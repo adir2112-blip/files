@@ -6,6 +6,7 @@
 <title>מוקד שירות לקוחות</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='20' font-family='Arial' fill='white' font-weight='bold'%3E%D7%9E%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -23,6 +24,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .topbar-brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600}
 .topbar-brand .ti{font-size:22px;color:var(--blue)}
 .topbar-date{font-size:13px;color:var(--text3)}
+.agent-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:20px;font-size:13px;color:var(--blue-dark);cursor:pointer}
+.agent-chip:hover{background:#dbeafe}
 .breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text3);margin-bottom:16px;flex-wrap:wrap}
 .breadcrumb .bc-link{cursor:pointer;color:var(--blue)}.breadcrumb .bc-link:hover{text-decoration:underline}
 .container{max-width:1100px;margin:0 auto;padding:24px 16px}
@@ -48,12 +51,12 @@ select.form-input{cursor:pointer}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
 .btn:hover{background:var(--surface2)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-dark);border-color:var(--blue-dark)}
+.btn-primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-dark)}
 .btn-success{background:var(--green);border-color:var(--green);color:#fff}.btn-success:hover{background:#15803d}
 .btn-danger{background:var(--red);border-color:var(--red);color:#fff}.btn-danger:hover{background:#b91c1c}
 .btn-purple{background:var(--purple);border-color:var(--purple);color:#fff}.btn-purple:hover{background:#6d28d9}
 .btn-sm{padding:5px 11px;font-size:13px}.btn-xs{padding:3px 8px;font-size:12px}
-.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:500}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:500}
 .badge-success{background:var(--green-light);color:#15803d}
 .badge-warning{background:var(--amber-light);color:var(--amber)}
 .badge-info{background:var(--blue-light);color:var(--blue-dark)}
@@ -70,13 +73,14 @@ table{width:100%;border-collapse:collapse;font-size:13px;min-width:500px}
 th{background:var(--surface2);padding:10px 12px;text-align:right;font-weight:600;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.03em}
 th.admin-col{background:var(--purple-light);color:var(--purple)}
 td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
-td.admin-col{background:rgba(245,243,255,.4)}
+td.admin-col{background:rgba(245,243,255,.35)}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--surface2)}
 tr:hover td.admin-col{background:var(--purple-light)}
 .alert{padding:11px 16px;border-radius:var(--radius-sm);font-size:14px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .alert-success{background:var(--green-light);color:#15803d;border:1px solid #bbf7d0}
 .alert-error{background:var(--red-light);color:#b91c1c;border:1px solid #fecaca}
+.alert-info{background:var(--blue-light);color:var(--blue-dark);border:1px solid #bfdbfe}
 .modal-overlay{position:fixed;inset:0;background:rgba(15,20,40,.45);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(2px)}
 .modal{background:var(--surface);border-radius:var(--radius);padding:28px;width:500px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md);border:1px solid var(--border)}
 .modal-title{font-size:17px;font-weight:600;margin-bottom:20px;color:var(--text)}
@@ -86,8 +90,17 @@ tr:hover td.admin-col{background:var(--purple-light)}
 .icon-opt{width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border);background:var(--surface2);font-size:18px;color:var(--text2);transition:all .12s}
 .icon-opt:hover,.icon-opt.selected{border-color:var(--blue);color:var(--blue);background:var(--blue-light)}
 .search-wrap{position:relative;margin-bottom:14px}
-.search-wrap .ti-search{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
+.search-wrap .ti{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
 .search-wrap input{padding-right:34px}
+/* phone lookup */
+.phone-lookup{background:var(--blue-light);border:1px solid #bfdbfe;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px;font-size:13px}
+.phone-lookup .pl-title{font-weight:600;color:var(--blue-dark);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.phone-lookup .pl-row{display:flex;justify-content:space-between;color:var(--text2);padding:2px 0}
+.phone-lookup .pl-row span:last-child{color:var(--text);font-weight:500}
+.phone-found{background:var(--amber-light);border-color:#fcd34d}
+.phone-found .pl-title{color:var(--amber)}
+/* existing record warning */
+.exist-warn{background:var(--amber-light);border:1px solid #fcd34d;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .empty{text-align:center;padding:40px 20px;color:var(--text3)}
 .empty .ti{font-size:40px;display:block;margin-bottom:10px}
 .loading{text-align:center;padding:32px;color:var(--text3)}
@@ -97,16 +110,17 @@ tr:hover td.admin-col{background:var(--purple-light)}
 .flex-gap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mt-1{margin-top:8px}.mt-2{margin-top:16px}
 .section-divider{font-size:12px;font-weight:600;color:var(--purple);text-transform:uppercase;letter-spacing:.05em;padding:10px 0 6px;border-top:1px solid var(--border);margin-top:16px;display:flex;align-items:center;gap:6px}
-/* inline admin edit */
 .admin-input{padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text);width:100%;min-width:80px}
 .admin-input:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 2px rgba(124,58,237,.12)}
 .admin-checkbox{width:16px;height:16px;accent-color:var(--purple);cursor:pointer}
-.save-indicator{font-size:11px;color:var(--green);display:none}
-/* filter bar */
 .filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
 .filter-bar select,.filter-bar input{padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)}
-.filter-bar select:focus,.filter-bar input:focus{outline:none;border-color:var(--blue)}
 .filter-label{font-size:12px;font-weight:500;color:var(--text2);align-self:center}
+/* agent name modal */
+.agent-modal{background:var(--surface);border-radius:var(--radius);padding:32px;width:380px;max-width:96vw;box-shadow:var(--shadow-md);border:1px solid var(--border);text-align:center}
+.agent-modal .am-icon{font-size:48px;color:var(--blue);margin-bottom:12px}
+.agent-modal .am-title{font-size:18px;font-weight:600;margin-bottom:6px}
+.agent-modal .am-sub{font-size:14px;color:var(--text2);margin-bottom:20px}
 @media(max-width:600px){.form-grid-2{grid-template-columns:1fr}.container{padding:12px}.card{padding:14px}.topbar{padding:0 12px}.org-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -116,6 +130,7 @@ tr:hover td.admin-col{background:var(--purple-light)}
   <div class="topbar-brand"><i class="ti ti-headset"></i>מוקד שירות לקוחות</div>
   <div class="flex-gap">
     <span class="topbar-date" id="topbar-date"></span>
+    <span class="agent-chip" id="agent-chip" onclick="changeAgentName()" title="לחץ לשינוי שם"></span>
     <button class="btn btn-sm" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
   </div>
 </div>
@@ -124,7 +139,7 @@ tr:hover td.admin-col{background:var(--purple-light)}
   <div class="loading"><div class="spinner"></div><p>טוען...</p></div>
 </div>
 
-<div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+<div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this&&!_modalLocked)closeModal()">
   <div class="modal" id="modal-body"></div>
 </div>
 
@@ -134,13 +149,21 @@ const KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const ADMIN_PASS = 'Q1w2e3r4!';
 const ICONS = ['ti-file','ti-coin','ti-clock-off','ti-steps','ti-alert-circle','ti-phone','ti-tool','ti-refresh','ti-star','ti-flag','ti-user','ti-mail','ti-notes','ti-gift','ti-bolt','ti-heart','ti-award','ti-calendar','ti-chart-bar','ti-clipboard'];
 
-let S = { view:'orgs', orgId:null, fileId:null, adminLoggedIn:false, adminTab:'orgs', searchQ:'', alert:null, filters:{} };
+let S = { view:'orgs', orgId:null, fileId:null, adminLoggedIn:!!(sessionStorage.getItem('adminLoggedIn')), adminTab:'orgs', searchQ:'', alert:null, filters:{}, phoneSearch:'', phoneLookup:null, sortCol:null, sortDir:1 };
 let DB = { orgs:[], files:[] };
 let _tmpIcon='ti-file', _tmpFields=[], _tmpAdminFields=[];
 let _cachedRecords={}, _allRecords=[];
 let _saveTimers={};
+let _modalLocked=false;
+let _agentName = localStorage.getItem('agentName')||'';
 
+// ── Date & agent chip ──
 document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('he-IL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+function updateAgentChip(){
+  const chip=document.getElementById('agent-chip');
+  chip.innerHTML=_agentName?`<i class="ti ti-user"></i>${esc(_agentName)} <i class="ti ti-pencil" style="font-size:11px;opacity:.6"></i>`:`<i class="ti ti-user-question"></i> הזן שם נציג`;
+}
+updateAgentChip();
 
 // ── API ──
 async function api(method,table,body=null,params=''){
@@ -165,12 +188,34 @@ async function getRecords(fileId){
   _cachedRecords[fileId]=r; return r;
 }
 
+// ── Agent name ──
+function askAgentName(onDone){
+  _modalLocked=true;
+  showModal(`
+    <div class="agent-modal" style="padding:0">
+      <div class="am-icon"><i class="ti ti-user-circle"></i></div>
+      <div class="am-title">שלום! מה שמך?</div>
+      <div class="am-sub">שמך יצורף לכל רשומה שתזין</div>
+      <input class="form-input" id="agent-name-input" placeholder="שם פרטי ושם משפחה" value="${esc(_agentName)}" style="margin-bottom:14px;text-align:center">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveAgentName(${onDone?'true':'false'})"><i class="ti ti-check"></i> המשך</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('agent-name-input')&&document.getElementById('agent-name-input').focus(),100);
+}
+function saveAgentName(andContinue){
+  const val=document.getElementById('agent-name-input').value.trim();
+  if(!val){alert('יש להזין שם');return;}
+  _agentName=val; localStorage.setItem('agentName',val);
+  updateAgentChip(); _modalLocked=false; closeModal();
+  if(andContinue) render();
+}
+function changeAgentName(){ askAgentName(false); }
+
 // ── Render ──
 function render(){
   const app=document.getElementById('app');
   let html=S.alert?`<div class="alert alert-${S.alert.type}"><i class="ti ${S.alert.type==='success'?'ti-check':'ti-alert-circle'}"></i>${S.alert.msg}</div>`:'';
   html+=renderBreadcrumb();
-  if(S.view==='orgs')    html+=renderOrgs();
+  if(S.view==='orgs')         html+=renderOrgs();
   else if(S.view==='files')   html+=renderFiles();
   else if(S.view==='form')    html+=renderForm();
   else if(S.view==='records') html+=renderRecordsPage();
@@ -216,6 +261,10 @@ function renderFiles(){
 // ── Form ──
 function renderForm(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
+
+  // phone lookup result
+  // phone lookup rendered separately via renderLookupOnly() - not blocking form render
+
   const extraF=(f.extra_fields||[]).map(ef=>{
     let inp='';
     if(ef.type==='select'){const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');inp=`<select class="form-input" name="extra_${ef.id}"><option value="">בחר...</option>${opts}</select>`;}
@@ -223,6 +272,7 @@ function renderForm(){
     else inp=`<input class="form-input" type="text" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
     return `<div class="form-row"><label class="form-label">${esc(ef.label)}</label>${inp}</div>`;
   }).join('');
+
   return `<div class="card">
     <div class="flex-between" style="margin-bottom:16px">
       <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)}</div>
@@ -231,20 +281,77 @@ function renderForm(){
         <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
       </div>
     </div>
+    <div class="form-row">
+      <label class="form-label"><i class="ti ti-phone" style="font-size:13px"></i> חיפוש לפי טלפון לפני הזנה</label>
+      <div class="search-wrap" style="margin-bottom:0">
+        <input class="form-input" id="phone-search-input" type="text" dir="ltr" placeholder="05X-XXXXXXX" value="${esc(S.phoneSearch)}" oninput="onPhoneSearch(this.value)">
+        <i class="ti ti-search"></i>
+      </div>
+    </div>
+    <div id="lookup-box"></div>
     <form id="entry-form" onsubmit="submitRecord(event,'${f.id}')">
       <div class="form-grid-2">
         <div class="form-row"><label class="form-label">שם פרטי *</label><input class="form-input" name="first_name" required placeholder="שם פרטי"></div>
         <div class="form-row"><label class="form-label">שם משפחה *</label><input class="form-input" name="last_name" required placeholder="שם משפחה"></div>
-        <div class="form-row"><label class="form-label">טלפון *</label><input class="form-input" name="phone" required placeholder="05X-XXXXXXX" dir="ltr"></div>
+        <div class="form-row"><label class="form-label">טלפון *</label>
+          <input class="form-input" name="phone" id="phone-form-input" required placeholder="05X-XXXXXXX" dir="ltr" value="${esc(S.phoneSearch)}">
+        </div>
         <div class="form-row"><label class="form-label">ת"ז *</label><input class="form-input" name="id_num" required placeholder="9 ספרות" dir="ltr" maxlength="9"></div>
       </div>
       ${extraF}
-      <div class="mt-2"><button type="submit" class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> שמור רשומה</button></div>
+      <div class="mt-2 flex-gap">
+        <button type="submit" class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> שמור רשומה</button>
+        ${_agentName?`<span style="font-size:12px;color:var(--text3)"><i class="ti ti-user" style="font-size:12px"></i> יירשם ע"ש ${esc(_agentName)}</span>`:''}
+      </div>
     </form>
   </div>`;
 }
 
-// ── Records page (נציג + מנהל) ──
+let _phoneTimer=null;
+function onPhoneSearch(val){
+  S.phoneSearch=val;
+  // clear previous result silently (no re-render yet)
+  S.phoneLookup=null;
+  clearTimeout(_phoneTimer);
+  const digits=val.replace(/\D/g,'');
+  if(digits.length>=9){
+    _phoneTimer=setTimeout(async()=>{
+      try{
+        const clean=val.replace(/[-\s]/g,'');
+        S.phoneLookup=await GET('records',`?file_id=eq.${S.fileId}&phone=ilike.*${encodeURIComponent(clean)}*&order=created_at.desc&limit=1`);
+      }catch(e){S.phoneLookup=[];}
+      // only re-render after lookup complete — not on every keystroke
+      renderLookupOnly();
+    },700);
+  } else {
+    // hide any previous result without full re-render
+    const box=document.getElementById('lookup-box');
+    if(box) box.innerHTML='';
+  }
+}
+
+function renderLookupOnly(){
+  const box=document.getElementById('lookup-box');
+  if(!box) return;
+  const f=DB.files.find(x=>x.id===S.fileId); if(!f) return;
+  if(S.phoneLookup===null){ box.innerHTML=''; return; }
+  if(S.phoneLookup.length===0){
+    box.innerHTML=`<div class="phone-lookup"><div class="pl-title"><i class="ti ti-circle-check" style="color:var(--green)"></i> לקוח חדש — לא נמצא בקובץ זה</div></div>`;
+  } else {
+    const ex=S.phoneLookup[0];
+    const extraFields=f.extra_fields||[];
+    const extraRows=extraFields.map(ef=>`<div class="pl-row"><span>${esc(ef.label)}</span><span>${esc((ex.extra||{})[ef.id]||'—')}</span></div>`).join('');
+    box.innerHTML=`<div class="phone-lookup phone-found">
+      <div class="pl-title"><i class="ti ti-alert-triangle"></i> לקוח קיים בקובץ זה</div>
+      <div class="pl-row"><span>שם</span><span>${esc(ex.first_name)} ${esc(ex.last_name)}</span></div>
+      <div class="pl-row"><span>ת"ז</span><span>${esc(ex.id_num)}</span></div>
+      <div class="pl-row"><span>תאריך הזנה</span><span>${fmtDate(ex.created_at)}</span></div>
+      ${extraRows}
+    </div>`;
+  }
+}
+
+// ── Records page ──
 function renderRecordsPage(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
   const isAdmin=S.adminLoggedIn;
@@ -252,13 +359,11 @@ function renderRecordsPage(){
   const extraFields=f.extra_fields||[];
   const adminFields=f.admin_fields||[];
 
-  // filters
   let filtered=records;
   const q=(S.searchQ||'').toLowerCase();
-  if(q) filtered=filtered.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num).toLowerCase().includes(q));
-  // admin field filters
+  if(q) filtered=filtered.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num+' '+(r.agent_name||'')).toLowerCase().includes(q));
   Object.entries(S.filters||{}).forEach(([afId,val])=>{
-    if(!val||val==='') return;
+    if(!val) return;
     const af=adminFields.find(x=>x.id===afId); if(!af) return;
     filtered=filtered.filter(r=>{
       const v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
@@ -267,8 +372,33 @@ function renderRecordsPage(){
     });
   });
 
-  const extraH=extraFields.map(ef=>`<th>${esc(ef.label)}</th>`).join('');
-  const adminH=adminFields.map(af=>`<th class="admin-col"><i class="ti ti-shield-check" style="font-size:11px"></i> ${esc(af.label)}</th>`).join('');
+  // ── sort ──
+  const sortable=(col,label,cls='')=>{
+    const active=S.sortCol===col;
+    const arrow=active?(S.sortDir===1?'↑':'↓'):'⇅';
+    return `<th class="${cls}" style="cursor:pointer;user-select:none" onclick="toggleSort('${col}')">${label} <span style="opacity:${active?1:.35};font-size:11px">${arrow}</span></th>`;
+  };
+
+  // apply sort
+  if(S.sortCol){
+    const col=S.sortCol;
+    filtered=[...filtered].sort((a,b)=>{
+      let va='',vb='';
+      if(col==='date'){va=a.created_at;vb=b.created_at;}
+      else if(col==='first_name'){va=a.first_name;vb=b.first_name;}
+      else if(col==='last_name'){va=a.last_name;vb=b.last_name;}
+      else if(col==='phone'){va=a.phone;vb=b.phone;}
+      else if(col==='id_num'){va=a.id_num;vb=b.id_num;}
+      else if(col==='agent'){va=a.agent_name||'';vb=b.agent_name||'';}
+      else if(col.startsWith('extra_')){const id=col.slice(6);va=(a.extra||{})[id]||'';vb=(b.extra||{})[id]||'';}
+      else if(col.startsWith('admin_')){const id=col.slice(6);va=((a.admin_data||{})[id]||'').toString();vb=((b.admin_data||{})[id]||'').toString();}
+      if(va<vb) return -S.sortDir; if(va>vb) return S.sortDir; return 0;
+    });
+  }
+
+  const extraH=extraFields.map(ef=>sortable('extra_'+ef.id,esc(ef.label))).join('');
+  const adminH=adminFields.map(af=>sortable('admin_'+af.id,'<i class="ti ti-shield-check" style="font-size:11px"></i> '+esc(af.label),'admin-col')).join('');
+  const agentH=sortable('agent','נציג');
   const delH=isAdmin?'<th></th>':'';
 
   const rows=filtered.map(r=>{
@@ -281,59 +411,29 @@ function renderRecordsPage(){
     const adminC=adminFields.map(af=>{
       const val=(r.admin_data||{})[af.id];
       if(!isAdmin){
-        // נציג רואה בקריאה בלבד
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center">${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</td>`;
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
         return `<td class="admin-col">${esc(val||'')}</td>`;
       }
-      // מנהל — עריכה inline
-      if(af.type==='checkbox'){
-        return `<td class="admin-col" style="text-align:center">
-          <input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked)">
-        </td>`;
-      }
-      if(af.type==='select'){
-        const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');
-        return `<td class="admin-col"><select class="admin-input" onchange="saveAdminField('${r.id}','${af.id}',this.value)"><option value="">--</option>${opts}</select></td>`;
-      }
-      return `<td class="admin-col"><input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." oninput="debounceAdminField('${r.id}','${af.id}',this.value)"></td>`;
+      if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></td>`;
+      if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><select class="admin-input" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></td>`;}
+      return `<td class="admin-col"><input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></td>`;
     }).join('');
 
-    const delC=isAdmin?`<td><button class="btn btn-xs btn-danger" onclick="delRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:'';
-    return `<tr><td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td><td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${adminC}${delC}</tr>`;
+    const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
+    const delC=isAdmin?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:'';
+    return `<tr><td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td><td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${delC}</tr>`;
   }).join('');
 
-  // filter bar for admin fields
-  const filterBar=adminFields.length&&isAdmin?`
-    <div class="filter-bar">
-      <span class="filter-label"><i class="ti ti-filter"></i> סינון לפי שדות ניהוליים:</span>
-      ${adminFields.map(af=>{
-        if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)">
-          <option value="">כל ${esc(af.label)}</option>
-          <option value="yes" ${S.filters[af.id]==='yes'?'selected':''}>✓ מסומן</option>
-          <option value="no" ${S.filters[af.id]==='no'?'selected':''}>✗ לא מסומן</option>
-        </select>`;
-        if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)">
-          <option value="">כל ${esc(af.label)}</option>
-          ${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${S.filters[af.id]===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('')}
-        </select>`;
-        return `<input type="text" placeholder="סנן ${esc(af.label)}..." value="${esc(S.filters[af.id]||'')}" oninput="setFilter('${af.id}',this.value)" style="min-width:140px">`;
-      }).join('')}
-      <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
-    </div>`:adminFields.length&&!isAdmin?`
+  const filterBar=adminFields.length?`
     <div class="filter-bar">
       <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
       ${adminFields.map(af=>{
-        if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)">
-          <option value="">כל ${esc(af.label)}</option>
-          <option value="yes">✓ מסומן</option><option value="no">✗ לא מסומן</option>
-        </select>`;
-        if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)">
-          <option value="">כל ${esc(af.label)}</option>
-          ${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('')}
-        </select>`;
-        return '';
+        if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option><option value="yes" ${S.filters[af.id]==='yes'?'selected':''}>✓ מסומן</option><option value="no" ${S.filters[af.id]==='no'?'selected':''}>✗ לא מסומן</option></select>`;
+        if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option>${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${S.filters[af.id]===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
+        return `<input type="text" placeholder="סנן ${esc(af.label)}..." value="${esc(S.filters[af.id]||'')}" oninput="setFilter('${af.id}',this.value)" style="min-width:130px">`;
       }).join('')}
+      <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
     </div>`:'';
 
   return `<div class="card">
@@ -344,41 +444,39 @@ function renderRecordsPage(){
         <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
       </div>
     </div>
-    ${adminFields.length?`<div style="margin-bottom:10px"><span class="badge badge-purple"><i class="ti ti-shield-check"></i> עמודות ניהוליות: ${adminFields.map(af=>esc(af.label)).join(', ')}</span></div>`:''}
+    ${adminFields.length?`<div style="margin-bottom:10px"><span class="badge badge-purple"><i class="ti ti-shield-check"></i> שדות ניהוליים: ${adminFields.map(af=>esc(af.label)).join(', ')}</span></div>`:''}
     <div class="search-wrap">
-      <input class="form-input" type="text" placeholder='חיפוש לפי שם / טלפון / ת"ז...' value="${esc(S.searchQ)}" oninput="S.searchQ=this.value;render()">
+      <input class="form-input" type="text" placeholder='חיפוש לפי שם / טלפון / ת"ז / נציג...' value="${esc(S.searchQ)}" oninput="S.searchQ=this.value;render()">
       <i class="ti ti-search"></i>
     </div>
     ${filterBar}
     ${!filtered.length
       ?`<div class="empty"><i class="ti ti-database-off"></i><p>${q?'לא נמצאו תוצאות':'אין רשומות עדיין'}</p></div>`
-      :`<div class="table-wrap"><table><thead><tr><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th>${extraH}${adminH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
+      :`<div class="table-wrap"><table><thead><tr>${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${agentH}${adminH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
     }
     <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות</div>
   </div>`;
 }
 
 // ── Admin inline save ──
-async function saveAdminField(recordId, fieldId, value){
-  const record=Object.values(_cachedRecords).flat().find(r=>r.id===recordId); if(!record) return;
+async function saveAdminField(recordId,fieldId,value,fileId){
+  const recs=_cachedRecords[fileId]||[];
+  const record=recs.find(r=>r.id===recordId); if(!record) return;
   if(!record.admin_data) record.admin_data={};
   record.admin_data[fieldId]=value;
-  try{
-    await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`);
-    flashSave(recordId);
-  }catch(e){showAlert('שגיאה בשמירה','error');}
+  try{ await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`); }
+  catch(e){ showAlert('שגיאה בשמירה','error'); }
 }
-function debounceAdminField(recordId,fieldId,value){
+function debounceAdminField(recordId,fieldId,value,fileId){
   const key=recordId+'_'+fieldId;
   clearTimeout(_saveTimers[key]);
-  _saveTimers[key]=setTimeout(()=>saveAdminField(recordId,fieldId,value),700);
+  _saveTimers[key]=setTimeout(()=>saveAdminField(recordId,fieldId,value,fileId),700);
 }
-function flashSave(recordId){
-  // brief green flash on row
-  document.querySelectorAll(`tr`).forEach(tr=>{
-    if(tr.innerHTML.includes(recordId.slice(0,8))||true){} // just a subtle indicator
-  });
+function toggleSort(col){
+  if(S.sortCol===col){ S.sortDir*=-1; } else { S.sortCol=col; S.sortDir=1; }
+  render();
 }
+
 function setFilter(afId,val){ S.filters[afId]=val; render(); }
 
 // ── Admin ──
@@ -395,7 +493,7 @@ function renderAdmin(){
   return `<div class="card">
     <div class="flex-between" style="margin-bottom:16px">
       <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ti-settings"></i> ממשק מנהל</div>
-      <button class="btn btn-sm btn-danger" onclick="S.adminLoggedIn=false;goOrgs()"><i class="ti ti-logout"></i> יציאה</button>
+      <button class="btn btn-sm btn-danger" onclick="S.adminLoggedIn=false;sessionStorage.removeItem('adminLoggedIn');goOrgs()"><i class="ti ti-logout"></i> יציאה</button>
     </div>
     <div class="nav-tabs">
       <button class="nav-tab ${tab==='orgs'?'active':''}" onclick="S.adminTab='orgs';render()">ארגונים</button>
@@ -423,7 +521,7 @@ function renderAdminFiles(){
     ${DB.orgs.map(o=>{
       const orgFiles=DB.files.filter(f=>f.org_id===o.id); if(!orgFiles.length) return '';
       return `<div style="margin-bottom:20px">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-building-hospital" style="color:var(--blue)"></i>${esc(o.name)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px"><i class="ti ti-building-hospital" style="color:var(--blue)"></i> ${esc(o.name)}</div>
         ${orgFiles.map(f=>`
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
             <div class="flex-between" style="margin-bottom:10px">
@@ -440,6 +538,7 @@ function renderAdminFiles(){
               <span class="tag"><i class="ti ti-user"></i> שם משפחה</span>
               <span class="tag"><i class="ti ti-phone"></i> טלפון</span>
               <span class="tag"><i class="ti ti-id"></i> ת"ז</span>
+              <span class="tag"><i class="ti ti-user-check"></i> נציג</span>
               ${(f.extra_fields||[]).map(ef=>`<span class="tag tag-blue">${esc(ef.label)}</span>`).join('')}
               ${(f.admin_fields||[]).map(af=>`<span class="tag tag-purple"><i class="ti ti-shield-check"></i> ${esc(af.label)}</span>`).join('')}
             </div>
@@ -450,46 +549,52 @@ function renderAdminFiles(){
 
 function renderAdminAllRecords(){
   if(S._loadingRecords) return `<div class="loading"><div class="spinner"></div><p>טוען...</p></div>`;
-  if(!_allRecords.length) return `<div class="empty"><i class="ti ti-database-off"></i><p>אין רשומות במערכת</p></div>`;
+  if(!_allRecords.length) return `<div class="empty"><i class="ti ti-database-off"></i><p>אין רשומות</p></div>`;
   const rows=_allRecords.map(r=>{
-    const f=DB.files.find(x=>x.id===r.file_id), o=DB.orgs.find(x=>x.id===(f&&f.org_id));
+    const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));
     return `<tr>
       <td><span class="badge badge-neutral">${esc(o?o.name:'')}</span></td>
       <td><span class="badge badge-info">${esc(f?f.name:'')}</span></td>
       <td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td>
       <td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td>
       <td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>
-      <td><button class="btn btn-xs" onclick="adminViewFileRecords('${r.file_id}')"><i class="ti ti-external-link"></i></button></td>
+      <td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>
+      <td>
+        <div class="flex-gap">
+          <button class="btn btn-xs" onclick="adminViewFileRecords('${r.file_id}')"><i class="ti ti-external-link"></i></button>
+          <button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}',null)"><i class="ti ti-trash"></i></button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
   return `<div class="flex-between" style="margin-bottom:12px">
     <span style="font-size:13px;color:var(--text2)">${_allRecords.length} רשומות סה"כ</span>
-    <button class="btn btn-sm btn-success" onclick="exportAll()"><i class="ti ti-download"></i> ייצוא הכל</button>
+    <button class="btn btn-sm btn-success" onclick="exportAll()"><i class="ti ti-download"></i> ייצוא Excel</button>
   </div>
-  <div class="table-wrap"><table><thead><tr><th>ארגון</th><th>קובץ</th><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  <div class="table-wrap"><table><thead><tr><th>ארגון</th><th>קובץ</th><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th><th>נציג</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 // ── Navigation ──
-function goOrgs(){ S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};loadAll().then(render); }
+function goOrgs(){ S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;loadAll().then(render); }
 function goFiles(orgId){ if(orgId)S.orgId=orgId; S.view='files';S.fileId=null;render(); }
-function goForm(fileId){ S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};render(); }
+function goForm(fileId){ S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;render(); }
 async function goRecords(fileId){
   S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};render();
-  await getRecords(fileId); render();
+  await getRecords(fileId);render();
 }
 async function adminViewFileRecords(fileId){
-  S.fileId=fileId;
-  const f=DB.files.find(x=>x.id===fileId);
-  if(f) S.orgId=f.org_id;
-  S.view='records';S.searchQ='';S.filters={};
-  render();
-  await getRecords(fileId); render();
+  S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;
+  S.view='records';S.searchQ='';S.filters={};render();
+  await getRecords(fileId);render();
 }
 function gotoAdmin(){ S.view='admin';render(); }
 function adminLogin(e){
   e.preventDefault();
-  if(document.getElementById('admin-pass').value===ADMIN_PASS){S.adminLoggedIn=true;render();}
-  else showAlert('סיסמה שגויה','error');
+  if(document.getElementById('admin-pass').value===ADMIN_PASS){
+    S.adminLoggedIn=true;
+    sessionStorage.setItem('adminLoggedIn','1');
+    render();
+  } else showAlert('סיסמה שגויה','error');
 }
 async function adminLoadAllRecords(){
   S.adminTab='records';S._loadingRecords=true;render();
@@ -500,23 +605,37 @@ async function adminLoadAllRecords(){
 // ── Submit ──
 async function submitRecord(e,fileId){
   e.preventDefault();
+  if(!_agentName){ askAgentName(false); showAlert('יש להזין שם נציג תחילה','error'); return; }
   const form=e.target,btn=document.getElementById('submit-btn');
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2"></i> שומר...';
   const f=DB.files.find(x=>x.id===fileId);
   const extra={};
   (f.extra_fields||[]).forEach(ef=>{const el=form[`extra_${ef.id}`];if(el)extra[ef.id]=el.value.trim();});
   try{
-    await POST('records',{file_id:fileId,first_name:form.first_name.value.trim(),last_name:form.last_name.value.trim(),phone:form.phone.value.trim(),id_num:form.id_num.value.trim(),extra,admin_data:{}});
-    form.reset();showAlert('הרשומה נשמרה בהצלחה ✓','success');
+    await POST('records',{file_id:fileId,first_name:form.first_name.value.trim(),last_name:form.last_name.value.trim(),phone:form.phone.value.trim(),id_num:form.id_num.value.trim(),extra,admin_data:{},agent_name:_agentName});
+    form.reset();S.phoneSearch='';S.phoneLookup=null;
+    showAlert('הרשומה נשמרה בהצלחה ✓','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
   btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> שמור רשומה';
 }
 
 // ── Delete record ──
-async function delRecord(id,fileId){
-  if(!confirm('למחוק רשומה זו?')) return;
-  await DEL('records',`?id=eq.${id}`);
-  await getRecords(fileId);render();
+function confirmDelRecord(id,fileId){
+  showModal(`<div class="modal-title" style="color:var(--red)"><i class="ti ti-alert-triangle"></i> מחיקת רשומה</div>
+    <p style="margin-bottom:20px;color:var(--text2)">האם אתה בטוח שברצונך למחוק רשומה זו? פעולה זו אינה ניתנת לביטול.</p>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">ביטול</button>
+      <button class="btn btn-danger" onclick="doDelRecord('${id}','${fileId||''}')"><i class="ti ti-trash"></i> מחק לצמיתות</button>
+    </div>`);
+}
+async function doDelRecord(id,fileId){
+  closeModal();
+  try{
+    await DEL('records',`?id=eq.${id}`);
+    if(fileId&&fileId!=='null'){ await getRecords(fileId); }
+    else{ _allRecords=_allRecords.filter(r=>r.id!==id); }
+    render();showAlert('הרשומה נמחקה','success');
+  }catch(e){showAlert('שגיאה במחיקה','error');}
 }
 
 // ── Org modal ──
@@ -528,7 +647,7 @@ function openEditOrg(id,name){showModal(`<div class="modal-title"><i class="ti t
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveEditOrg('${id}')"><i class="ti ti-check"></i> שמור</button></div>`);}
 async function saveNewOrg(){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await POST('organizations',{name:n});await loadAll();closeModal();render();showAlert('הארגון נוסף','success');}
 async function saveEditOrg(id){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await PATCH('organizations',{name:n},`?id=eq.${id}`);await loadAll();closeModal();render();showAlert('הארגון עודכן','success');}
-async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכל קבציו?'))return;await DEL('organizations',`?id=eq.${id}`);await loadAll();render();showAlert('הארגון נמחק','success');}
+async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכל קבציו ורשומותיו?'))return;await DEL('organizations',`?id=eq.${id}`);await loadAll();render();showAlert('הארגון נמחק','success');}
 
 // ── File modal ──
 function openNewFile(){_tmpIcon='ti-file';_tmpFields=[];_tmpAdminFields=[];showModal(fileModalHTML({name:'',icon:'ti-file',org_id:'',extra_fields:[],admin_fields:[]},'new'));}
@@ -547,55 +666,30 @@ function fileModalHTML(f,mode,id=''){
     <div class="form-row"><label class="form-label">ארגון *</label><select class="form-input" id="mf-org"><option value="">בחר ארגון...</option>${orgOpts}</select></div>
     <div class="form-row"><label class="form-label">שם הקובץ *</label><input class="form-input" id="mf-name" value="${esc(f.name)}" placeholder="שם הקובץ"></div>
     <div class="form-row"><label class="form-label">אייקון</label><div class="icon-picker" id="icon-picker">${iconsH}</div></div>
-    <div class="form-row">
-      <label class="form-label">שדות טופס (נציג ממלא)</label>
-      <div id="field-list">${fieldRows}</div>
-      <button class="btn btn-sm mt-1" type="button" onclick="addField('f')"><i class="ti ti-plus"></i> הוסף שדה</button>
-    </div>
+    <div class="form-row"><label class="form-label">שדות טופס (נציג ממלא)</label><div id="field-list">${fieldRows}</div><button class="btn btn-sm mt-1" type="button" onclick="addField('f')"><i class="ti ti-plus"></i> הוסף שדה</button></div>
     <div class="section-divider"><i class="ti ti-shield-check"></i> שדות ניהוליים (מנהל ממלא)</div>
-    <div class="form-row">
-      <div id="admin-field-list">${adminRows}</div>
-      <button class="btn btn-sm btn-purple mt-1" type="button" onclick="addField('a')"><i class="ti ti-plus"></i> הוסף שדה ניהולי</button>
-    </div>
+    <div class="form-row"><div id="admin-field-list">${adminRows}</div><button class="btn btn-sm btn-purple mt-1" type="button" onclick="addField('a')"><i class="ti ti-plus"></i> הוסף שדה ניהולי</button></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
-
 function fieldRowHTML(ef,i,prefix){
   const typeOpts=['text','number','select','checkbox'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':'תיבת סימון'}</option>`).join('');
-  const showOpts=ef.type==='select';
   return `<div class="field-row" id="fr_${prefix}_${i}">
     <div><label class="form-label" style="font-size:11px">שם השדה</label><input class="form-input" data-fl="${prefix}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
     <div><label class="form-label" style="font-size:11px">סוג</label>
       <select class="form-input" data-ft="${prefix}_${i}" onchange="onTypeChange('${prefix}',${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
-      ${showOpts?`<input class="form-input mt-1" data-fo="${prefix}_${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
+      ${ef.type==='select'?`<input class="form-input mt-1" data-fo="${prefix}_${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
     </div>
     <div style="padding-top:22px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField('${prefix}',${i})"><i class="ti ti-trash"></i></button></div>
   </div>`;
 }
 function pickIcon(ic){_tmpIcon=ic;document.querySelectorAll('.icon-opt').forEach(el=>el.classList.toggle('selected',el.dataset.icon===ic));}
-function onTypeChange(prefix,i,val){
-  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
-  arr[i].type=val;if(val!=='select')arr[i].options='';refreshFields(prefix);
-}
-function refreshFields(prefix){
-  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
-  const el=document.getElementById(prefix==='f'?'field-list':'admin-field-list');
-  if(el) el.innerHTML=arr.map((ef,i)=>fieldRowHTML(ef,i,prefix)).join('');
-}
-function addField(prefix){
-  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
-  arr.push({id:genId(),label:'',type:'text',options:''});refreshFields(prefix);
-}
-function removeField(prefix,i){
-  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
-  arr.splice(i,1);refreshFields(prefix);
-}
+function onTypeChange(prefix,i,val){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;arr[i].type=val;if(val!=='select')arr[i].options='';refreshFields(prefix);}
+function refreshFields(prefix){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;const el=document.getElementById(prefix==='f'?'field-list':'admin-field-list');if(el)el.innerHTML=arr.map((ef,i)=>fieldRowHTML(ef,i,prefix)).join('');}
+function addField(prefix){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;arr.push({id:genId(),label:'',type:'text',options:''});refreshFields(prefix);}
+function removeField(prefix,i){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;arr.splice(i,1);refreshFields(prefix);}
 function collectFields(prefix){
   const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
-  return arr.map((ef,i)=>{
-    const l=document.querySelector(`[data-fl="${prefix}_${i}"]`),t=document.querySelector(`[data-ft="${prefix}_${i}"]`),o=document.querySelector(`[data-fo="${prefix}_${i}"]`);
-    return {id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options};
-  }).filter(ef=>ef.label);
+  return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${prefix}_${i}"]`),t=document.querySelector(`[data-ft="${prefix}_${i}"]`),o=document.querySelector(`[data-fo="${prefix}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options};}).filter(ef=>ef.label);
 }
 async function saveNewFile(){
   const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;
@@ -610,41 +704,87 @@ async function saveEditFile(id){
   await loadAll();closeModal();render();showAlert('הקובץ עודכן','success');
 }
 async function confirmDeleteFile(id){
-  const f=DB.files.find(x=>x.id===id);
-  if(!confirm(`למחוק את "${f.name}" וכל הרשומות שלו?`))return;
+  const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}" וכל הרשומות שלו?`))return;
   await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');
 }
 
-// ── Export ──
+// ── Export Excel (SheetJS) ──
 async function exportFile(fileId){
   const f=DB.files.find(x=>x.id===fileId);
+  showAlert('מכין קובץ Excel...','success');
   const records=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);
-  const extra=f.extra_fields||[], admin=f.admin_fields||[];
-  const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label)];
-  const rows=records.map(r=>[fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,...extra.map(ef=>(r.extra||{})[ef.id]||''),...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');})]);
-  downloadCSV(f.name,headers,rows);
+  const extra=f.extra_fields||[],admin=f.admin_fields||[];
+  const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label)];
+  const rows=records.map(r=>[
+    fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||'',
+    ...extra.map(ef=>(r.extra||{})[ef.id]||''),
+    ...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');})
+  ]);
+  buildXLSX(f.name, headers, rows,
+    admin.map((_,i)=>headers.indexOf('[ניהולי] '+admin[i].label))
+  );
 }
 async function exportAll(){
-  const headers=['ארגון','קובץ','תאריך','שם פרטי','שם משפחה','טלפון','ת"ז'];
-  const rows=_allRecords.map(r=>{const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));return[o?o.name:'',f?f.name:'',fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num];});
-  downloadCSV('כל_הרשומות',headers,rows);
+  showAlert('מכין קובץ Excel...','success');
+  const headers=['ארגון','קובץ','תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג'];
+  const rows=_allRecords.map(r=>{const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));return[o?o.name:'',f?f.name:'',fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||''];});
+  buildXLSX('כל_הרשומות',headers,rows,[]);
 }
-function downloadCSV(name,headers,rows){
-  const csv='\uFEFF'+[headers,...rows].map(r=>r.map(c=>'"'+(c||'').toString().replace(/"/g,'""')+'"').join(',')).join('\n');
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name+'.csv';a.click();
+
+function buildXLSX(filename, headers, rows, adminColIdxs){
+  const wb=XLSX.utils.book_new();
+  const wsData=[headers,...rows];
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+
+  // column widths
+  const colWidths=headers.map((h,ci)=>{
+    const maxLen=Math.max(h.length,...rows.map(r=>(r[ci]||'').toString().length));
+    return{wch:Math.min(Math.max(maxLen+2,10),40)};
+  });
+  ws['!cols']=colWidths;
+
+  // header style — blue
+  headers.forEach((_,ci)=>{
+    const ref=XLSX.utils.encode_cell({r:0,c:ci});
+    if(!ws[ref]) return;
+    ws[ref].s={fill:{fgColor:{rgb:'2563EB'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:11},alignment:{horizontal:'right',vertical:'center'}};
+  });
+  // admin col style — purple header
+  adminColIdxs.forEach(ci=>{
+    const ref=XLSX.utils.encode_cell({r:0,c:ci});
+    if(!ws[ref]) return;
+    ws[ref].s={fill:{fgColor:{rgb:'7C3AED'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:11},alignment:{horizontal:'right',vertical:'center'}};
+    // purple tint on data cells
+    for(let ri=1;ri<wsData.length;ri++){
+      const dref=XLSX.utils.encode_cell({r:ri,c:ci});
+      if(ws[dref]) ws[dref].s={fill:{fgColor:{rgb:'F5F3FF'}},alignment:{horizontal:'right'}};
+    }
+  });
+
+  // freeze header row
+  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activePane:'bottomLeft',state:'frozen'};
+
+  XLSX.utils.book_append_sheet(wb,ws,'רשומות');
+  XLSX.writeFile(wb,filename+'.xlsx');
 }
 
 // ── Helpers ──
 function showModal(html){document.getElementById('modal-body').innerHTML=html;document.getElementById('modal-overlay').style.display='flex';}
-function closeModal(){document.getElementById('modal-overlay').style.display='none';}
+function closeModal(){if(_modalLocked)return;document.getElementById('modal-overlay').style.display='none';}
 function showAlert(msg,type='success'){S.alert={msg,type};render();setTimeout(()=>{S.alert=null;render();},3500);}
 function esc(s){return(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmtDate(ts){return new Date(ts).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function genId(){return Math.random().toString(36).slice(2,9);}
 
+// ── Init ──
 (async()=>{
-  try{await loadAll();render();}
-  catch(e){document.getElementById('app').innerHTML=`<div class="alert alert-error"><i class="ti ti-alert-circle"></i>שגיאה בהתחברות ל-Supabase.</div>`;}
+  try{
+    await loadAll();
+    if(!_agentName){ askAgentName(true); }
+    else{ render(); }
+  }catch(e){
+    document.getElementById('app').innerHTML=`<div class="alert alert-error"><i class="ti ti-alert-circle"></i>שגיאה בהתחברות ל-Supabase.</div>`;
+  }
 })();
 </script>
 </body>
