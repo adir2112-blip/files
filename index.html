@@ -6,6 +6,7 @@
 <title>מוקד שירות לקוחות</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='20' font-family='Arial' fill='white' font-weight='bold'%3E%D7%9E%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -20,12 +21,47 @@
   --shadow-md:0 4px 16px rgba(0,0,0,.10);
 }
 body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.5}
+
+/* ── LOGIN ── */
+#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
+.login-wrap{width:100%;max-width:400px}
+@keyframes fadeUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:36px 32px;box-shadow:var(--shadow-md);animation:fadeUp .25s ease}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .ti{font-size:40px;color:var(--blue)}
+.login-logo-title{font-size:20px;font-weight:700;color:var(--text);margin-top:6px}
+.login-logo-sub{font-size:13px;color:var(--text3);margin-top:2px}
+.mode-btns{display:flex;flex-direction:column;gap:10px}
+.mode-btn{display:flex;align-items:center;gap:14px;padding:16px 18px;border:1.5px solid var(--border2);border-radius:var(--radius);background:var(--surface2);cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;color:var(--text);transition:all .15s;text-align:right;width:100%}
+.mode-btn:hover{border-color:var(--blue);background:var(--blue-light)}
+.mode-btn .mb-icon{font-size:28px;color:var(--blue)}
+.mode-btn .mb-sub{font-size:12px;font-weight:400;color:var(--text3);margin-top:2px}
+.login-back{background:none;border:none;cursor:pointer;font-size:13px;color:var(--text3);font-family:inherit;display:flex;align-items:center;gap:5px;margin-bottom:18px;padding:0}
+.login-back:hover{color:var(--blue)}
+.pin-row{display:flex;gap:10px;justify-content:center;margin:8px 0 16px}
+.pin-digit{width:58px;height:64px;border:2px solid var(--border2);border-radius:var(--radius-sm);font-size:28px;font-weight:700;text-align:center;background:var(--surface2);color:var(--text);font-family:inherit;transition:border-color .15s}
+.pin-digit:focus{outline:none;border-color:var(--blue);background:var(--surface)}
+.login-err{background:var(--red-light);border:1px solid #fecaca;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#b91c1c;font-weight:600;margin-bottom:14px;display:none}
+/* ── AGENT LOGIN LIST ── */
+.agent-list{max-height:220px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius-sm);margin-top:6px;background:var(--surface)}
+.agent-list-item{padding:11px 14px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .1s}
+.agent-list-item:last-child{border-bottom:none}
+.agent-list-item:hover{background:var(--blue-light);color:var(--blue-dark)}
+.agent-list-item.selected{background:var(--blue-light);color:var(--blue-dark);font-weight:600}
+.agent-list-item .ali-avatar{width:32px;height:32px;background:var(--blue);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0}
+.agent-list-empty{padding:20px;text-align:center;color:var(--text3);font-size:13px}
+.selected-agent-chip{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--blue-light);border:1.5px solid var(--blue);border-radius:var(--radius-sm);margin-bottom:14px}
+.selected-agent-chip .sac-name{font-weight:600;color:var(--blue-dark);font-size:14px}
+.selected-agent-chip .sac-change{margin-right:auto;font-size:12px;color:var(--blue);cursor:pointer;text-decoration:underline}
+.pin-label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:block}
+
+/* ── APP ── */
+#app-screen{display:none}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--shadow)}
 .topbar-brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600}
 .topbar-brand .ti{font-size:22px;color:var(--blue)}
 .topbar-date{font-size:13px;color:var(--text3)}
-.agent-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:20px;font-size:13px;color:var(--blue-dark);cursor:pointer}
-.agent-chip:hover{background:#dbeafe}
+.agent-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:20px;font-size:13px;color:var(--blue-dark)}
 .breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text3);margin-bottom:16px;flex-wrap:wrap}
 .breadcrumb .bc-link{cursor:pointer;color:var(--blue)}.breadcrumb .bc-link:hover{text-decoration:underline}
 .container{max-width:1100px;margin:0 auto;padding:24px 16px}
@@ -38,6 +74,12 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .org-card .oc-icon{font-size:32px;color:var(--blue);margin-bottom:10px;display:block}
 .org-card .oc-name{font-size:14px;font-weight:600;color:var(--text)}
 .org-card .oc-count{font-size:12px;color:var(--text3);margin-top:4px}
+.pending-badge{display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:20px;font-size:11px;font-weight:700;padding:2px 8px;margin-top:6px}
+.admin-alert-bar{background:#fef3c7;border:1px solid #fcd34d;border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.admin-alert-bar .aab-title{font-weight:700;color:#92400e;font-size:14px;white-space:nowrap}
+.admin-alert-bar .aab-items{display:flex;flex-wrap:wrap;gap:8px}
+.aab-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:#fff;border:1px solid #fcd34d;border-radius:20px;font-size:13px;color:#78350f;cursor:pointer;transition:background .12s}
+.aab-chip:hover{background:#fef3c7}
 .files-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .file-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 12px;text-align:center;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
 .file-card:hover{border-color:var(--blue);background:var(--blue-light);transform:translateY(-2px);box-shadow:var(--shadow-md)}
@@ -70,8 +112,9 @@ select.form-input{cursor:pointer}
 .nav-tab:hover{color:var(--text);background:var(--surface2)}.nav-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:500px}
-th{background:var(--surface2);padding:10px 12px;text-align:right;font-weight:600;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.03em}
+th{background:var(--surface2);padding:10px 12px;text-align:right;font-weight:600;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;user-select:none}
 th.admin-col{background:var(--purple-light);color:var(--purple)}
+th:hover{background:var(--border)}
 td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
 td.admin-col{background:rgba(245,243,255,.35)}
 tr:last-child td{border-bottom:none}
@@ -80,8 +123,7 @@ tr:hover td.admin-col{background:var(--purple-light)}
 .alert{padding:11px 16px;border-radius:var(--radius-sm);font-size:14px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .alert-success{background:var(--green-light);color:#15803d;border:1px solid #bbf7d0}
 .alert-error{background:var(--red-light);color:#b91c1c;border:1px solid #fecaca}
-.alert-info{background:var(--blue-light);color:var(--blue-dark);border:1px solid #bfdbfe}
-.modal-overlay{position:fixed;inset:0;background:rgba(15,20,40,.45);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(2px)}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,20,40,.45);display:flex;align-items:center;justify-content:center;z-index:300;backdrop-filter:blur(2px)}
 .modal{background:var(--surface);border-radius:var(--radius);padding:28px;width:500px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md);border:1px solid var(--border)}
 .modal-title{font-size:17px;font-weight:600;margin-bottom:20px;color:var(--text)}
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
@@ -92,15 +134,12 @@ tr:hover td.admin-col{background:var(--purple-light)}
 .search-wrap{position:relative;margin-bottom:14px}
 .search-wrap .ti{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
 .search-wrap input{padding-right:34px}
-/* phone lookup */
 .phone-lookup{background:var(--blue-light);border:1px solid #bfdbfe;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px;font-size:13px}
 .phone-lookup .pl-title{font-weight:600;color:var(--blue-dark);margin-bottom:6px;display:flex;align-items:center;gap:6px}
 .phone-lookup .pl-row{display:flex;justify-content:space-between;color:var(--text2);padding:2px 0}
 .phone-lookup .pl-row span:last-child{color:var(--text);font-weight:500}
 .phone-found{background:var(--amber-light);border-color:#fcd34d}
 .phone-found .pl-title{color:var(--amber)}
-/* existing record warning */
-.exist-warn{background:var(--amber-light);border:1px solid #fcd34d;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .empty{text-align:center;padding:40px 20px;color:var(--text3)}
 .empty .ti{font-size:40px;display:block;margin-bottom:10px}
 .loading{text-align:center;padding:32px;color:var(--text3)}
@@ -116,27 +155,102 @@ tr:hover td.admin-col{background:var(--purple-light)}
 .filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
 .filter-bar select,.filter-bar input{padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)}
 .filter-label{font-size:12px;font-weight:500;color:var(--text2);align-self:center}
-/* agent name modal */
-.agent-modal{background:var(--surface);border-radius:var(--radius);padding:32px;width:380px;max-width:96vw;box-shadow:var(--shadow-md);border:1px solid var(--border);text-align:center}
-.agent-modal .am-icon{font-size:48px;color:var(--blue);margin-bottom:12px}
-.agent-modal .am-title{font-size:18px;font-weight:600;margin-bottom:6px}
-.agent-modal .am-sub{font-size:14px;color:var(--text2);margin-bottom:20px}
 @media(max-width:600px){.form-grid-2{grid-template-columns:1fr}.container{padding:12px}.card{padding:14px}.topbar{padding:0 12px}.org-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="topbar-brand"><i class="ti ti-headset"></i>מוקד שירות לקוחות</div>
-  <div class="flex-gap">
-    <span class="topbar-date" id="topbar-date"></span>
-    <span class="agent-chip" id="agent-chip" onclick="changeAgentName()" title="לחץ לשינוי שם"></span>
-    <button class="btn btn-sm" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen">
+  <div class="login-wrap">
+    <!-- mode select -->
+    <div id="ls-mode" class="login-card">
+      <div class="login-logo">
+        <div><i class="ti ti-headset" style="font-size:44px;color:var(--blue)"></i></div>
+        <div class="login-logo-title">מוקד שירות לקוחות</div>
+        <div class="login-logo-sub">בחר סוג כניסה</div>
+      </div>
+      <div class="mode-btns">
+        <button class="mode-btn" onclick="showLogin('agent')">
+          <i class="ti ti-user mb-icon"></i>
+          <div><div>כניסת נציג</div><div class="mb-sub">בחירת שם + 4 ספרות ת"ז</div></div>
+        </button>
+        <button class="mode-btn" onclick="showLogin('manager')">
+          <i class="ti ti-shield-check mb-icon"></i>
+          <div><div>כניסת מנהל</div><div class="mb-sub">מייל וסיסמה</div></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- agent login -->
+    <div id="ls-agent" class="login-card" style="display:none">
+      <button class="login-back" onclick="showLogin('mode')"><i class="ti ti-arrow-right"></i> חזרה</button>
+      <div class="login-logo">
+        <i class="ti ti-user" style="font-size:36px;color:var(--blue)"></i>
+        <div class="login-logo-title">כניסת נציג</div>
+        <div class="login-logo-sub">בחר את שמך והזן קוד</div>
+      </div>
+      <div class="login-err" id="agent-err"></div>
+
+      <!-- step 1: pick agent -->
+      <div id="agent-step1">
+        <div class="form-row" style="margin-bottom:6px">
+          <label class="form-label">חיפוש שם</label>
+          <div class="search-wrap" style="margin-bottom:0">
+            <input class="form-input" id="agent-search" placeholder="הקלד שם..." oninput="filterAgents()" autocomplete="off">
+            <i class="ti ti-search"></i>
+          </div>
+        </div>
+        <div class="agent-list" id="agent-list"></div>
+      </div>
+
+      <!-- step 2: pin after selecting -->
+      <div id="agent-step2" style="display:none">
+        <div class="selected-agent-chip" id="selected-chip"></div>
+        <label class="pin-label">4 ספרות אחרונות של ת"ז</label>
+        <div class="pin-row">
+          <input class="pin-digit" id="p0" maxlength="1" type="password" inputmode="numeric" oninput="pinInput(0)" onkeydown="pinKey(event,0)">
+          <input class="pin-digit" id="p1" maxlength="1" type="password" inputmode="numeric" oninput="pinInput(1)" onkeydown="pinKey(event,1)">
+          <input class="pin-digit" id="p2" maxlength="1" type="password" inputmode="numeric" oninput="pinInput(2)" onkeydown="pinKey(event,2)">
+          <input class="pin-digit" id="p3" maxlength="1" type="password" inputmode="numeric" oninput="pinInput(3)" onkeydown="pinKey(event,3)">
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px" onclick="loginAgent()"><i class="ti ti-login"></i> כניסה</button>
+      </div>
+    </div>
+
+    <!-- manager login -->
+    <div id="ls-manager" class="login-card" style="display:none">
+      <button class="login-back" onclick="showLogin('mode')"><i class="ti ti-arrow-right"></i> חזרה</button>
+      <div class="login-logo">
+        <i class="ti ti-shield-check" style="font-size:36px;color:var(--blue)"></i>
+        <div class="login-logo-title">כניסת מנהל</div>
+      </div>
+      <div class="login-err" id="mgr-err"></div>
+      <div class="form-row">
+        <label class="form-label">מייל</label>
+        <input class="form-input" id="mgr-email" type="email" placeholder="your@email.com" dir="ltr" onkeydown="if(event.key==='Enter')loginManager()">
+      </div>
+      <div class="form-row">
+        <label class="form-label">סיסמה</label>
+        <input class="form-input" id="mgr-pass" type="password" placeholder="••••••••" dir="ltr" onkeydown="if(event.key==='Enter')loginManager()">
+      </div>
+      <button class="btn btn-primary" id="mgr-btn" style="width:100%;justify-content:center;margin-top:8px" onclick="loginManager()"><i class="ti ti-login"></i> כניסה</button>
+    </div>
   </div>
 </div>
 
-<div class="container" id="app">
-  <div class="loading"><div class="spinner"></div><p>טוען...</p></div>
+<!-- ══ APP SCREEN ══ -->
+<div id="app-screen">
+  <div class="topbar">
+    <div class="topbar-brand"><i class="ti ti-headset"></i>מוקד שירות לקוחות</div>
+    <div class="flex-gap">
+      <span class="topbar-date" id="topbar-date"></span>
+      <span class="agent-chip" id="agent-chip"></span>
+      <button class="btn btn-sm" id="admin-btn" style="display:none" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
+      <button class="btn btn-sm btn-danger" onclick="doLogout()"><i class="ti ti-logout"></i> יציאה</button>
+    </div>
+  </div>
+  <div class="container" id="app"></div>
 </div>
 
 <div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this&&!_modalLocked)closeModal()">
@@ -144,32 +258,23 @@ tr:hover td.admin-col{background:var(--purple-light)}
 </div>
 
 <script>
-const SB  = 'https://vlhqkwwgmkriwojffced.supabase.co/rest/v1';
-const KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsaHFrd3dnbWtyaXdvamZmY2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MzY1ODEsImV4cCI6MjA5ODIxMjU4MX0.HDsgaf_S_CZjtqn2D75SpDk9KqjaC_kYtA2_Oex-vak';
-const ADMIN_PASS = 'Q1w2e3r4!';
-const ICONS = ['ti-file','ti-coin','ti-clock-off','ti-steps','ti-alert-circle','ti-phone','ti-tool','ti-refresh','ti-star','ti-flag','ti-user','ti-mail','ti-notes','ti-gift','ti-bolt','ti-heart','ti-award','ti-calendar','ti-chart-bar','ti-clipboard'];
+const SB_URL  = 'https://vlhqkwwgmkriwojffced.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsaHFrd3dnbWtyaXdvamZmY2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MzY1ODEsImV4cCI6MjA5ODIxMjU4MX0.HDsgaf_S_CZjtqn2D75SpDk9KqjaC_kYtA2_Oex-vak';
+const SB_REST = SB_URL + '/rest/v1';
+const ICONS   = ['ti-file','ti-coin','ti-clock-off','ti-steps','ti-alert-circle','ti-phone','ti-tool','ti-refresh','ti-star','ti-flag','ti-user','ti-mail','ti-notes','ti-gift','ti-bolt','ti-heart','ti-award','ti-calendar','ti-chart-bar','ti-clipboard'];
 
-let S = { view:'orgs', orgId:null, fileId:null, adminLoggedIn:!!(sessionStorage.getItem('adminLoggedIn')), adminTab:'orgs', searchQ:'', alert:null, filters:{}, phoneSearch:'', phoneLookup:null, sortCol:null, sortDir:1 };
-let DB = { orgs:[], files:[] };
-let _tmpIcon='ti-file', _tmpFields=[], _tmpAdminFields=[];
-let _cachedRecords={}, _allRecords=[];
-let _saveTimers={};
-let _modalLocked=false;
-let _agentName = localStorage.getItem('agentName')||'';
+let sbClient = null;
+let currentUser = null; // { name, role:'agent'|'manager', is_super_admin }
+let allAgents  = [];
 
-// ── Date & agent chip ──
-document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('he-IL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-function updateAgentChip(){
-  const chip=document.getElementById('agent-chip');
-  chip.innerHTML=_agentName?`<i class="ti ti-user"></i>${esc(_agentName)} <i class="ti ti-pencil" style="font-size:11px;opacity:.6"></i>`:`<i class="ti ti-user-question"></i> הזן שם נציג`;
-}
-updateAgentChip();
+// ── Supabase client (for auth only) ──
+sbClient = window.supabase.createClient(SB_URL, SB_KEY);
 
-// ── API ──
+// ── REST API ──
 async function api(method,table,body=null,params=''){
-  const r=await fetch(`${SB}/${table}${params}`,{
+  const r=await fetch(`${SB_REST}/${table}${params}`,{
     method,
-    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
     body:body?JSON.stringify(body):null
   });
   if(!r.ok) throw new Error(await r.text());
@@ -180,6 +285,169 @@ const POST=(t,b)=>api('POST',t,b);
 const PATCH=(t,b,p)=>api('PATCH',t,b,p);
 const DEL=(t,p)=>api('DELETE',t,null,p);
 
+// ══════════════════════════════════
+// LOGIN SYSTEM
+// ══════════════════════════════════
+document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('he-IL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+function showLogin(screen){
+  ['mode','agent','manager'].forEach(s=>document.getElementById('ls-'+s).style.display=s===screen?'block':'none');
+  if(screen==='agent'){
+    document.getElementById('agent-step1').style.display='block';
+    document.getElementById('agent-step2').style.display='none';
+    populateAgents(allAgents);
+    setTimeout(()=>document.getElementById('agent-search').focus(),50);
+  }
+  if(screen==='manager') setTimeout(()=>document.getElementById('mgr-email').focus(),50);
+}
+
+async function initLogin(){
+  // check existing manager session
+  const {data:{session}} = await sbClient.auth.getSession();
+  if(session?.user){
+    const {data:mgr} = await sbClient.from('app_managers').select('*').eq('email',session.user.email).eq('active',true).single();
+    if(mgr){ enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin}); return; }
+  }
+  // load agents list
+  const data = await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin');
+  allAgents = data||[];
+  populateAgents(allAgents);
+  showLogin('mode');
+}
+
+let _selectedAgent = null;
+
+function populateAgents(list){
+  const el=document.getElementById('agent-list'); if(!el) return;
+  if(!list.length){ el.innerHTML=`<div class="agent-list-empty"><i class="ti ti-search"></i> לא נמצאו נציגים</div>`; return; }
+  el.innerHTML=list.map(u=>{
+    const initials=u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('');
+    return `<div class="agent-list-item ${_selectedAgent&&_selectedAgent.id===u.id?'selected':''}" onclick="selectAgent(${u.id})">
+      <div class="ali-avatar">${initials}</div>
+      <span>${esc(u.name)}</span>
+    </div>`;
+  }).join('');
+}
+
+function filterAgents(){
+  const q=document.getElementById('agent-search').value.trim();
+  const filtered=q?allAgents.filter(u=>u.name.includes(q)):allAgents;
+  populateAgents(filtered);
+}
+
+function selectAgent(id){
+  _selectedAgent=allAgents.find(u=>u.id===id);
+  if(!_selectedAgent) return;
+  // show step2
+  document.getElementById('agent-step1').style.display='none';
+  document.getElementById('agent-step2').style.display='block';
+  document.getElementById('agent-err').style.display='none';
+  // show chip
+  const initials=_selectedAgent.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('');
+  document.getElementById('selected-chip').innerHTML=`
+    <div class="ali-avatar" style="width:36px;height:36px;font-size:14px;background:var(--blue)">${initials}</div>
+    <span class="sac-name">${esc(_selectedAgent.name)}</span>
+    <span class="sac-change" onclick="backToAgentList()">שנה</span>`;
+  // clear & focus pin
+  ['p0','p1','p2','p3'].forEach(id=>document.getElementById(id).value='');
+  setTimeout(()=>document.getElementById('p0').focus(),80);
+}
+
+function backToAgentList(){
+  _selectedAgent=null;
+  document.getElementById('agent-step2').style.display='none';
+  document.getElementById('agent-step1').style.display='block';
+  document.getElementById('agent-search').value='';
+  populateAgents(allAgents);
+  setTimeout(()=>document.getElementById('agent-search').focus(),50);
+}
+
+function onAgentSelect(){} // legacy — not used
+function pinInput(i){
+  const el=document.getElementById('p'+i);
+  el.value=el.value.replace(/\D/g,'').slice(0,1);
+  if(el.value&&i<3) document.getElementById('p'+(i+1)).focus();
+  if(i===3&&el.value) loginAgent();
+}
+function pinKey(e,i){
+  if(e.key==='Backspace'&&!document.getElementById('p'+i).value&&i>0) document.getElementById('p'+(i-1)).focus();
+  if(e.key==='Enter') loginAgent();
+}
+async function loginAgent(){
+  const errEl=document.getElementById('agent-err');
+  errEl.style.display='none';
+  if(!_selectedAgent){ showLoginErr(errEl,'בחר שם תחילה'); return; }
+  const pin=['p0','p1','p2','p3'].map(id=>document.getElementById(id).value).join('');
+  if(pin.length<4){ showLoginErr(errEl,'יש להזין 4 ספרות'); return; }
+  if(_selectedAgent.pin!==pin){
+    showLoginErr(errEl,'קוד שגוי — נסה שנית');
+    ['p0','p1','p2','p3'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('p0').focus(); return;
+  }
+  enterApp({name:_selectedAgent.name, role:'agent', is_super_admin:false});
+}
+async function loginManager(){
+  const email=document.getElementById('mgr-email').value.trim();
+  const pass=document.getElementById('mgr-pass').value;
+  const errEl=document.getElementById('mgr-err');
+  const btn=document.getElementById('mgr-btn');
+  errEl.style.display='none';
+  if(!email||!pass){ showLoginErr(errEl,'יש למלא מייל וסיסמה'); return; }
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> מתחבר...';
+  const {error}=await sbClient.auth.signInWithPassword({email,password:pass});
+  if(error){ showLoginErr(errEl,'מייל או סיסמה שגויים'); btn.disabled=false; btn.innerHTML='<i class="ti ti-login"></i> כניסה'; return; }
+  const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',email).eq('active',true).single();
+  if(!mgr){ await sbClient.auth.signOut(); showLoginErr(errEl,'אין הרשאת מנהל'); btn.disabled=false; btn.innerHTML='<i class="ti ti-login"></i> כניסה'; return; }
+  enterApp({name:mgr.name, role:'manager', is_super_admin:mgr.is_super_admin});
+}
+function showLoginErr(el,msg){ el.textContent=msg; el.style.display='block'; }
+
+function enterApp(user){
+  currentUser=user;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-screen').style.display='block';
+  // chip
+  const chip=document.getElementById('agent-chip');
+  const icon=user.role==='manager'?'ti-shield-check':'ti-user';
+  chip.innerHTML=`<i class="ti ${icon}"></i> ${esc(user.name)}`;
+  // admin btn — only managers see it
+  document.getElementById('admin-btn').style.display=user.role==='manager'?'':'none';
+  // set S.adminLoggedIn
+  S.adminLoggedIn = user.role==='manager';
+  _agentName = user.name;
+  initApp();
+}
+
+async function doLogout(){
+  if(currentUser?.role==='manager') await sbClient.auth.signOut();
+  currentUser=null; _agentName=''; _selectedAgent=null;
+  S={...S_DEFAULT()};
+  DB={orgs:[],files:[]};
+  _cachedRecords={}; _allRecords=[]; _pendingCounts={};
+  document.getElementById('app-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('mgr-email').value='';
+  document.getElementById('mgr-pass').value='';
+  document.getElementById('agent-search').value='';
+  document.getElementById('agent-step1').style.display='block';
+  document.getElementById('agent-step2').style.display='none';
+  populateAgents(allAgents);
+  showLogin('mode');
+}
+
+// ══════════════════════════════════
+// APP STATE
+// ══════════════════════════════════
+function S_DEFAULT(){ return { view:'orgs', orgId:null, fileId:null, adminLoggedIn:false, adminTab:'orgs', searchQ:'', alert:null, filters:{}, phoneSearch:'', phoneLookup:null, sortCol:null, sortDir:1 }; }
+let S = S_DEFAULT();
+let DB = { orgs:[], files:[] };
+let _agentName = '';
+let _tmpIcon='ti-file', _tmpFields=[], _tmpAdminFields=[];
+let _cachedRecords={}, _allRecords=[];
+let _saveTimers={};
+let _modalLocked=false;
+let _pendingCounts={};
+
 async function loadAll(){
   [DB.orgs,DB.files]=await Promise.all([GET('organizations','?order=created_at.asc'),GET('files','?order=created_at.asc')]);
 }
@@ -188,27 +456,34 @@ async function getRecords(fileId){
   _cachedRecords[fileId]=r; return r;
 }
 
-// ── Agent name ──
-function askAgentName(onDone){
-  _modalLocked=true;
-  showModal(`
-    <div class="agent-modal" style="padding:0">
-      <div class="am-icon"><i class="ti ti-user-circle"></i></div>
-      <div class="am-title">שלום! מה שמך?</div>
-      <div class="am-sub">שמך יצורף לכל רשומה שתזין</div>
-      <input class="form-input" id="agent-name-input" placeholder="שם פרטי ושם משפחה" value="${esc(_agentName)}" style="margin-bottom:14px;text-align:center">
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveAgentName(${onDone?'true':'false'})"><i class="ti ti-check"></i> המשך</button>
-    </div>`);
-  setTimeout(()=>document.getElementById('agent-name-input')&&document.getElementById('agent-name-input').focus(),100);
+// ── Pending ──
+function isRecordPending(record,file){
+  const rules=file.pending_rules||{};
+  const adminFields=file.admin_fields||[];
+  if(!adminFields.length) return false;
+  for(const af of adminFields){
+    const rule=rules[af.id]||'ignore';
+    if(rule==='ignore') continue;
+    const val=(record.admin_data||{})[af.id];
+    if(rule==='must_fill'){ if(!val||val.toString().trim()==='') return true; }
+    else if(rule==='must_check'){ if(!val||val===false||val==='false') return true; }
+    else if(rule.startsWith('value:')){ if((val||'').toString()!==rule.slice(6)) return true; }
+  }
+  return false;
 }
-function saveAgentName(andContinue){
-  const val=document.getElementById('agent-name-input').value.trim();
-  if(!val){alert('יש להזין שם');return;}
-  _agentName=val; localStorage.setItem('agentName',val);
-  updateAgentChip(); _modalLocked=false; closeModal();
-  if(andContinue) render();
+async function loadPendingCounts(){
+  _pendingCounts={};
+  const filesWithRules=DB.files.filter(f=>Object.values(f.pending_rules||{}).some(r=>r!=='ignore'));
+  if(!filesWithRules.length) return;
+  await Promise.all(filesWithRules.map(async f=>{
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,admin_data`);
+      _pendingCounts[f.id]=recs.filter(r=>isRecordPending(r,f)).length;
+    }catch(e){ _pendingCounts[f.id]=0; }
+  }));
 }
-function changeAgentName(){ askAgentName(false); }
+function pendingForOrg(orgId){ return DB.files.filter(f=>f.org_id===orgId).reduce((s,f)=>s+(_pendingCounts[f.id]||0),0); }
+function totalPending(){ return Object.values(_pendingCounts).reduce((s,v)=>s+v,0); }
 
 // ── Render ──
 function render(){
@@ -225,46 +500,58 @@ function render(){
 
 function renderBreadcrumb(){
   if(S.view==='orgs'||S.view==='admin') return '';
-  const org=DB.orgs.find(o=>o.id===S.orgId), file=DB.files.find(f=>f.id===S.fileId);
+  const org=DB.orgs.find(o=>o.id===S.orgId),file=DB.files.find(f=>f.id===S.fileId);
   let c=`<span class="bc-link" onclick="goOrgs()">ארגונים</span>`;
   if(org) c+=`<span>›</span><span class="bc-link" onclick="goFiles()">${esc(org.name)}</span>`;
   if(file&&(S.view==='form'||S.view==='records')) c+=`<span>›</span><span>${esc(file.name)}</span>`;
   return `<div class="breadcrumb">${c}</div>`;
 }
 
-// ── Orgs ──
 function renderOrgs(){
-  if(!DB.orgs.length) return `<div class="empty"><i class="ti ti-building-off"></i><p>אין ארגונים. כנס למנהל להוסיף.</p></div>`;
-  return `<div class="card"><div class="card-title"><i class="ti ti-building"></i>בחר ארגון</div>
-    <div class="org-grid">${DB.orgs.map(o=>`
-      <div class="org-card" onclick="goFiles('${o.id}')">
+  if(!DB.orgs.length) return `<div class="empty"><i class="ti ti-building-off"></i><p>אין ארגונים.</p></div>`;
+  const totalP=totalPending();
+  const adminAlert=S.adminLoggedIn&&totalP>0?`
+    <div class="admin-alert-bar">
+      <div class="aab-title"><i class="ti ti-bell-ringing"></i> ממתינים לטיפול</div>
+      <div class="aab-items">
+        ${DB.files.filter(f=>(_pendingCounts[f.id]||0)>0).map(f=>{
+          const o=DB.orgs.find(x=>x.id===f.org_id);
+          return `<div class="aab-chip" onclick="adminViewFileRecords('${f.id}')">
+            <i class="ti ti-folder"></i> ${esc(o?o.name:'')} › ${esc(f.name)}
+            <span style="background:#fca5a5;color:#7f1d1d;border-radius:20px;padding:1px 7px;font-weight:700">${_pendingCounts[f.id]}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:'';
+  return `${adminAlert}<div class="card"><div class="card-title"><i class="ti ti-building"></i>בחר ארגון</div>
+    <div class="org-grid">${DB.orgs.map(o=>{
+      const p=pendingForOrg(o.id);
+      const pb=S.adminLoggedIn&&p>0?`<div class="pending-badge"><i class="ti ti-clock" style="font-size:10px"></i> ${p} ממתינים</div>`:'';
+      return `<div class="org-card" onclick="goFiles('${o.id}')">
         <i class="ti ti-building-hospital oc-icon"></i>
         <div class="oc-name">${esc(o.name)}</div>
         <div class="oc-count">${DB.files.filter(f=>f.org_id===o.id).length} קבצים</div>
-      </div>`).join('')}
-    </div></div>`;
+        ${pb}
+      </div>`;
+    }).join('')}</div></div>`;
 }
 
-// ── Files ──
 function renderFiles(){
   const orgFiles=DB.files.filter(f=>f.org_id===S.orgId);
-  if(!orgFiles.length) return `<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים לארגון זה.</p></div>`;
+  if(!orgFiles.length) return `<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים.</p></div>`;
   return `<div class="card"><div class="card-title"><i class="ti ti-folder"></i>בחר קובץ לעדכון</div>
-    <div class="files-grid">${orgFiles.map(f=>`
-      <div class="file-card" onclick="goForm('${f.id}')">
+    <div class="files-grid">${orgFiles.map(f=>{
+      const p=S.adminLoggedIn?(_pendingCounts[f.id]||0):0;
+      const pb=p>0?`<div class="pending-badge"><i class="ti ti-clock" style="font-size:10px"></i> ${p} ממתינים</div>`:'';
+      return `<div class="file-card" onclick="goForm('${f.id}')">
         <i class="ti ${f.icon||'ti-file'} fc-icon"></i>
-        <div class="fc-name">${esc(f.name)}</div>
-      </div>`).join('')}
-    </div></div>`;
+        <div class="fc-name">${esc(f.name)}</div>${pb}
+      </div>`;
+    }).join('')}</div></div>`;
 }
 
-// ── Form ──
 function renderForm(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
-
-  // phone lookup result
-  // phone lookup rendered separately via renderLookupOnly() - not blocking form render
-
   const extraF=(f.extra_fields||[]).map(ef=>{
     let inp='';
     if(ef.type==='select'){const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');inp=`<select class="form-input" name="extra_${ef.id}"><option value="">בחר...</option>${opts}</select>`;}
@@ -272,17 +559,16 @@ function renderForm(){
     else inp=`<input class="form-input" type="text" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
     return `<div class="form-row"><label class="form-label">${esc(ef.label)}</label>${inp}</div>`;
   }).join('');
-
   return `<div class="card">
     <div class="flex-between" style="margin-bottom:16px">
       <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)}</div>
       <div class="flex-gap">
-        <button class="btn btn-sm" onclick="goRecords('${f.id}')"><i class="ti ti-list"></i> כל הרשומות</button>
+        <button class="btn btn-sm" onclick="goRecords('${f.id}')"><i class="ti ti-list"></i> רשומות</button>
         <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
       </div>
     </div>
     <div class="form-row">
-      <label class="form-label"><i class="ti ti-phone" style="font-size:13px"></i> חיפוש לפי טלפון לפני הזנה</label>
+      <label class="form-label"><i class="ti ti-phone" style="font-size:13px"></i> חיפוש לפי טלפון</label>
       <div class="search-wrap" style="margin-bottom:0">
         <input class="form-input" id="phone-search-input" type="text" dir="ltr" placeholder="05X-XXXXXXX" value="${esc(S.phoneSearch)}" oninput="onPhoneSearch(this.value)">
         <i class="ti ti-search"></i>
@@ -293,15 +579,13 @@ function renderForm(){
       <div class="form-grid-2">
         <div class="form-row"><label class="form-label">שם פרטי *</label><input class="form-input" name="first_name" required placeholder="שם פרטי"></div>
         <div class="form-row"><label class="form-label">שם משפחה *</label><input class="form-input" name="last_name" required placeholder="שם משפחה"></div>
-        <div class="form-row"><label class="form-label">טלפון *</label>
-          <input class="form-input" name="phone" id="phone-form-input" required placeholder="05X-XXXXXXX" dir="ltr" value="${esc(S.phoneSearch)}">
-        </div>
+        <div class="form-row"><label class="form-label">טלפון *</label><input class="form-input" name="phone" id="phone-form-input" required placeholder="05X-XXXXXXX" dir="ltr" value="${esc(S.phoneSearch)}"></div>
         <div class="form-row"><label class="form-label">ת"ז *</label><input class="form-input" name="id_num" required placeholder="9 ספרות" dir="ltr" maxlength="9"></div>
       </div>
       ${extraF}
       <div class="mt-2 flex-gap">
         <button type="submit" class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> שמור רשומה</button>
-        ${_agentName?`<span style="font-size:12px;color:var(--text3)"><i class="ti ti-user" style="font-size:12px"></i> יירשם ע"ש ${esc(_agentName)}</span>`:''}
+        <span style="font-size:12px;color:var(--text3)"><i class="ti ti-user" style="font-size:12px"></i> יירשם ע"ש ${esc(_agentName)}</span>
       </div>
     </form>
   </div>`;
@@ -310,37 +594,30 @@ function renderForm(){
 let _phoneTimer=null;
 function onPhoneSearch(val){
   S.phoneSearch=val;
-  // clear previous result silently (no re-render yet)
   S.phoneLookup=null;
   clearTimeout(_phoneTimer);
-  const digits=val.replace(/\D/g,'');
-  if(digits.length>=9){
+  if(val.replace(/\D/g,'').length>=9){
     _phoneTimer=setTimeout(async()=>{
       try{
         const clean=val.replace(/[-\s]/g,'');
         S.phoneLookup=await GET('records',`?file_id=eq.${S.fileId}&phone=ilike.*${encodeURIComponent(clean)}*&order=created_at.desc&limit=1`);
       }catch(e){S.phoneLookup=[];}
-      // only re-render after lookup complete — not on every keystroke
       renderLookupOnly();
     },700);
   } else {
-    // hide any previous result without full re-render
     const box=document.getElementById('lookup-box');
     if(box) box.innerHTML='';
   }
 }
-
 function renderLookupOnly(){
-  const box=document.getElementById('lookup-box');
-  if(!box) return;
+  const box=document.getElementById('lookup-box'); if(!box) return;
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return;
-  if(S.phoneLookup===null){ box.innerHTML=''; return; }
+  if(!S.phoneLookup){ box.innerHTML=''; return; }
   if(S.phoneLookup.length===0){
-    box.innerHTML=`<div class="phone-lookup"><div class="pl-title"><i class="ti ti-circle-check" style="color:var(--green)"></i> לקוח חדש — לא נמצא בקובץ זה</div></div>`;
+    box.innerHTML=`<div class="phone-lookup"><div class="pl-title"><i class="ti ti-circle-check" style="color:var(--green)"></i> לקוח חדש</div></div>`;
   } else {
     const ex=S.phoneLookup[0];
-    const extraFields=f.extra_fields||[];
-    const extraRows=extraFields.map(ef=>`<div class="pl-row"><span>${esc(ef.label)}</span><span>${esc((ex.extra||{})[ef.id]||'—')}</span></div>`).join('');
+    const extraRows=(f.extra_fields||[]).map(ef=>`<div class="pl-row"><span>${esc(ef.label)}</span><span>${esc((ex.extra||{})[ef.id]||'—')}</span></div>`).join('');
     box.innerHTML=`<div class="phone-lookup phone-found">
       <div class="pl-title"><i class="ti ti-alert-triangle"></i> לקוח קיים בקובץ זה</div>
       <div class="pl-row"><span>שם</span><span>${esc(ex.first_name)} ${esc(ex.last_name)}</span></div>
@@ -351,14 +628,11 @@ function renderLookupOnly(){
   }
 }
 
-// ── Records page ──
 function renderRecordsPage(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
   const isAdmin=S.adminLoggedIn;
   const records=_cachedRecords[S.fileId]||[];
-  const extraFields=f.extra_fields||[];
-  const adminFields=f.admin_fields||[];
-
+  const extraFields=f.extra_fields||[], adminFields=f.admin_fields||[];
   let filtered=records;
   const q=(S.searchQ||'').toLowerCase();
   if(q) filtered=filtered.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num+' '+(r.agent_name||'')).toLowerCase().includes(q));
@@ -371,15 +645,11 @@ function renderRecordsPage(){
       return v.includes(val.toLowerCase());
     });
   });
-
-  // ── sort ──
   const sortable=(col,label,cls='')=>{
     const active=S.sortCol===col;
     const arrow=active?(S.sortDir===1?'↑':'↓'):'⇅';
-    return `<th class="${cls}" style="cursor:pointer;user-select:none" onclick="toggleSort('${col}')">${label} <span style="opacity:${active?1:.35};font-size:11px">${arrow}</span></th>`;
+    return `<th class="${cls}" onclick="toggleSort('${col}')">${label} <span style="opacity:${active?1:.35};font-size:11px">${arrow}</span></th>`;
   };
-
-  // apply sort
   if(S.sortCol){
     const col=S.sortCol;
     filtered=[...filtered].sort((a,b)=>{
@@ -395,19 +665,16 @@ function renderRecordsPage(){
       if(va<vb) return -S.sortDir; if(va>vb) return S.sortDir; return 0;
     });
   }
-
   const extraH=extraFields.map(ef=>sortable('extra_'+ef.id,esc(ef.label))).join('');
   const adminH=adminFields.map(af=>sortable('admin_'+af.id,'<i class="ti ti-shield-check" style="font-size:11px"></i> '+esc(af.label),'admin-col')).join('');
   const agentH=sortable('agent','נציג');
   const delH=isAdmin?'<th></th>':'';
-
   const rows=filtered.map(r=>{
     const extraC=extraFields.map(ef=>{
       const v=(r.extra||{})[ef.id]||'';
       if(ef.type==='select'&&v){const cls=v==='טופל'?'badge-success':v==='לא טופל'?'badge-warning':'badge-info';return `<td><span class="badge ${cls}">${esc(v)}</span></td>`;}
       return `<td>${esc(v)}</td>`;
     }).join('');
-
     const adminC=adminFields.map(af=>{
       const val=(r.admin_data||{})[af.id];
       if(!isAdmin){
@@ -419,23 +686,19 @@ function renderRecordsPage(){
       if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><select class="admin-input" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></td>`;}
       return `<td class="admin-col"><input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></td>`;
     }).join('');
-
     const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
     const delC=isAdmin?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:'';
     return `<tr><td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td><td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${delC}</tr>`;
   }).join('');
-
-  const filterBar=adminFields.length?`
-    <div class="filter-bar">
-      <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
-      ${adminFields.map(af=>{
-        if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option><option value="yes" ${S.filters[af.id]==='yes'?'selected':''}>✓ מסומן</option><option value="no" ${S.filters[af.id]==='no'?'selected':''}>✗ לא מסומן</option></select>`;
-        if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option>${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${S.filters[af.id]===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
-        return `<input type="text" placeholder="סנן ${esc(af.label)}..." value="${esc(S.filters[af.id]||'')}" oninput="setFilter('${af.id}',this.value)" style="min-width:130px">`;
-      }).join('')}
-      <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
-    </div>`:'';
-
+  const filterBar=adminFields.length?`<div class="filter-bar">
+    <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
+    ${adminFields.map(af=>{
+      if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option><option value="yes">✓ מסומן</option><option value="no">✗ לא מסומן</option></select>`;
+      if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option>${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('')}</select>`;
+      return `<input type="text" placeholder="סנן ${esc(af.label)}..." value="${esc(S.filters[af.id]||'')}" oninput="setFilter('${af.id}',this.value)" style="min-width:130px">`;
+    }).join('')}
+    <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
+  </div>`:'';
   return `<div class="card">
     <div class="flex-between" style="margin-bottom:16px">
       <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)} — רשומות</div>
@@ -458,49 +721,18 @@ function renderRecordsPage(){
   </div>`;
 }
 
-// ── Admin inline save ──
-async function saveAdminField(recordId,fieldId,value,fileId){
-  const recs=_cachedRecords[fileId]||[];
-  const record=recs.find(r=>r.id===recordId); if(!record) return;
-  if(!record.admin_data) record.admin_data={};
-  record.admin_data[fieldId]=value;
-  try{ await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`); }
-  catch(e){ showAlert('שגיאה בשמירה','error'); }
-}
-function debounceAdminField(recordId,fieldId,value,fileId){
-  const key=recordId+'_'+fieldId;
-  clearTimeout(_saveTimers[key]);
-  _saveTimers[key]=setTimeout(()=>saveAdminField(recordId,fieldId,value,fileId),700);
-}
-function toggleSort(col){
-  if(S.sortCol===col){ S.sortDir*=-1; } else { S.sortCol=col; S.sortDir=1; }
-  render();
-}
-
-function setFilter(afId,val){ S.filters[afId]=val; render(); }
-
-// ── Admin ──
 function renderAdmin(){
-  if(!S.adminLoggedIn) return `
-    <div class="card" style="max-width:360px;margin:20px auto">
-      <div class="card-title"><i class="ti ti-lock"></i> כניסת מנהל</div>
-      <form onsubmit="adminLogin(event)">
-        <div class="form-row"><label class="form-label">סיסמה</label><input class="form-input" type="password" id="admin-pass" placeholder="הזן סיסמה" autofocus></div>
-        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px"><i class="ti ti-login"></i> כניסה</button>
-      </form>
-    </div>`;
+  if(!S.adminLoggedIn) return `<div class="empty"><i class="ti ti-lock"></i><p>אין גישה</p></div>`;
   const tab=S.adminTab;
   return `<div class="card">
-    <div class="flex-between" style="margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ti-settings"></i> ממשק מנהל</div>
-      <button class="btn btn-sm btn-danger" onclick="S.adminLoggedIn=false;sessionStorage.removeItem('adminLoggedIn');goOrgs()"><i class="ti ti-logout"></i> יציאה</button>
-    </div>
+    <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
     <div class="nav-tabs">
       <button class="nav-tab ${tab==='orgs'?'active':''}" onclick="S.adminTab='orgs';render()">ארגונים</button>
       <button class="nav-tab ${tab==='files'?'active':''}" onclick="S.adminTab='files';render()">קבצים</button>
       <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
+      <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
     </div>
-    ${tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():renderAdminAllRecords()}
+    ${tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -534,8 +766,7 @@ function renderAdminFiles(){
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:6px">
               <span class="tag"><i class="ti ti-calendar"></i> תאריך</span>
-              <span class="tag"><i class="ti ti-user"></i> שם פרטי</span>
-              <span class="tag"><i class="ti ti-user"></i> שם משפחה</span>
+              <span class="tag"><i class="ti ti-user"></i> שם</span>
               <span class="tag"><i class="ti ti-phone"></i> טלפון</span>
               <span class="tag"><i class="ti ti-id"></i> ת"ז</span>
               <span class="tag"><i class="ti ti-user-check"></i> נציג</span>
@@ -545,6 +776,21 @@ function renderAdminFiles(){
           </div>`).join('')}
       </div>`;
     }).join('')||'<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים</p></div>'}`;
+}
+
+function renderAdminAgents(){
+  return `<div style="text-align:left;margin-bottom:14px"><button class="btn btn-primary" onclick="openNewAgent()"><i class="ti ti-plus"></i> נציג חדש</button></div>
+    <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th></th></tr></thead><tbody>
+    ${allAgents.map(u=>`<tr>
+      <td>${esc(u.name)}</td>
+      <td dir="ltr" style="letter-spacing:4px">****</td>
+      <td><span class="badge ${u.active?'badge-success':'badge-warning'}">${u.active?'פעיל':'מושבת'}</span></td>
+      <td><div class="flex-gap">
+        <button class="btn btn-xs" onclick="openEditAgent(${u.id},'${esc(u.name)}','${u.pin}',${u.active})"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-xs btn-danger" onclick="confirmDeleteAgent(${u.id},'${esc(u.name)}')"><i class="ti ti-trash"></i></button>
+      </div></td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
 }
 
 function renderAdminAllRecords(){
@@ -559,53 +805,33 @@ function renderAdminAllRecords(){
       <td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td>
       <td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>
       <td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>
-      <td>
-        <div class="flex-gap">
-          <button class="btn btn-xs" onclick="adminViewFileRecords('${r.file_id}')"><i class="ti ti-external-link"></i></button>
-          <button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}',null)"><i class="ti ti-trash"></i></button>
-        </div>
-      </td>
+      <td><div class="flex-gap">
+        <button class="btn btn-xs" onclick="adminViewFileRecords('${r.file_id}')"><i class="ti ti-external-link"></i></button>
+        <button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}',null)"><i class="ti ti-trash"></i></button>
+      </div></td>
     </tr>`;
   }).join('');
   return `<div class="flex-between" style="margin-bottom:12px">
-    <span style="font-size:13px;color:var(--text2)">${_allRecords.length} רשומות סה"כ</span>
+    <span style="font-size:13px;color:var(--text2)">${_allRecords.length} רשומות</span>
     <button class="btn btn-sm btn-success" onclick="exportAll()"><i class="ti ti-download"></i> ייצוא Excel</button>
   </div>
   <div class="table-wrap"><table><thead><tr><th>ארגון</th><th>קובץ</th><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th><th>נציג</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 // ── Navigation ──
-function goOrgs(){ S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;loadAll().then(render); }
+function goOrgs(){ S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;loadAll().then(()=>loadPendingCounts().then(render)); }
 function goFiles(orgId){ if(orgId)S.orgId=orgId; S.view='files';S.fileId=null;render(); }
 function goForm(fileId){ S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;render(); }
-async function goRecords(fileId){
-  S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};render();
-  await getRecords(fileId);render();
-}
-async function adminViewFileRecords(fileId){
-  S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;
-  S.view='records';S.searchQ='';S.filters={};render();
-  await getRecords(fileId);render();
-}
+async function goRecords(fileId){ S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};render(); await getRecords(fileId);render(); }
+async function adminViewFileRecords(fileId){ S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};render();await getRecords(fileId);render(); }
 function gotoAdmin(){ S.view='admin';render(); }
-function adminLogin(e){
-  e.preventDefault();
-  if(document.getElementById('admin-pass').value===ADMIN_PASS){
-    S.adminLoggedIn=true;
-    sessionStorage.setItem('adminLoggedIn','1');
-    render();
-  } else showAlert('סיסמה שגויה','error');
-}
-async function adminLoadAllRecords(){
-  S.adminTab='records';S._loadingRecords=true;render();
-  _allRecords=await GET('records','?order=created_at.desc');
-  S._loadingRecords=false;render();
-}
+function toggleSort(col){ if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;} render(); }
+function setFilter(afId,val){ S.filters[afId]=val; render(); }
+async function adminLoadAllRecords(){ S.adminTab='records';S._loadingRecords=true;render();_allRecords=await GET('records','?order=created_at.desc');S._loadingRecords=false;render(); }
 
-// ── Submit ──
+// ── Submit record ──
 async function submitRecord(e,fileId){
   e.preventDefault();
-  if(!_agentName){ askAgentName(false); showAlert('יש להזין שם נציג תחילה','error'); return; }
   const form=e.target,btn=document.getElementById('submit-btn');
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2"></i> שומר...';
   const f=DB.files.find(x=>x.id===fileId);
@@ -614,28 +840,82 @@ async function submitRecord(e,fileId){
   try{
     await POST('records',{file_id:fileId,first_name:form.first_name.value.trim(),last_name:form.last_name.value.trim(),phone:form.phone.value.trim(),id_num:form.id_num.value.trim(),extra,admin_data:{},agent_name:_agentName});
     form.reset();S.phoneSearch='';S.phoneLookup=null;
+    // update pending
+    await loadPendingCounts();
     showAlert('הרשומה נשמרה בהצלחה ✓','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
   btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> שמור רשומה';
 }
 
+// ── Admin field inline save ──
+async function saveAdminField(recordId,fieldId,value,fileId){
+  const recs=_cachedRecords[fileId]||[];
+  const record=recs.find(r=>r.id===recordId); if(!record) return;
+  if(!record.admin_data) record.admin_data={};
+  record.admin_data[fieldId]=value;
+  try{
+    await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`);
+    await loadPendingCounts(); // refresh badges
+  }catch(e){showAlert('שגיאה בשמירה','error');}
+}
+function debounceAdminField(recordId,fieldId,value,fileId){
+  const key=recordId+'_'+fieldId;
+  clearTimeout(_saveTimers[key]);
+  _saveTimers[key]=setTimeout(()=>saveAdminField(recordId,fieldId,value,fileId),700);
+}
+
 // ── Delete record ──
 function confirmDelRecord(id,fileId){
   showModal(`<div class="modal-title" style="color:var(--red)"><i class="ti ti-alert-triangle"></i> מחיקת רשומה</div>
-    <p style="margin-bottom:20px;color:var(--text2)">האם אתה בטוח שברצונך למחוק רשומה זו? פעולה זו אינה ניתנת לביטול.</p>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal()">ביטול</button>
-      <button class="btn btn-danger" onclick="doDelRecord('${id}','${fileId||''}')"><i class="ti ti-trash"></i> מחק לצמיתות</button>
-    </div>`);
+    <p style="margin-bottom:20px;color:var(--text2)">האם אתה בטוח? פעולה זו אינה ניתנת לביטול.</p>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-danger" onclick="doDelRecord('${id}','${fileId||''}')"><i class="ti ti-trash"></i> מחק לצמיתות</button></div>`);
 }
 async function doDelRecord(id,fileId){
   closeModal();
-  try{
-    await DEL('records',`?id=eq.${id}`);
-    if(fileId&&fileId!=='null'){ await getRecords(fileId); }
-    else{ _allRecords=_allRecords.filter(r=>r.id!==id); }
-    render();showAlert('הרשומה נמחקה','success');
-  }catch(e){showAlert('שגיאה במחיקה','error');}
+  await DEL('records',`?id=eq.${id}`);
+  if(fileId&&fileId!=='null'){ await getRecords(fileId); }
+  else{ _allRecords=_allRecords.filter(r=>r.id!==id); }
+  await loadPendingCounts();
+  render(); showAlert('הרשומה נמחקה','success');
+}
+
+// ── Agent CRUD ──
+function openNewAgent(){
+  showModal(`<div class="modal-title"><i class="ti ti-user-plus" style="color:var(--blue)"></i> נציג חדש</div>
+    <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" placeholder="שם פרטי ושם משפחה"></div>
+    <div class="form-row"><label class="form-label">PIN — 4 ספרות אחרונות ת"ז *</label><input class="form-input" id="ag-pin" maxlength="4" placeholder="0000" dir="ltr"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveNewAgent()"><i class="ti ti-check"></i> הוסף</button></div>`);
+}
+function openEditAgent(id,name,pin,active){
+  showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת נציג</div>
+    <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" value="${esc(name)}"></div>
+    <div class="form-row"><label class="form-label">PIN חדש (השאר ריק לאי-שינוי)</label><input class="form-input" id="ag-pin" maxlength="4" placeholder="----" dir="ltr"></div>
+    <div class="form-row"><label class="form-label">סטטוס</label><select class="form-input" id="ag-active"><option value="true" ${active?'selected':''}>פעיל</option><option value="false" ${!active?'selected':''}>מושבת</option></select></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveEditAgent(${id})"><i class="ti ti-check"></i> שמור</button></div>`);
+}
+async function saveNewAgent(){
+  const name=document.getElementById('ag-name').value.trim();
+  const pin=document.getElementById('ag-pin').value.trim();
+  if(!name||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}
+  await POST('app_users',{name,pin,active:true});
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin');
+  allAgents=data||[]; closeModal(); render(); showAlert('הנציג נוסף','success');
+}
+async function saveEditAgent(id){
+  const name=document.getElementById('ag-name').value.trim();
+  const pin=document.getElementById('ag-pin').value.trim();
+  const active=document.getElementById('ag-active').value==='true';
+  if(!name){alert('יש להזין שם');return;}
+  const body={name,active};
+  if(pin.length===4) body.pin=pin;
+  await PATCH('app_users',body,`?id=eq.${id}`);
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin');
+  allAgents=data||[]; closeModal(); render(); showAlert('הנציג עודכן','success');
+}
+async function confirmDeleteAgent(id,name){
+  if(!confirm(`למחוק את הנציג "${name}"?`)) return;
+  await DEL('app_users',`?id=eq.${id}`);
+  allAgents=allAgents.filter(u=>u.id!==id); render(); showAlert('הנציג נמחק','success');
 }
 
 // ── Org modal ──
@@ -647,10 +927,10 @@ function openEditOrg(id,name){showModal(`<div class="modal-title"><i class="ti t
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveEditOrg('${id}')"><i class="ti ti-check"></i> שמור</button></div>`);}
 async function saveNewOrg(){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await POST('organizations',{name:n});await loadAll();closeModal();render();showAlert('הארגון נוסף','success');}
 async function saveEditOrg(id){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await PATCH('organizations',{name:n},`?id=eq.${id}`);await loadAll();closeModal();render();showAlert('הארגון עודכן','success');}
-async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכל קבציו ורשומותיו?'))return;await DEL('organizations',`?id=eq.${id}`);await loadAll();render();showAlert('הארגון נמחק','success');}
+async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכל קבציו?'))return;await DEL('organizations',`?id=eq.${id}`);await loadAll();render();showAlert('הארגון נמחק','success');}
 
 // ── File modal ──
-function openNewFile(){_tmpIcon='ti-file';_tmpFields=[];_tmpAdminFields=[];showModal(fileModalHTML({name:'',icon:'ti-file',org_id:'',extra_fields:[],admin_fields:[]},'new'));}
+function openNewFile(){_tmpIcon='ti-file';_tmpFields=[];_tmpAdminFields=[];showModal(fileModalHTML({name:'',icon:'ti-file',org_id:'',extra_fields:[],admin_fields:[],pending_rules:{}},'new'));}
 function openEditFile(id){
   const f=DB.files.find(x=>x.id===id);
   _tmpIcon=f.icon||'ti-file';_tmpFields=JSON.parse(JSON.stringify(f.extra_fields||[]));_tmpAdminFields=JSON.parse(JSON.stringify(f.admin_fields||[]));
@@ -661,20 +941,34 @@ function fileModalHTML(f,mode,id=''){
   const iconsH=ICONS.map(ic=>`<div class="icon-opt ${_tmpIcon===ic?'selected':''}" data-icon="${ic}" onclick="pickIcon('${ic}')"><i class="ti ${ic}"></i></div>`).join('');
   const fieldRows=_tmpFields.map((ef,i)=>fieldRowHTML(ef,i,'f')).join('');
   const adminRows=_tmpAdminFields.map((af,i)=>fieldRowHTML(af,i,'a')).join('');
+  const rules=f.pending_rules||{};
+  const pendingHTML=_tmpAdminFields.filter(af=>af.label).length?`
+    <div class="section-divider" style="color:#b45309"><i class="ti ti-bell"></i> הגדרת סטטוס "ממתין לטיפול"</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">מתי רשומה נחשבת "ממתינה" — תופיע כ-badge אדום</div>
+    ${_tmpAdminFields.filter(af=>af.label).map(af=>{
+      const rule=rules[af.id]||'ignore';
+      let opts=`<option value="ignore" ${rule==='ignore'?'selected':''}>התעלם</option><option value="must_fill" ${rule==='must_fill'?'selected':''}>חייב להיות מלא</option>`;
+      if(af.type==='checkbox') opts+=`<option value="must_check" ${rule==='must_check'?'selected':''}>חייב להיות מסומן ✓</option>`;
+      if(af.type==='select'&&af.options) af.options.split(',').forEach(o=>{const v='value:'+o.trim();opts+=`<option value="${esc(v)}" ${rule===v?'selected':''}>${esc(o.trim())}</option>`;});
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px">
+        <div style="font-size:13px;font-weight:500;color:var(--purple);display:flex;align-items:center;gap:6px"><i class="ti ti-shield-check"></i>${esc(af.label)}</div>
+        <select class="form-input" style="font-size:13px" data-pr="${af.id}">${opts}</select>
+      </div>`;
+    }).join('')}`:'';
   const saveBtn=mode==='new'?`<button class="btn btn-primary" onclick="saveNewFile()"><i class="ti ti-check"></i> צור קובץ</button>`:`<button class="btn btn-primary" onclick="saveEditFile('${id}')"><i class="ti ti-check"></i> שמור</button>`;
   return `<div class="modal-title"><i class="ti ${mode==='new'?'ti-plus':'ti-edit'}" style="color:var(--blue)"></i> ${mode==='new'?'קובץ חדש':'עריכת קובץ'}</div>
     <div class="form-row"><label class="form-label">ארגון *</label><select class="form-input" id="mf-org"><option value="">בחר ארגון...</option>${orgOpts}</select></div>
     <div class="form-row"><label class="form-label">שם הקובץ *</label><input class="form-input" id="mf-name" value="${esc(f.name)}" placeholder="שם הקובץ"></div>
     <div class="form-row"><label class="form-label">אייקון</label><div class="icon-picker" id="icon-picker">${iconsH}</div></div>
-    <div class="form-row"><label class="form-label">שדות טופס (נציג ממלא)</label><div id="field-list">${fieldRows}</div><button class="btn btn-sm mt-1" type="button" onclick="addField('f')"><i class="ti ti-plus"></i> הוסף שדה</button></div>
-    <div class="section-divider"><i class="ti ti-shield-check"></i> שדות ניהוליים (מנהל ממלא)</div>
+    <div class="form-row"><label class="form-label">שדות טופס</label><div id="field-list">${fieldRows}</div><button class="btn btn-sm mt-1" type="button" onclick="addField('f')"><i class="ti ti-plus"></i> הוסף שדה</button></div>
+    <div class="section-divider"><i class="ti ti-shield-check"></i> שדות ניהוליים</div>
     <div class="form-row"><div id="admin-field-list">${adminRows}</div><button class="btn btn-sm btn-purple mt-1" type="button" onclick="addField('a')"><i class="ti ti-plus"></i> הוסף שדה ניהולי</button></div>
+    <div id="pending-rules-section">${pendingHTML}</div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 function fieldRowHTML(ef,i,prefix){
   const typeOpts=['text','number','select','checkbox'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':'תיבת סימון'}</option>`).join('');
-  return `<div class="field-row" id="fr_${prefix}_${i}">
-    <div><label class="form-label" style="font-size:11px">שם השדה</label><input class="form-input" data-fl="${prefix}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
+  return `<div class="field-row"><div><label class="form-label" style="font-size:11px">שם השדה</label><input class="form-input" data-fl="${prefix}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
     <div><label class="form-label" style="font-size:11px">סוג</label>
       <select class="form-input" data-ft="${prefix}_${i}" onchange="onTypeChange('${prefix}',${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
       ${ef.type==='select'?`<input class="form-input mt-1" data-fo="${prefix}_${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
@@ -684,45 +978,60 @@ function fieldRowHTML(ef,i,prefix){
 }
 function pickIcon(ic){_tmpIcon=ic;document.querySelectorAll('.icon-opt').forEach(el=>el.classList.toggle('selected',el.dataset.icon===ic));}
 function onTypeChange(prefix,i,val){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;arr[i].type=val;if(val!=='select')arr[i].options='';refreshFields(prefix);}
-function refreshFields(prefix){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;const el=document.getElementById(prefix==='f'?'field-list':'admin-field-list');if(el)el.innerHTML=arr.map((ef,i)=>fieldRowHTML(ef,i,prefix)).join('');}
+function refreshFields(prefix){
+  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
+  const el=document.getElementById(prefix==='f'?'field-list':'admin-field-list');
+  if(el) el.innerHTML=arr.map((ef,i)=>fieldRowHTML(ef,i,prefix)).join('');
+  if(prefix==='a') refreshPendingRules();
+}
+function refreshPendingRules(){
+  const sec=document.getElementById('pending-rules-section'); if(!sec) return;
+  const fields=_tmpAdminFields.filter(af=>af.label);
+  if(!fields.length){sec.innerHTML='';return;}
+  const cur={};
+  document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value)cur[el.dataset.pr]=el.value;});
+  sec.innerHTML=`<div class="section-divider" style="color:#b45309"><i class="ti ti-bell"></i> הגדרת סטטוס "ממתין"</div>
+    ${fields.map(af=>{
+      const rule=cur[af.id]||'ignore';
+      let opts=`<option value="ignore" ${rule==='ignore'?'selected':''}>התעלם</option><option value="must_fill" ${rule==='must_fill'?'selected':''}>חייב להיות מלא</option>`;
+      if(af.type==='checkbox') opts+=`<option value="must_check" ${rule==='must_check'?'selected':''}>חייב מסומן ✓</option>`;
+      if(af.type==='select'&&af.options) af.options.split(',').forEach(o=>{const v='value:'+o.trim();opts+=`<option value="${esc(v)}" ${rule===v?'selected':''}>${esc(o.trim())}</option>`;});
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px">
+        <div style="font-size:13px;font-weight:500;color:var(--purple)"><i class="ti ti-shield-check"></i> ${esc(af.label)}</div>
+        <select class="form-input" style="font-size:13px" data-pr="${af.id}">${opts}</select>
+      </div>`;
+    }).join('')}`;
+}
 function addField(prefix){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;arr.push({id:genId(),label:'',type:'text',options:''});refreshFields(prefix);}
 function removeField(prefix,i){const arr=prefix==='f'?_tmpFields:_tmpAdminFields;arr.splice(i,1);refreshFields(prefix);}
 function collectFields(prefix){
   const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
   return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${prefix}_${i}"]`),t=document.querySelector(`[data-ft="${prefix}_${i}"]`),o=document.querySelector(`[data-fo="${prefix}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options};}).filter(ef=>ef.label);
 }
+function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
 async function saveNewFile(){
   const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;
   if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}
-  await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a')});
-  await loadAll();closeModal();render();showAlert('הקובץ נוסף','success');
+  await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()});
+  await loadAll();await loadPendingCounts();closeModal();render();showAlert('הקובץ נוסף','success');
 }
 async function saveEditFile(id){
   const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;
   if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}
-  await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a')},`?id=eq.${id}`);
-  await loadAll();closeModal();render();showAlert('הקובץ עודכן','success');
+  await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()},`?id=eq.${id}`);
+  await loadAll();await loadPendingCounts();closeModal();render();showAlert('הקובץ עודכן','success');
 }
-async function confirmDeleteFile(id){
-  const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}" וכל הרשומות שלו?`))return;
-  await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');
-}
+async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
-// ── Export Excel (SheetJS) ──
+// ── Export ──
 async function exportFile(fileId){
   const f=DB.files.find(x=>x.id===fileId);
   showAlert('מכין קובץ Excel...','success');
   const records=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);
   const extra=f.extra_fields||[],admin=f.admin_fields||[];
   const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label)];
-  const rows=records.map(r=>[
-    fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||'',
-    ...extra.map(ef=>(r.extra||{})[ef.id]||''),
-    ...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');})
-  ]);
-  buildXLSX(f.name, headers, rows,
-    admin.map((_,i)=>headers.indexOf('[ניהולי] '+admin[i].label))
-  );
+  const rows=records.map(r=>[fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||'',...extra.map(ef=>(r.extra||{})[ef.id]||''),...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');})]);
+  buildXLSX(f.name,headers,rows,admin.map((_,i)=>6+extra.length+i));
 }
 async function exportAll(){
   showAlert('מכין קובץ Excel...','success');
@@ -730,40 +1039,14 @@ async function exportAll(){
   const rows=_allRecords.map(r=>{const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));return[o?o.name:'',f?f.name:'',fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||''];});
   buildXLSX('כל_הרשומות',headers,rows,[]);
 }
-
-function buildXLSX(filename, headers, rows, adminColIdxs){
+function buildXLSX(filename,headers,rows,adminColIdxs){
   const wb=XLSX.utils.book_new();
   const wsData=[headers,...rows];
   const ws=XLSX.utils.aoa_to_sheet(wsData);
-
-  // column widths
-  const colWidths=headers.map((h,ci)=>{
-    const maxLen=Math.max(h.length,...rows.map(r=>(r[ci]||'').toString().length));
-    return{wch:Math.min(Math.max(maxLen+2,10),40)};
-  });
-  ws['!cols']=colWidths;
-
-  // header style — blue
-  headers.forEach((_,ci)=>{
-    const ref=XLSX.utils.encode_cell({r:0,c:ci});
-    if(!ws[ref]) return;
-    ws[ref].s={fill:{fgColor:{rgb:'2563EB'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:11},alignment:{horizontal:'right',vertical:'center'}};
-  });
-  // admin col style — purple header
-  adminColIdxs.forEach(ci=>{
-    const ref=XLSX.utils.encode_cell({r:0,c:ci});
-    if(!ws[ref]) return;
-    ws[ref].s={fill:{fgColor:{rgb:'7C3AED'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:11},alignment:{horizontal:'right',vertical:'center'}};
-    // purple tint on data cells
-    for(let ri=1;ri<wsData.length;ri++){
-      const dref=XLSX.utils.encode_cell({r:ri,c:ci});
-      if(ws[dref]) ws[dref].s={fill:{fgColor:{rgb:'F5F3FF'}},alignment:{horizontal:'right'}};
-    }
-  });
-
-  // freeze header row
+  ws['!cols']=headers.map((h,ci)=>({wch:Math.min(Math.max(Math.max(h.length,...rows.map(r=>(r[ci]||'').toString().length))+2,10),40)}));
+  headers.forEach((_,ci)=>{const ref=XLSX.utils.encode_cell({r:0,c:ci});if(!ws[ref])return;ws[ref].s={fill:{fgColor:{rgb:'2563EB'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:11},alignment:{horizontal:'right',vertical:'center'}};});
+  adminColIdxs.forEach(ci=>{const ref=XLSX.utils.encode_cell({r:0,c:ci});if(!ws[ref])return;ws[ref].s={fill:{fgColor:{rgb:'7C3AED'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:11},alignment:{horizontal:'right',vertical:'center'}};for(let ri=1;ri<wsData.length;ri++){const dr=XLSX.utils.encode_cell({r:ri,c:ci});if(ws[dr])ws[dr].s={fill:{fgColor:{rgb:'F5F3FF'}},alignment:{horizontal:'right'}};}});
   ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activePane:'bottomLeft',state:'frozen'};
-
   XLSX.utils.book_append_sheet(wb,ws,'רשומות');
   XLSX.writeFile(wb,filename+'.xlsx');
 }
@@ -776,16 +1059,14 @@ function esc(s){return(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt
 function fmtDate(ts){return new Date(ts).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function genId(){return Math.random().toString(36).slice(2,9);}
 
-// ── Init ──
-(async()=>{
-  try{
-    await loadAll();
-    if(!_agentName){ askAgentName(true); }
-    else{ render(); }
-  }catch(e){
-    document.getElementById('app').innerHTML=`<div class="alert alert-error"><i class="ti ti-alert-circle"></i>שגיאה בהתחברות ל-Supabase.</div>`;
-  }
-})();
+async function initApp(){
+  await loadAll();
+  await loadPendingCounts();
+  render();
+}
+
+// ── Boot ──
+window.addEventListener('DOMContentLoaded', ()=>{ initLogin(); });
 </script>
 </body>
 </html>
