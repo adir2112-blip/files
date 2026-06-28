@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מוקד שירות לקוחות</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f6fa;
+    --surface: #ffffff;
+    --surface2: #f8f9fc;
+    --border: #e2e6ef;
+    --border2: #c8cfe0;
+    --text: #1a1f36;
+    --text2: #5a6380;
+    --text3: #9198b0;
+    --blue: #2563eb;
+    --blue-light: #eff4ff;
+    --blue-dark: #1d4ed8;
+    --green: #16a34a;
+    --green-light: #f0fdf4;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+  }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: var(--shadow);
+  }
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .topbar-brand .ti { font-size: 22px; color: var(--blue); }
+  .topbar-date { font-size: 13px; color: var(--text3); }
+
+  /* ── Layout ── */
+  .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title .ti { color: var(--blue); }
+
+  /* ── File grid ── */
+  .files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .file-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    box-shadow: var(--shadow);
+  }
+  .file-card:hover {
+    border-color: var(--blue);
+    background: var(--blue-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .file-card .fc-icon { font-size: 28px; color: var(--blue); margin-bottom: 10px; display: block; }
+  .file-card .fc-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .file-card .fc-count { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  /* ── Forms ── */
+  .form-row { margin-bottom: 14px; }
+  .form-label { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 5px; display: block; }
+  .form-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .form-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+  select.form-input { cursor: pointer; }
+  textarea.form-input { resize: vertical; min-height: 70px; }
+  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface2); border-color: var(--border2); }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+  .btn-success { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn-success:hover { background: #15803d; border-color: #15803d; }
+  .btn-danger { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
+  .btn-sm { padding: 5px 11px; font-size: 13px; }
+  .btn-xs { padding: 3px 8px; font-size: 12px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .badge-success { background: var(--green-light); color: #15803d; }
+  .badge-warning { background: var(--amber-light); color: var(--amber); }
+  .badge-info { background: var(--blue-light); color: var(--blue-dark); }
+  .badge-neutral { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+
+  /* ── Tags ── */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .tag-blue { background: var(--blue-light); color: var(--blue-dark); border-color: #bfdbfe; }
+
+  /* ── Nav tabs ── */
+  .nav-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .nav-tab {
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--text2);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.15s;
+    font-family: inherit;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .nav-tab:hover { color: var(--text); background: var(--surface2); }
+  .nav-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
+  th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+
+  /* ── Back btn ── */
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+    margin-bottom: 16px;
+    padding: 5px 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    transition: color 0.15s;
+  }
+  .back-btn:hover { color: var(--blue); }
+
+  /* ── Alerts ── */
+  .alert {
+    padding: 11px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .alert-success { background: var(--green-light); color: #15803d; border: 1px solid #bbf7d0; }
+  .alert-error { background: var(--red-light); color: #b91c1c; border: 1px solid #fecaca; }
+  .alert-info { background: var(--blue-light); color: var(--blue-dark); border: 1px solid #bfdbfe; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,20,40,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+    backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 28px;
+    width: 460px;
+    max-width: 96vw;
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border);
+  }
+  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 20px; color: var(--text); }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ── Field editor ── */
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    align-items: start;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+
+  /* ── Icon picker ── */
+  .icon-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .icon-opt {
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    font-size: 18px;
+    color: var(--text2);
+    transition: all 0.12s;
+  }
+  .icon-opt:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+  .icon-opt.selected { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+
+  /* ── Search ── */
+  .search-wrap { position: relative; margin-bottom: 14px; }
+  .search-wrap .ti-search { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 15px; pointer-events: none; }
+  .search-wrap input { padding-right: 34px; }
+
+  /* ── Empty state ── */
+  .empty { text-align: center; padding: 40px 20px; color: var(--text3); }
+  .empty .ti { font-size: 40px; display: block; margin-bottom: 10px; }
+  .empty p { font-size: 14px; }
+
+  /* ── Loading ── */
+  .loading { text-align: center; padding: 32px; color: var(--text3); }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Misc ── */
+  .flex-between { display: flex; align-items: center; justify-content: space-between; }
+  .flex-gap { display: flex; align-items: center; gap: 8px; }
+  .mt-1 { margin-top: 8px; }
+  .mt-2 { margin-top: 16px; }
+
+  @media (max-width: 600px) {
+    .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
+    .container { padding: 12px; }
+    .card { padding: 14px 14px; }
+    .topbar { padding: 0 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <i class="ti ti-headset"></i>
+    מוקד שירות לקוחות
+  </div>
+  <div class="flex-gap">
+    <span class="topbar-date" id="topbar-date"></span>
+    <button class="btn btn-sm" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
+  </div>
+</div>
+
+<div class="container" id="app">
+  <div class="loading"><div class="spinner"></div><p>טוען...</p></div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/rest/v1';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsaHFrd3dnbWtyaXdvamZmY2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MzY1ODEsImV4cCI6MjA5ODIxMjU4MX0.HDsgaf_S_CZjtqn2D75SpDk9KqjaC_kYtA2_Oex-vak';
+const ADMIN_PASS = 'Q1w2e3r4!';
+const ICONS = ['ti-file','ti-coin','ti-clock-off','ti-steps','ti-alert-circle','ti-phone','ti-tool','ti-refresh','ti-star','ti-flag','ti-user','ti-mail','ti-notes','ti-gift','ti-bolt'];
+
+// ── State ──
+let state = { view: 'home', fileId: null, showRecords: false, adminLoggedIn: false, adminTab: 'files', searchQ: '', alert: null, loading: false };
+let db = { files: [] };
+let _tmpIcon = 'ti-file';
+let _tmpFields = [];
+
+// ── Date ──
+document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('he-IL', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+// ── API ──
+async function api(method, table, body = null, params = '') {
+  const url = `${SUPABASE_URL}/${table}${params}`;
+  const headers = { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+  const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : null });
+  if (!res.ok) { const e = await res.text(); throw new Error(e); }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function getFiles() {
+  return await api('GET', 'files', null, '?order=created_at.asc');
+}
+async function getRecords(fileId) {
+  return await api('GET', 'records', null, `?file_id=eq.${fileId}&order=created_at.desc`);
+}
+async function getAllRecords() {
+  return await api('GET', 'records', null, '?order=created_at.desc');
+}
+async function insertRecord(data) {
+  return await api('POST', 'records', data);
+}
+async function deleteRecord(id) {
+  return await api('DELETE', 'records', null, `?id=eq.${id}`);
+}
+async function insertFile(data) {
+  return await api('POST', 'files', data);
+}
+async function updateFile(id, data) {
+  return await api('PATCH', 'files', data, `?id=eq.${id}`);
+}
+async function deleteFile(id) {
+  return await api('DELETE', 'files', null, `?id=eq.${id}`);
+}
+
+// ── Load ──
+async function loadFiles() {
+  db.files = await getFiles();
+}
+
+// ── Render engine ──
+function render() {
+  const app = document.getElementById('app');
+  let html = '';
+  if (state.alert) {
+    html += `<div class="alert alert-${state.alert.type}"><i class="ti ${state.alert.type==='success'?'ti-check':'ti-alert-circle'}"></i>${state.alert.msg}</div>`;
+  }
+  if (state.view === 'home') html += renderHome();
+  else if (state.view === 'file') html += renderFile();
+  else if (state.view === 'admin') html += renderAdmin();
+  app.innerHTML = html;
+}
+
+// ── Home ──
+function renderHome() {
+  if (!db.files.length) return `<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים עדיין. כנס למנהל להוסיף.</p></div>`;
+  let grid = db.files.map(f => `
+    <div class="file-card" onclick="openFile('${f.id}')">
+      <i class="ti ${f.icon||'ti-file'} fc-icon"></i>
+      <div class="fc-name">${esc(f.name)}</div>
+      <div class="fc-count">לחץ להזנה</div>
+    </div>
+  `).join('');
+  return `<div class="card"><div class="card-title"><i class="ti ti-layout-grid"></i>בחר קובץ לעדכון</div><div class="files-grid">${grid}</div></div>`;
+}
+
+// ── File view ──
+function renderFile() {
+  const f = db.files.find(x => x.id === state.fileId);
+  if (!f) return '';
+  let html = `<button class="back-btn" onclick="goHome()"><i class="ti ti-arrow-right"></i> חזור לרשימת הקבצים</button>`;
+
+  if (state.showRecords) {
+    html += renderRecords(f);
+  } else {
+    html += renderForm(f);
+  }
+  return html;
+}
+
+function renderForm(f) {
+  const extra = (f.extra_fields || []).map(ef => {
+    let input = '';
+    if (ef.type === 'select') {
+      const opts = (ef.options || '').split(',').map(o => `<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');
+      input = `<select class="form-input" name="extra_${ef.id}"><option value="">בחר...</option>${opts}</select>`;
+    } else if (ef.type === 'number') {
+      input = `<input class="form-input" type="number" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
+    } else {
+      input = `<input class="form-input" type="text" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
+    }
+    return `<div class="form-row"><label class="form-label">${esc(ef.label)}</label>${input}</div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)}</div>
+        <div class="flex-gap">
+          <button class="btn btn-sm" onclick="viewRecords('${f.id}')"><i class="ti ti-list"></i> צפה ברשומות</button>
+          <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
+        </div>
+      </div>
+      <form id="entry-form" onsubmit="submitRecord(event,'${f.id}')">
+        <div class="form-grid-2">
+          <div class="form-row"><label class="form-label">שם פרטי *</label><input class="form-input" name="first_name" required placeholder="שם פרטי"></div>
+          <div class="form-row"><label class="form-label">שם משפחה *</label><input class="form-input" name="last_name" required placeholder="שם משפחה"></div>
+          <div class="form-row"><label class="form-label">טלפון *</label><input class="form-input" name="phone" required placeholder="05X-XXXXXXX" dir="ltr"></div>
+          <div class="form-row"><label class="form-label">ת"ז *</label><input class="form-input" name="id_num" required placeholder="9 ספרות" dir="ltr" maxlength="9"></div>
+        </div>
+        ${extra}
+        <div class="mt-2">
+          <button type="submit" class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> שמור רשומה</button>
+        </div>
+      </form>
+    </div>`;
+}
+
+async function viewRecords(fileId) {
+  state.showRecords = true;
+  state.loading = true;
+  render();
+  try {
+    const f = db.files.find(x => x.id === fileId);
+    f._records = await getRecords(fileId);
+  } catch(e) { showAlert('שגיאה בטעינת רשומות','error'); }
+  state.loading = false;
+  render();
+}
+
+function renderRecords(f) {
+  const records = f._records || [];
+  const q = (state.searchQ || '').toLowerCase();
+  const filtered = q ? records.filter(r =>
+    (r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num).toLowerCase().includes(q)
+  ) : records;
+
+  const extra = f.extra_fields || [];
+  const rows = filtered.map(r => {
+    const extraCells = extra.map(ef => {
+      const val = (r.extra || {})[ef.id] || '';
+      if (ef.type === 'select' && val) {
+        const cls = val==='טופל'?'badge-success':val==='לא טופל'?'badge-warning':'badge-info';
+        return `<td><span class="badge ${cls}">${esc(val)}</span></td>`;
+      }
+      return `<td>${esc(val)}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td>
+      <td>${esc(r.first_name)}</td>
+      <td>${esc(r.last_name)}</td>
+      <td dir="ltr">${esc(r.phone)}</td>
+      <td dir="ltr">${esc(r.id_num)}</td>
+      ${extraCells}
+      <td><button class="btn btn-xs btn-danger" onclick="removeRecord('${f.id}','${r.id}')"><i class="ti ti-trash"></i></button></td>
+    </tr>`;
+  }).join('');
+
+  const extraHeaders = extra.map(ef => `<th>${esc(ef.label)}</th>`).join('');
+
+  return `
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)} — רשומות</div>
+        <div class="flex-gap">
+          <button class="btn btn-sm" onclick="state.showRecords=false;render()"><i class="ti ti-edit"></i> הזנה חדשה</button>
+          <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <input class="form-input" type="text" placeholder="חיפוש לפי שם / טלפון / ת&quot;ז..." value="${esc(state.searchQ)}" oninput="state.searchQ=this.value;render()">
+        <i class="ti ti-search"></i>
+      </div>
+      ${filtered.length === 0
+        ? `<div class="empty"><i class="ti ti-database-off"></i><p>${q ? 'לא נמצאו תוצאות' : 'אין רשומות עדיין'}</p></div>`
+        : `<div class="table-wrap"><table><thead><tr><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th>${extraHeaders}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      }
+      <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות</div>
+    </div>`;
+}
+
+// ── Admin ──
+function renderAdmin() {
+  if (!state.adminLoggedIn) {
+    return `
+      <button class="back-btn" onclick="goHome()"><i class="ti ti-arrow-right"></i> חזור</button>
+      <div class="card" style="max-width:360px;margin:20px auto">
+        <div class="card-title"><i class="ti ti-lock"></i> כניסת מנהל</div>
+        <form onsubmit="adminLogin(event)">
+          <div class="form-row"><label class="form-label">סיסמה</label><input class="form-input" type="password" id="admin-pass" placeholder="הזן סיסמה" autofocus></div>
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px"><i class="ti ti-login"></i> כניסה</button>
+        </form>
+      </div>`;
+  }
+
+  const tab = state.adminTab;
+  return `
+    <div class="flex-between" style="margin-bottom:12px">
+      <button class="back-btn" onclick="goHome()" style="margin-bottom:0"><i class="ti ti-arrow-right"></i> חזור</button>
+      <button class="btn btn-sm btn-danger" onclick="state.adminLoggedIn=false;goHome()"><i class="ti ti-logout"></i> יציאה</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
+      <div class="nav-tabs">
+        <button class="nav-tab ${tab==='files'?'active':''}" onclick="state.adminTab='files';render()">ניהול קבצים</button>
+        <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadRecords()">כל הרשומות</button>
+      </div>
+      ${tab === 'files' ? renderAdminFiles() : renderAdminRecords()}
+    </div>`;
+}
+
+function renderAdminFiles() {
+  return `
+    <div style="text-align:left;margin-bottom:14px">
+      <button class="btn btn-primary" onclick="openNewFile()"><i class="ti ti-plus"></i> קובץ חדש</button>
+    </div>
+    ${db.files.map(f => `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px">
+        <div class="flex-between" style="margin-bottom:10px">
+          <div style="font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px"><i class="ti ${f.icon||'ti-file'}" style="color:var(--blue)"></i>${esc(f.name)}</div>
+          <div class="flex-gap">
+            <button class="btn btn-sm" onclick="openEditFile('${f.id}')"><i class="ti ti-edit"></i> עריכה</button>
+            <button class="btn btn-sm btn-danger" onclick="confirmDeleteFile('${f.id}')"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <span class="tag"><i class="ti ti-calendar"></i> תאריך</span>
+          <span class="tag"><i class="ti ti-user"></i> שם פרטי</span>
+          <span class="tag"><i class="ti ti-user"></i> שם משפחה</span>
+          <span class="tag"><i class="ti ti-phone"></i> טלפון</span>
+          <span class="tag"><i class="ti ti-id"></i> ת"ז</span>
+          ${(f.extra_fields||[]).map(ef => `<span class="tag tag-blue">${esc(ef.label)}</span>`).join('')}
+        </div>
+      </div>
+    `).join('') || '<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים</p></div>'}`;
+}
+
+function renderAdminRecords() {
+  if (state.loading) return `<div class="loading"><div class="spinner"></div><p>טוען...</p></div>`;
+  const allRecords = state._allRecords || [];
+  if (!allRecords.length) return `<div class="empty"><i class="ti ti-database-off"></i><p>אין רשומות במערכת</p></div>`;
+
+  const rows = allRecords.map(r => {
+    const f = db.files.find(x => x.id === r.file_id);
+    return `<tr>
+      <td><span class="badge badge-info">${esc(f ? f.name : r.file_id)}</span></td>
+      <td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td>
+      <td>${esc(r.first_name)}</td>
+      <td>${esc(r.last_name)}</td>
+      <td dir="ltr">${esc(r.phone)}</td>
+      <td dir="ltr">${esc(r.id_num)}</td>
+      <td><button class="btn btn-xs btn-danger" onclick="removeRecordAdmin('${r.id}')"><i class="ti ti-trash"></i></button></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="flex-between" style="margin-bottom:12px">
+      <span style="font-size:13px;color:var(--text2)">${allRecords.length} רשומות סה"כ</span>
+      <button class="btn btn-sm btn-success" onclick="exportAll()"><i class="ti ti-download"></i> ייצוא הכל</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>קובץ</th><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>`;
+}
+
+// ── Actions ──
+function goHome() {
+  state.view = 'home';
+  state.fileId = null;
+  state.showRecords = false;
+  state.searchQ = '';
+  state.alert = null;
+  loadFiles().then(render);
+}
+
+function openFile(id) {
+  state.view = 'file';
+  state.fileId = id;
+  state.showRecords = false;
+  state.searchQ = '';
+  render();
+}
+
+function gotoAdmin() {
+  state.view = 'admin';
+  render();
+}
+
+function adminLogin(e) {
+  e.preventDefault();
+  const pass = document.getElementById('admin-pass').value;
+  if (pass === ADMIN_PASS) {
+    state.adminLoggedIn = true;
+    render();
+  } else {
+    showAlert('סיסמה שגויה', 'error');
+  }
+}
+
+async function adminLoadRecords() {
+  state.adminTab = 'records';
+  state.loading = true;
+  render();
+  try {
+    state._allRecords = await getAllRecords();
+  } catch(e) { showAlert('שגיאה בטעינת רשומות','error'); }
+  state.loading = false;
+  render();
+}
+
+async function submitRecord(e, fileId) {
+  e.preventDefault();
+  const form = e.target;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> שומר...';
+
+  const f = db.files.find(x => x.id === fileId);
+  const extra = {};
+  (f.extra_fields || []).forEach(ef => {
+    const el = form[`extra_${ef.id}`];
+    if (el) extra[ef.id] = el.value.trim();
+  });
+
+  try {
+    await insertRecord({
+      file_id: fileId,
+      first_name: form.first_name.value.trim(),
+      last_name: form.last_name.value.trim(),
+      phone: form.phone.value.trim(),
+      id_num: form.id_num.value.trim(),
+      extra
+    });
+    form.reset();
+    showAlert('הרשומה נשמרה בהצלחה ✓', 'success');
+  } catch(e) {
+    showAlert('שגיאה בשמירה: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-check"></i> שמור רשומה';
+}
+
+async function removeRecord(fileId, recordId) {
+  if (!confirm('למחוק רשומה זו?')) return;
+  try {
+    await deleteRecord(recordId);
+    await viewRecords(fileId);
+  } catch(e) { showAlert('שגיאה במחיקה','error'); }
+}
+
+async function removeRecordAdmin(recordId) {
+  if (!confirm('למחוק רשומה זו?')) return;
+  try {
+    await deleteRecord(recordId);
+    await adminLoadRecords();
+  } catch(e) { showAlert('שגיאה במחיקה','error'); }
+}
+
+async function confirmDeleteFile(id) {
+  const f = db.files.find(x => x.id === id);
+  if (!confirm(`למחוק את הקובץ "${f.name}" וכל הרשומות שלו?`)) return;
+  try {
+    await deleteFile(id);
+    await loadFiles();
+    render();
+    showAlert('הקובץ נמחק','success');
+  } catch(e) { showAlert('שגיאה במחיקה','error'); }
+}
+
+// ── File modal ──
+function openNewFile() {
+  _tmpIcon = 'ti-file';
+  _tmpFields = [];
+  showModal(`
+    <div class="modal-title"><i class="ti ti-plus" style="color:var(--blue)"></i> קובץ חדש</div>
+    ${fileFormHTML({name:'',icon:'ti-file',extra_fields:[]})}
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">ביטול</button>
+      <button class="btn btn-primary" onclick="saveNewFile()"><i class="ti ti-check"></i> צור קובץ</button>
+    </div>
+  `);
+}
+
+function openEditFile(id) {
+  const f = db.files.find(x => x.id === id);
+  _tmpIcon = f.icon || 'ti-file';
+  _tmpFields = JSON.parse(JSON.stringify(f.extra_fields || []));
+  showModal(`
+    <div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת קובץ</div>
+    ${fileFormHTML(f)}
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">ביטול</button>
+      <button class="btn btn-primary" onclick="saveEditFile('${id}')"><i class="ti ti-check"></i> שמור שינויים</button>
+    </div>
+  `);
+}
+
+function fileFormHTML(f) {
+  const icons = ICONS.map(ic => `
+    <div class="icon-opt ${_tmpIcon===ic?'selected':''}" data-icon="${ic}" onclick="pickIcon('${ic}')">
+      <i class="ti ${ic}"></i>
+    </div>`).join('');
+
+  const fieldRows = _tmpFields.map((ef, i) => fieldRowHTML(ef, i)).join('');
+
+  return `
+    <div class="form-row"><label class="form-label">שם הקובץ *</label><input class="form-input" id="mf-name" value="${esc(f.name)}" placeholder="לדוגמה: פיצוי מטבעות"></div>
+    <div class="form-row"><label class="form-label">אייקון</label><div class="icon-picker" id="icon-picker">${icons}</div></div>
+    <div class="form-row">
+      <label class="form-label">שדות נוספים</label>
+      <div id="field-list">${fieldRows}</div>
+      <button class="btn btn-sm mt-1" type="button" onclick="addField()"><i class="ti ti-plus"></i> הוסף שדה</button>
+    </div>`;
+}
+
+function fieldRowHTML(ef, i) {
+  const typeOpts = ['text','number','select'].map(t =>
+    `<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':'תפריט'}</option>`
+  ).join('');
+  return `
+    <div class="field-row" id="fr_${i}">
+      <div><label class="form-label" style="font-size:11px">שם השדה</label><input class="form-input" data-fl="${i}" value="${esc(ef.label)}" placeholder="שם"></div>
+      <div>
+        <label class="form-label" style="font-size:11px">סוג</label>
+        <select class="form-input" data-ft="${i}" onchange="onTypeChange(${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
+        ${ef.type==='select'?`<input class="form-input mt-1" data-fo="${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
+      </div>
+      <div style="padding-top:22px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField(${i})"><i class="ti ti-trash"></i></button></div>
+    </div>`;
+}
+
+function pickIcon(ic) {
+  _tmpIcon = ic;
+  document.querySelectorAll('.icon-opt').forEach(el => {
+    const isMe = el.dataset.icon === ic;
+    el.classList.toggle('selected', isMe);
+  });
+}
+
+function onTypeChange(i, val) {
+  _tmpFields[i].type = val;
+  if (val !== 'select') _tmpFields[i].options = '';
+  refreshFields();
+}
+
+function refreshFields() {
+  const el = document.getElementById('field-list');
+  if (el) el.innerHTML = _tmpFields.map((ef,i) => fieldRowHTML(ef,i)).join('');
+}
+
+function addField() {
+  _tmpFields.push({ id: genId(), label: '', type: 'text', options: '' });
+  refreshFields();
+}
+
+function removeField(i) {
+  _tmpFields.splice(i,1);
+  refreshFields();
+}
+
+function collectFields() {
+  return _tmpFields.map((ef, i) => {
+    const labelEl = document.querySelector(`[data-fl="${i}"]`);
+    const typeEl = document.querySelector(`[data-ft="${i}"]`);
+    const optsEl = document.querySelector(`[data-fo="${i}"]`);
+    return {
+      id: ef.id,
+      label: labelEl ? labelEl.value.trim() : ef.label,
+      type: typeEl ? typeEl.value : ef.type,
+      options: optsEl ? optsEl.value.trim() : ef.options
+    };
+  }).filter(ef => ef.label);
+}
+
+async function saveNewFile() {
+  const name = document.getElementById('mf-name').value.trim();
+  if (!name) { alert('יש להזין שם קובץ'); return; }
+  try {
+    await insertFile({ name, icon: _tmpIcon, extra_fields: collectFields() });
+    await loadFiles();
+    closeModal();
+    render();
+    showAlert('הקובץ נוסף בהצלחה', 'success');
+  } catch(e) { showAlert('שגיאה: ' + e.message, 'error'); }
+}
+
+async function saveEditFile(id) {
+  const name = document.getElementById('mf-name').value.trim();
+  if (!name) { alert('יש להזין שם קובץ'); return; }
+  try {
+    await updateFile(id, { name, icon: _tmpIcon, extra_fields: collectFields() });
+    await loadFiles();
+    closeModal();
+    render();
+    showAlert('הקובץ עודכן בהצלחה', 'success');
+  } catch(e) { showAlert('שגיאה: ' + e.message, 'error'); }
+}
+
+// ── Export ──
+async function exportFile(fileId) {
+  const f = db.files.find(x => x.id === fileId);
+  let records;
+  try { records = await getRecords(fileId); } catch(e) { showAlert('שגיאה בטעינה','error'); return; }
+  const extra = f.extra_fields || [];
+  const headers = ['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז', ...extra.map(ef => ef.label)];
+  const rows = records.map(r => [
+    fmtDate(r.created_at), r.first_name, r.last_name, r.phone, r.id_num,
+    ...extra.map(ef => (r.extra || {})[ef.id] || '')
+  ]);
+  downloadCSV(f.name, headers, rows);
+}
+
+async function exportAll() {
+  const all = state._allRecords || [];
+  const headers = ['קובץ','תאריך','שם פרטי','שם משפחה','טלפון','ת"ז'];
+  const rows = all.map(r => {
+    const f = db.files.find(x => x.id === r.file_id);
+    return [f ? f.name : r.file_id, fmtDate(r.created_at), r.first_name, r.last_name, r.phone, r.id_num];
+  });
+  downloadCSV('כל_הרשומות', headers, rows);
+}
+
+function downloadCSV(name, headers, rows) {
+  const csv = '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(c => '"' + (c||'').toString().replace(/"/g,'""') + '"').join(','))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name + '.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Helpers ──
+function showModal(html) {
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+function showAlert(msg, type='success') {
+  state.alert = { msg, type };
+  render();
+  setTimeout(() => { state.alert = null; render(); }, 3500);
+}
+function esc(s) {
+  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDate(ts) {
+  return new Date(ts).toLocaleString('he-IL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function genId() {
+  return Math.random().toString(36).slice(2,9);
+}
+
+// ── Init ──
+(async () => {
+  try {
+    await loadFiles();
+    render();
+  } catch(e) {
+    document.getElementById('app').innerHTML = `<div class="alert alert-error"><i class="ti ti-alert-circle"></i>שגיאה בהתחברות ל-Supabase. בדוק את הגדרות ה-URL והמפתח.</div>`;
+  }
+})();
+</script>
+</body>
+</html>
