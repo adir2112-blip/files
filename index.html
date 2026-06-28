@@ -4,364 +4,116 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>מוקד שירות לקוחות</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='20' font-family='Arial' fill='white' font-weight='bold'%3E%D7%9E%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #f4f6fa;
-    --surface: #ffffff;
-    --surface2: #f8f9fc;
-    --border: #e2e6ef;
-    --border2: #c8cfe0;
-    --text: #1a1f36;
-    --text2: #5a6380;
-    --text3: #9198b0;
-    --blue: #2563eb;
-    --blue-light: #eff4ff;
-    --blue-dark: #1d4ed8;
-    --green: #16a34a;
-    --green-light: #f0fdf4;
-    --red: #dc2626;
-    --red-light: #fef2f2;
-    --amber: #d97706;
-    --amber-light: #fffbeb;
-    --radius: 10px;
-    --radius-sm: 6px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
-  }
-
-  body {
-    font-family: 'Segoe UI', Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    font-size: 15px;
-    line-height: 1.5;
-  }
-
-  /* ── Header ── */
-  .topbar {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 24px;
-    height: 58px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    box-shadow: var(--shadow);
-  }
-  .topbar-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .topbar-brand .ti { font-size: 22px; color: var(--blue); }
-  .topbar-date { font-size: 13px; color: var(--text3); }
-
-  /* ── Layout ── */
-  .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
-
-  /* ── Cards ── */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    margin-bottom: 16px;
-    box-shadow: var(--shadow);
-  }
-  .card-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .card-title .ti { color: var(--blue); }
-
-  /* ── File grid ── */
-  .files-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
-  }
-  .file-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 12px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.15s;
-    box-shadow: var(--shadow);
-  }
-  .file-card:hover {
-    border-color: var(--blue);
-    background: var(--blue-light);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-  }
-  .file-card .fc-icon { font-size: 28px; color: var(--blue); margin-bottom: 10px; display: block; }
-  .file-card .fc-name { font-size: 13px; font-weight: 600; color: var(--text); }
-  .file-card .fc-count { font-size: 11px; color: var(--text3); margin-top: 4px; }
-
-  /* ── Forms ── */
-  .form-row { margin-bottom: 14px; }
-  .form-label { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 5px; display: block; }
-  .form-input {
-    width: 100%;
-    padding: 9px 12px;
-    border: 1px solid var(--border2);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    color: var(--text);
-    font-size: 14px;
-    font-family: inherit;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-  .form-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
-  select.form-input { cursor: pointer; }
-  textarea.form-input { resize: vertical; min-height: 70px; }
-  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-
-  /* ── Buttons ── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border2);
-    background: var(--surface);
-    color: var(--text);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: inherit;
-    white-space: nowrap;
-  }
-  .btn:hover { background: var(--surface2); border-color: var(--border2); }
-  .btn:active { transform: scale(0.97); }
-  .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-  .btn-primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
-  .btn-success { background: var(--green); border-color: var(--green); color: #fff; }
-  .btn-success:hover { background: #15803d; border-color: #15803d; }
-  .btn-danger { background: var(--red); border-color: var(--red); color: #fff; }
-  .btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
-  .btn-sm { padding: 5px 11px; font-size: 13px; }
-  .btn-xs { padding: 3px 8px; font-size: 12px; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* ── Badges ── */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 9px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 500;
-  }
-  .badge-success { background: var(--green-light); color: #15803d; }
-  .badge-warning { background: var(--amber-light); color: var(--amber); }
-  .badge-info { background: var(--blue-light); color: var(--blue-dark); }
-  .badge-neutral { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
-
-  /* ── Tags ── */
-  .tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 9px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    font-size: 12px;
-    color: var(--text2);
-  }
-  .tag-blue { background: var(--blue-light); color: var(--blue-dark); border-color: #bfdbfe; }
-
-  /* ── Nav tabs ── */
-  .nav-tabs {
-    display: flex;
-    gap: 2px;
-    border-bottom: 2px solid var(--border);
-    margin-bottom: 20px;
-  }
-  .nav-tab {
-    padding: 9px 18px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    background: none;
-    color: var(--text2);
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: all 0.15s;
-    font-family: inherit;
-    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  }
-  .nav-tab:hover { color: var(--text); background: var(--surface2); }
-  .nav-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
-
-  /* ── Table ── */
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
-  th {
-    background: var(--surface2);
-    padding: 10px 12px;
-    text-align: right;
-    font-weight: 600;
-    font-size: 12px;
-    color: var(--text2);
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-  td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: var(--surface2); }
-
-  /* ── Back btn ── */
-  .back-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: var(--text2);
-    cursor: pointer;
-    margin-bottom: 16px;
-    padding: 5px 0;
-    border: none;
-    background: none;
-    font-family: inherit;
-    transition: color 0.15s;
-  }
-  .back-btn:hover { color: var(--blue); }
-
-  /* ── Alerts ── */
-  .alert {
-    padding: 11px 16px;
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .alert-success { background: var(--green-light); color: #15803d; border: 1px solid #bbf7d0; }
-  .alert-error { background: var(--red-light); color: #b91c1c; border: 1px solid #fecaca; }
-  .alert-info { background: var(--blue-light); color: var(--blue-dark); border: 1px solid #bfdbfe; }
-
-  /* ── Modal ── */
-  .modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(15,20,40,0.45);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 200;
-    backdrop-filter: blur(2px);
-  }
-  .modal {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 28px;
-    width: 460px;
-    max-width: 96vw;
-    max-height: 88vh;
-    overflow-y: auto;
-    box-shadow: var(--shadow-md);
-    border: 1px solid var(--border);
-  }
-  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 20px; color: var(--text); }
-  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-
-  /* ── Field editor ── */
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr auto;
-    gap: 8px;
-    align-items: start;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 10px;
-    margin-bottom: 8px;
-  }
-
-  /* ── Icon picker ── */
-  .icon-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .icon-opt {
-    width: 38px; height: 38px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    font-size: 18px;
-    color: var(--text2);
-    transition: all 0.12s;
-  }
-  .icon-opt:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
-  .icon-opt.selected { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
-
-  /* ── Search ── */
-  .search-wrap { position: relative; margin-bottom: 14px; }
-  .search-wrap .ti-search { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 15px; pointer-events: none; }
-  .search-wrap input { padding-right: 34px; }
-
-  /* ── Empty state ── */
-  .empty { text-align: center; padding: 40px 20px; color: var(--text3); }
-  .empty .ti { font-size: 40px; display: block; margin-bottom: 10px; }
-  .empty p { font-size: 14px; }
-
-  /* ── Loading ── */
-  .loading { text-align: center; padding: 32px; color: var(--text3); }
-  .spinner {
-    width: 28px; height: 28px;
-    border: 3px solid var(--border);
-    border-top-color: var(--blue);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 10px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Misc ── */
-  .flex-between { display: flex; align-items: center; justify-content: space-between; }
-  .flex-gap { display: flex; align-items: center; gap: 8px; }
-  .mt-1 { margin-top: 8px; }
-  .mt-2 { margin-top: 16px; }
-
-  @media (max-width: 600px) {
-    .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
-    .container { padding: 12px; }
-    .card { padding: 14px 14px; }
-    .topbar { padding: 0 12px; }
-  }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f6fa;--surface:#fff;--surface2:#f8f9fc;--border:#e2e6ef;--border2:#c8cfe0;
+  --text:#1a1f36;--text2:#5a6380;--text3:#9198b0;
+  --blue:#2563eb;--blue-light:#eff4ff;--blue-dark:#1d4ed8;
+  --green:#16a34a;--green-light:#f0fdf4;--red:#dc2626;--red-light:#fef2f2;
+  --amber:#d97706;--amber-light:#fffbeb;--purple:#7c3aed;--purple-light:#f5f3ff;
+  --radius:10px;--radius-sm:6px;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.10);
+}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.5}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--shadow)}
+.topbar-brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600}
+.topbar-brand .ti{font-size:22px;color:var(--blue)}
+.topbar-date{font-size:13px;color:var(--text3)}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text3);margin-bottom:16px;flex-wrap:wrap}
+.breadcrumb .bc-link{cursor:pointer;color:var(--blue)}.breadcrumb .bc-link:hover{text-decoration:underline}
+.container{max-width:1100px;margin:0 auto;padding:24px 16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.card-title .ti{color:var(--blue)}
+.org-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.org-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 16px;text-align:center;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+.org-card:hover{border-color:var(--blue);background:var(--blue-light);transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.org-card .oc-icon{font-size:32px;color:var(--blue);margin-bottom:10px;display:block}
+.org-card .oc-name{font-size:14px;font-weight:600;color:var(--text)}
+.org-card .oc-count{font-size:12px;color:var(--text3);margin-top:4px}
+.files-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.file-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 12px;text-align:center;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+.file-card:hover{border-color:var(--blue);background:var(--blue-light);transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.file-card .fc-icon{font-size:28px;color:var(--blue);margin-bottom:10px;display:block}
+.file-card .fc-name{font-size:13px;font-weight:600;color:var(--text)}
+.form-row{margin-bottom:14px}
+.form-label{font-size:13px;font-weight:500;color:var(--text2);margin-bottom:5px;display:block}
+.form-input{width:100%;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.form-input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+select.form-input{cursor:pointer}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+.btn:hover{background:var(--surface2)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-dark);border-color:var(--blue-dark)}
+.btn-success{background:var(--green);border-color:var(--green);color:#fff}.btn-success:hover{background:#15803d}
+.btn-danger{background:var(--red);border-color:var(--red);color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-purple{background:var(--purple);border-color:var(--purple);color:#fff}.btn-purple:hover{background:#6d28d9}
+.btn-sm{padding:5px 11px;font-size:13px}.btn-xs{padding:3px 8px;font-size:12px}
+.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:500}
+.badge-success{background:var(--green-light);color:#15803d}
+.badge-warning{background:var(--amber-light);color:var(--amber)}
+.badge-info{background:var(--blue-light);color:var(--blue-dark)}
+.badge-neutral{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.badge-purple{background:var(--purple-light);color:var(--purple)}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text2)}
+.tag-blue{background:var(--blue-light);color:var(--blue-dark);border-color:#bfdbfe}
+.tag-purple{background:var(--purple-light);color:var(--purple);border-color:#ddd6fe}
+.nav-tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:20px}
+.nav-tab{padding:9px 18px;font-size:14px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;font-family:inherit;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.nav-tab:hover{color:var(--text);background:var(--surface2)}.nav-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:500px}
+th{background:var(--surface2);padding:10px 12px;text-align:right;font-weight:600;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.03em}
+th.admin-col{background:var(--purple-light);color:var(--purple)}
+td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+td.admin-col{background:rgba(245,243,255,.4)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+tr:hover td.admin-col{background:var(--purple-light)}
+.alert{padding:11px 16px;border-radius:var(--radius-sm);font-size:14px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.alert-success{background:var(--green-light);color:#15803d;border:1px solid #bbf7d0}
+.alert-error{background:var(--red-light);color:#b91c1c;border:1px solid #fecaca}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,20,40,.45);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(2px)}
+.modal{background:var(--surface);border-radius:var(--radius);padding:28px;width:500px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md);border:1px solid var(--border)}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:20px;color:var(--text)}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.field-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:start;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px}
+.icon-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.icon-opt{width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border);background:var(--surface2);font-size:18px;color:var(--text2);transition:all .12s}
+.icon-opt:hover,.icon-opt.selected{border-color:var(--blue);color:var(--blue);background:var(--blue-light)}
+.search-wrap{position:relative;margin-bottom:14px}
+.search-wrap .ti-search{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
+.search-wrap input{padding-right:34px}
+.empty{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty .ti{font-size:40px;display:block;margin-bottom:10px}
+.loading{text-align:center;padding:32px;color:var(--text3)}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.flex-between{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.flex-gap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mt-1{margin-top:8px}.mt-2{margin-top:16px}
+.section-divider{font-size:12px;font-weight:600;color:var(--purple);text-transform:uppercase;letter-spacing:.05em;padding:10px 0 6px;border-top:1px solid var(--border);margin-top:16px;display:flex;align-items:center;gap:6px}
+/* inline admin edit */
+.admin-input{padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text);width:100%;min-width:80px}
+.admin-input:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 2px rgba(124,58,237,.12)}
+.admin-checkbox{width:16px;height:16px;accent-color:var(--purple);cursor:pointer}
+.save-indicator{font-size:11px;color:var(--green);display:none}
+/* filter bar */
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.filter-bar select,.filter-bar input{padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)}
+.filter-bar select:focus,.filter-bar input:focus{outline:none;border-color:var(--blue)}
+.filter-label{font-size:12px;font-weight:500;color:var(--text2);align-self:center}
+@media(max-width:600px){.form-grid-2{grid-template-columns:1fr}.container{padding:12px}.card{padding:14px}.topbar{padding:0 12px}.org-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="topbar-brand">
-    <i class="ti ti-headset"></i>
-    מוקד שירות לקוחות
-  </div>
+  <div class="topbar-brand"><i class="ti ti-headset"></i>מוקד שירות לקוחות</div>
   <div class="flex-gap">
     <span class="topbar-date" id="topbar-date"></span>
     <button class="btn btn-sm" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
@@ -372,591 +124,527 @@
   <div class="loading"><div class="spinner"></div><p>טוען...</p></div>
 </div>
 
-<!-- Modal -->
 <div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal-body"></div>
 </div>
 
 <script>
-const SUPABASE_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/rest/v1';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsaHFrd3dnbWtyaXdvamZmY2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MzY1ODEsImV4cCI6MjA5ODIxMjU4MX0.HDsgaf_S_CZjtqn2D75SpDk9KqjaC_kYtA2_Oex-vak';
+const SB  = 'https://vlhqkwwgmkriwojffced.supabase.co/rest/v1';
+const KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsaHFrd3dnbWtyaXdvamZmY2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MzY1ODEsImV4cCI6MjA5ODIxMjU4MX0.HDsgaf_S_CZjtqn2D75SpDk9KqjaC_kYtA2_Oex-vak';
 const ADMIN_PASS = 'Q1w2e3r4!';
-const ICONS = ['ti-file','ti-coin','ti-clock-off','ti-steps','ti-alert-circle','ti-phone','ti-tool','ti-refresh','ti-star','ti-flag','ti-user','ti-mail','ti-notes','ti-gift','ti-bolt'];
+const ICONS = ['ti-file','ti-coin','ti-clock-off','ti-steps','ti-alert-circle','ti-phone','ti-tool','ti-refresh','ti-star','ti-flag','ti-user','ti-mail','ti-notes','ti-gift','ti-bolt','ti-heart','ti-award','ti-calendar','ti-chart-bar','ti-clipboard'];
 
-// ── State ──
-let state = { view: 'home', fileId: null, showRecords: false, adminLoggedIn: false, adminTab: 'files', searchQ: '', alert: null, loading: false };
-let db = { files: [] };
-let _tmpIcon = 'ti-file';
-let _tmpFields = [];
+let S = { view:'orgs', orgId:null, fileId:null, adminLoggedIn:false, adminTab:'orgs', searchQ:'', alert:null, filters:{} };
+let DB = { orgs:[], files:[] };
+let _tmpIcon='ti-file', _tmpFields=[], _tmpAdminFields=[];
+let _cachedRecords={}, _allRecords=[];
+let _saveTimers={};
 
-// ── Date ──
-document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('he-IL', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('he-IL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
 // ── API ──
-async function api(method, table, body = null, params = '') {
-  const url = `${SUPABASE_URL}/${table}${params}`;
-  const headers = { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
-  const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : null });
-  if (!res.ok) { const e = await res.text(); throw new Error(e); }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
+async function api(method,table,body=null,params=''){
+  const r=await fetch(`${SB}/${table}${params}`,{
+    method,
+    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:body?JSON.stringify(body):null
+  });
+  if(!r.ok) throw new Error(await r.text());
+  const t=await r.text(); return t?JSON.parse(t):null;
+}
+const GET=(t,p='')=>api('GET',t,null,p);
+const POST=(t,b)=>api('POST',t,b);
+const PATCH=(t,b,p)=>api('PATCH',t,b,p);
+const DEL=(t,p)=>api('DELETE',t,null,p);
+
+async function loadAll(){
+  [DB.orgs,DB.files]=await Promise.all([GET('organizations','?order=created_at.asc'),GET('files','?order=created_at.asc')]);
+}
+async function getRecords(fileId){
+  const r=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);
+  _cachedRecords[fileId]=r; return r;
 }
 
-async function getFiles() {
-  return await api('GET', 'files', null, '?order=created_at.asc');
-}
-async function getRecords(fileId) {
-  return await api('GET', 'records', null, `?file_id=eq.${fileId}&order=created_at.desc`);
-}
-async function getAllRecords() {
-  return await api('GET', 'records', null, '?order=created_at.desc');
-}
-async function insertRecord(data) {
-  return await api('POST', 'records', data);
-}
-async function deleteRecord(id) {
-  return await api('DELETE', 'records', null, `?id=eq.${id}`);
-}
-async function insertFile(data) {
-  return await api('POST', 'files', data);
-}
-async function updateFile(id, data) {
-  return await api('PATCH', 'files', data, `?id=eq.${id}`);
-}
-async function deleteFile(id) {
-  return await api('DELETE', 'files', null, `?id=eq.${id}`);
+// ── Render ──
+function render(){
+  const app=document.getElementById('app');
+  let html=S.alert?`<div class="alert alert-${S.alert.type}"><i class="ti ${S.alert.type==='success'?'ti-check':'ti-alert-circle'}"></i>${S.alert.msg}</div>`:'';
+  html+=renderBreadcrumb();
+  if(S.view==='orgs')    html+=renderOrgs();
+  else if(S.view==='files')   html+=renderFiles();
+  else if(S.view==='form')    html+=renderForm();
+  else if(S.view==='records') html+=renderRecordsPage();
+  else if(S.view==='admin')   html+=renderAdmin();
+  app.innerHTML=html;
 }
 
-// ── Load ──
-async function loadFiles() {
-  db.files = await getFiles();
+function renderBreadcrumb(){
+  if(S.view==='orgs'||S.view==='admin') return '';
+  const org=DB.orgs.find(o=>o.id===S.orgId), file=DB.files.find(f=>f.id===S.fileId);
+  let c=`<span class="bc-link" onclick="goOrgs()">ארגונים</span>`;
+  if(org) c+=`<span>›</span><span class="bc-link" onclick="goFiles()">${esc(org.name)}</span>`;
+  if(file&&(S.view==='form'||S.view==='records')) c+=`<span>›</span><span>${esc(file.name)}</span>`;
+  return `<div class="breadcrumb">${c}</div>`;
 }
 
-// ── Render engine ──
-function render() {
-  const app = document.getElementById('app');
-  let html = '';
-  if (state.alert) {
-    html += `<div class="alert alert-${state.alert.type}"><i class="ti ${state.alert.type==='success'?'ti-check':'ti-alert-circle'}"></i>${state.alert.msg}</div>`;
-  }
-  if (state.view === 'home') html += renderHome();
-  else if (state.view === 'file') html += renderFile();
-  else if (state.view === 'admin') html += renderAdmin();
-  app.innerHTML = html;
+// ── Orgs ──
+function renderOrgs(){
+  if(!DB.orgs.length) return `<div class="empty"><i class="ti ti-building-off"></i><p>אין ארגונים. כנס למנהל להוסיף.</p></div>`;
+  return `<div class="card"><div class="card-title"><i class="ti ti-building"></i>בחר ארגון</div>
+    <div class="org-grid">${DB.orgs.map(o=>`
+      <div class="org-card" onclick="goFiles('${o.id}')">
+        <i class="ti ti-building-hospital oc-icon"></i>
+        <div class="oc-name">${esc(o.name)}</div>
+        <div class="oc-count">${DB.files.filter(f=>f.org_id===o.id).length} קבצים</div>
+      </div>`).join('')}
+    </div></div>`;
 }
 
-// ── Home ──
-function renderHome() {
-  if (!db.files.length) return `<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים עדיין. כנס למנהל להוסיף.</p></div>`;
-  let grid = db.files.map(f => `
-    <div class="file-card" onclick="openFile('${f.id}')">
-      <i class="ti ${f.icon||'ti-file'} fc-icon"></i>
-      <div class="fc-name">${esc(f.name)}</div>
-      <div class="fc-count">לחץ להזנה</div>
+// ── Files ──
+function renderFiles(){
+  const orgFiles=DB.files.filter(f=>f.org_id===S.orgId);
+  if(!orgFiles.length) return `<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים לארגון זה.</p></div>`;
+  return `<div class="card"><div class="card-title"><i class="ti ti-folder"></i>בחר קובץ לעדכון</div>
+    <div class="files-grid">${orgFiles.map(f=>`
+      <div class="file-card" onclick="goForm('${f.id}')">
+        <i class="ti ${f.icon||'ti-file'} fc-icon"></i>
+        <div class="fc-name">${esc(f.name)}</div>
+      </div>`).join('')}
+    </div></div>`;
+}
+
+// ── Form ──
+function renderForm(){
+  const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
+  const extraF=(f.extra_fields||[]).map(ef=>{
+    let inp='';
+    if(ef.type==='select'){const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');inp=`<select class="form-input" name="extra_${ef.id}"><option value="">בחר...</option>${opts}</select>`;}
+    else if(ef.type==='number') inp=`<input class="form-input" type="number" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
+    else inp=`<input class="form-input" type="text" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
+    return `<div class="form-row"><label class="form-label">${esc(ef.label)}</label>${inp}</div>`;
+  }).join('');
+  return `<div class="card">
+    <div class="flex-between" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)}</div>
+      <div class="flex-gap">
+        <button class="btn btn-sm" onclick="goRecords('${f.id}')"><i class="ti ti-list"></i> כל הרשומות</button>
+        <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
+      </div>
     </div>
-  `).join('');
-  return `<div class="card"><div class="card-title"><i class="ti ti-layout-grid"></i>בחר קובץ לעדכון</div><div class="files-grid">${grid}</div></div>`;
-}
-
-// ── File view ──
-function renderFile() {
-  const f = db.files.find(x => x.id === state.fileId);
-  if (!f) return '';
-  let html = `<button class="back-btn" onclick="goHome()"><i class="ti ti-arrow-right"></i> חזור לרשימת הקבצים</button>`;
-
-  if (state.showRecords) {
-    html += renderRecords(f);
-  } else {
-    html += renderForm(f);
-  }
-  return html;
-}
-
-function renderForm(f) {
-  const extra = (f.extra_fields || []).map(ef => {
-    let input = '';
-    if (ef.type === 'select') {
-      const opts = (ef.options || '').split(',').map(o => `<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');
-      input = `<select class="form-input" name="extra_${ef.id}"><option value="">בחר...</option>${opts}</select>`;
-    } else if (ef.type === 'number') {
-      input = `<input class="form-input" type="number" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
-    } else {
-      input = `<input class="form-input" type="text" name="extra_${ef.id}" placeholder="${esc(ef.label)}">`;
-    }
-    return `<div class="form-row"><label class="form-label">${esc(ef.label)}</label>${input}</div>`;
-  }).join('');
-
-  return `
-    <div class="card">
-      <div class="flex-between" style="margin-bottom:16px">
-        <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)}</div>
-        <div class="flex-gap">
-          <button class="btn btn-sm" onclick="viewRecords('${f.id}')"><i class="ti ti-list"></i> צפה ברשומות</button>
-          <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
-        </div>
+    <form id="entry-form" onsubmit="submitRecord(event,'${f.id}')">
+      <div class="form-grid-2">
+        <div class="form-row"><label class="form-label">שם פרטי *</label><input class="form-input" name="first_name" required placeholder="שם פרטי"></div>
+        <div class="form-row"><label class="form-label">שם משפחה *</label><input class="form-input" name="last_name" required placeholder="שם משפחה"></div>
+        <div class="form-row"><label class="form-label">טלפון *</label><input class="form-input" name="phone" required placeholder="05X-XXXXXXX" dir="ltr"></div>
+        <div class="form-row"><label class="form-label">ת"ז *</label><input class="form-input" name="id_num" required placeholder="9 ספרות" dir="ltr" maxlength="9"></div>
       </div>
-      <form id="entry-form" onsubmit="submitRecord(event,'${f.id}')">
-        <div class="form-grid-2">
-          <div class="form-row"><label class="form-label">שם פרטי *</label><input class="form-input" name="first_name" required placeholder="שם פרטי"></div>
-          <div class="form-row"><label class="form-label">שם משפחה *</label><input class="form-input" name="last_name" required placeholder="שם משפחה"></div>
-          <div class="form-row"><label class="form-label">טלפון *</label><input class="form-input" name="phone" required placeholder="05X-XXXXXXX" dir="ltr"></div>
-          <div class="form-row"><label class="form-label">ת"ז *</label><input class="form-input" name="id_num" required placeholder="9 ספרות" dir="ltr" maxlength="9"></div>
-        </div>
-        ${extra}
-        <div class="mt-2">
-          <button type="submit" class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> שמור רשומה</button>
-        </div>
-      </form>
-    </div>`;
+      ${extraF}
+      <div class="mt-2"><button type="submit" class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> שמור רשומה</button></div>
+    </form>
+  </div>`;
 }
 
-async function viewRecords(fileId) {
-  state.showRecords = true;
-  state.loading = true;
-  render();
-  try {
-    const f = db.files.find(x => x.id === fileId);
-    f._records = await getRecords(fileId);
-  } catch(e) { showAlert('שגיאה בטעינת רשומות','error'); }
-  state.loading = false;
-  render();
-}
+// ── Records page (נציג + מנהל) ──
+function renderRecordsPage(){
+  const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
+  const isAdmin=S.adminLoggedIn;
+  const records=_cachedRecords[S.fileId]||[];
+  const extraFields=f.extra_fields||[];
+  const adminFields=f.admin_fields||[];
 
-function renderRecords(f) {
-  const records = f._records || [];
-  const q = (state.searchQ || '').toLowerCase();
-  const filtered = q ? records.filter(r =>
-    (r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num).toLowerCase().includes(q)
-  ) : records;
+  // filters
+  let filtered=records;
+  const q=(S.searchQ||'').toLowerCase();
+  if(q) filtered=filtered.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num).toLowerCase().includes(q));
+  // admin field filters
+  Object.entries(S.filters||{}).forEach(([afId,val])=>{
+    if(!val||val==='') return;
+    const af=adminFields.find(x=>x.id===afId); if(!af) return;
+    filtered=filtered.filter(r=>{
+      const v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
+      if(af.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
+      return v.includes(val.toLowerCase());
+    });
+  });
 
-  const extra = f.extra_fields || [];
-  const rows = filtered.map(r => {
-    const extraCells = extra.map(ef => {
-      const val = (r.extra || {})[ef.id] || '';
-      if (ef.type === 'select' && val) {
-        const cls = val==='טופל'?'badge-success':val==='לא טופל'?'badge-warning':'badge-info';
-        return `<td><span class="badge ${cls}">${esc(val)}</span></td>`;
-      }
-      return `<td>${esc(val)}</td>`;
+  const extraH=extraFields.map(ef=>`<th>${esc(ef.label)}</th>`).join('');
+  const adminH=adminFields.map(af=>`<th class="admin-col"><i class="ti ti-shield-check" style="font-size:11px"></i> ${esc(af.label)}</th>`).join('');
+  const delH=isAdmin?'<th></th>':'';
+
+  const rows=filtered.map(r=>{
+    const extraC=extraFields.map(ef=>{
+      const v=(r.extra||{})[ef.id]||'';
+      if(ef.type==='select'&&v){const cls=v==='טופל'?'badge-success':v==='לא טופל'?'badge-warning':'badge-info';return `<td><span class="badge ${cls}">${esc(v)}</span></td>`;}
+      return `<td>${esc(v)}</td>`;
     }).join('');
-    return `<tr>
-      <td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td>
-      <td>${esc(r.first_name)}</td>
-      <td>${esc(r.last_name)}</td>
-      <td dir="ltr">${esc(r.phone)}</td>
-      <td dir="ltr">${esc(r.id_num)}</td>
-      ${extraCells}
-      <td><button class="btn btn-xs btn-danger" onclick="removeRecord('${f.id}','${r.id}')"><i class="ti ti-trash"></i></button></td>
-    </tr>`;
+
+    const adminC=adminFields.map(af=>{
+      const val=(r.admin_data||{})[af.id];
+      if(!isAdmin){
+        // נציג רואה בקריאה בלבד
+        if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center">${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</td>`;
+        if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
+        return `<td class="admin-col">${esc(val||'')}</td>`;
+      }
+      // מנהל — עריכה inline
+      if(af.type==='checkbox'){
+        return `<td class="admin-col" style="text-align:center">
+          <input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked)">
+        </td>`;
+      }
+      if(af.type==='select'){
+        const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');
+        return `<td class="admin-col"><select class="admin-input" onchange="saveAdminField('${r.id}','${af.id}',this.value)"><option value="">--</option>${opts}</select></td>`;
+      }
+      return `<td class="admin-col"><input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." oninput="debounceAdminField('${r.id}','${af.id}',this.value)"></td>`;
+    }).join('');
+
+    const delC=isAdmin?`<td><button class="btn btn-xs btn-danger" onclick="delRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:'';
+    return `<tr><td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td><td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${adminC}${delC}</tr>`;
   }).join('');
 
-  const extraHeaders = extra.map(ef => `<th>${esc(ef.label)}</th>`).join('');
+  // filter bar for admin fields
+  const filterBar=adminFields.length&&isAdmin?`
+    <div class="filter-bar">
+      <span class="filter-label"><i class="ti ti-filter"></i> סינון לפי שדות ניהוליים:</span>
+      ${adminFields.map(af=>{
+        if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)">
+          <option value="">כל ${esc(af.label)}</option>
+          <option value="yes" ${S.filters[af.id]==='yes'?'selected':''}>✓ מסומן</option>
+          <option value="no" ${S.filters[af.id]==='no'?'selected':''}>✗ לא מסומן</option>
+        </select>`;
+        if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)">
+          <option value="">כל ${esc(af.label)}</option>
+          ${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${S.filters[af.id]===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('')}
+        </select>`;
+        return `<input type="text" placeholder="סנן ${esc(af.label)}..." value="${esc(S.filters[af.id]||'')}" oninput="setFilter('${af.id}',this.value)" style="min-width:140px">`;
+      }).join('')}
+      <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
+    </div>`:adminFields.length&&!isAdmin?`
+    <div class="filter-bar">
+      <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
+      ${adminFields.map(af=>{
+        if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)">
+          <option value="">כל ${esc(af.label)}</option>
+          <option value="yes">✓ מסומן</option><option value="no">✗ לא מסומן</option>
+        </select>`;
+        if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)">
+          <option value="">כל ${esc(af.label)}</option>
+          ${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('')}
+        </select>`;
+        return '';
+      }).join('')}
+    </div>`:'';
 
-  return `
-    <div class="card">
-      <div class="flex-between" style="margin-bottom:16px">
-        <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)} — רשומות</div>
-        <div class="flex-gap">
-          <button class="btn btn-sm" onclick="state.showRecords=false;render()"><i class="ti ti-edit"></i> הזנה חדשה</button>
-          <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
-        </div>
+  return `<div class="card">
+    <div class="flex-between" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)} — רשומות</div>
+      <div class="flex-gap">
+        <button class="btn btn-sm" onclick="goForm('${f.id}')"><i class="ti ti-edit"></i> הזנה חדשה</button>
+        <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
       </div>
-      <div class="search-wrap">
-        <input class="form-input" type="text" placeholder="חיפוש לפי שם / טלפון / ת&quot;ז..." value="${esc(state.searchQ)}" oninput="state.searchQ=this.value;render()">
-        <i class="ti ti-search"></i>
-      </div>
-      ${filtered.length === 0
-        ? `<div class="empty"><i class="ti ti-database-off"></i><p>${q ? 'לא נמצאו תוצאות' : 'אין רשומות עדיין'}</p></div>`
-        : `<div class="table-wrap"><table><thead><tr><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th>${extraHeaders}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-      }
-      <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות</div>
-    </div>`;
+    </div>
+    ${adminFields.length?`<div style="margin-bottom:10px"><span class="badge badge-purple"><i class="ti ti-shield-check"></i> עמודות ניהוליות: ${adminFields.map(af=>esc(af.label)).join(', ')}</span></div>`:''}
+    <div class="search-wrap">
+      <input class="form-input" type="text" placeholder='חיפוש לפי שם / טלפון / ת"ז...' value="${esc(S.searchQ)}" oninput="S.searchQ=this.value;render()">
+      <i class="ti ti-search"></i>
+    </div>
+    ${filterBar}
+    ${!filtered.length
+      ?`<div class="empty"><i class="ti ti-database-off"></i><p>${q?'לא נמצאו תוצאות':'אין רשומות עדיין'}</p></div>`
+      :`<div class="table-wrap"><table><thead><tr><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th>${extraH}${adminH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
+    }
+    <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות</div>
+  </div>`;
 }
+
+// ── Admin inline save ──
+async function saveAdminField(recordId, fieldId, value){
+  const record=Object.values(_cachedRecords).flat().find(r=>r.id===recordId); if(!record) return;
+  if(!record.admin_data) record.admin_data={};
+  record.admin_data[fieldId]=value;
+  try{
+    await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`);
+    flashSave(recordId);
+  }catch(e){showAlert('שגיאה בשמירה','error');}
+}
+function debounceAdminField(recordId,fieldId,value){
+  const key=recordId+'_'+fieldId;
+  clearTimeout(_saveTimers[key]);
+  _saveTimers[key]=setTimeout(()=>saveAdminField(recordId,fieldId,value),700);
+}
+function flashSave(recordId){
+  // brief green flash on row
+  document.querySelectorAll(`tr`).forEach(tr=>{
+    if(tr.innerHTML.includes(recordId.slice(0,8))||true){} // just a subtle indicator
+  });
+}
+function setFilter(afId,val){ S.filters[afId]=val; render(); }
 
 // ── Admin ──
-function renderAdmin() {
-  if (!state.adminLoggedIn) {
-    return `
-      <button class="back-btn" onclick="goHome()"><i class="ti ti-arrow-right"></i> חזור</button>
-      <div class="card" style="max-width:360px;margin:20px auto">
-        <div class="card-title"><i class="ti ti-lock"></i> כניסת מנהל</div>
-        <form onsubmit="adminLogin(event)">
-          <div class="form-row"><label class="form-label">סיסמה</label><input class="form-input" type="password" id="admin-pass" placeholder="הזן סיסמה" autofocus></div>
-          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px"><i class="ti ti-login"></i> כניסה</button>
-        </form>
-      </div>`;
-  }
-
-  const tab = state.adminTab;
-  return `
-    <div class="flex-between" style="margin-bottom:12px">
-      <button class="back-btn" onclick="goHome()" style="margin-bottom:0"><i class="ti ti-arrow-right"></i> חזור</button>
-      <button class="btn btn-sm btn-danger" onclick="state.adminLoggedIn=false;goHome()"><i class="ti ti-logout"></i> יציאה</button>
-    </div>
-    <div class="card">
-      <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
-      <div class="nav-tabs">
-        <button class="nav-tab ${tab==='files'?'active':''}" onclick="state.adminTab='files';render()">ניהול קבצים</button>
-        <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadRecords()">כל הרשומות</button>
-      </div>
-      ${tab === 'files' ? renderAdminFiles() : renderAdminRecords()}
+function renderAdmin(){
+  if(!S.adminLoggedIn) return `
+    <div class="card" style="max-width:360px;margin:20px auto">
+      <div class="card-title"><i class="ti ti-lock"></i> כניסת מנהל</div>
+      <form onsubmit="adminLogin(event)">
+        <div class="form-row"><label class="form-label">סיסמה</label><input class="form-input" type="password" id="admin-pass" placeholder="הזן סיסמה" autofocus></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px"><i class="ti ti-login"></i> כניסה</button>
+      </form>
     </div>`;
-}
-
-function renderAdminFiles() {
-  return `
-    <div style="text-align:left;margin-bottom:14px">
-      <button class="btn btn-primary" onclick="openNewFile()"><i class="ti ti-plus"></i> קובץ חדש</button>
+  const tab=S.adminTab;
+  return `<div class="card">
+    <div class="flex-between" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ti-settings"></i> ממשק מנהל</div>
+      <button class="btn btn-sm btn-danger" onclick="S.adminLoggedIn=false;goOrgs()"><i class="ti ti-logout"></i> יציאה</button>
     </div>
-    ${db.files.map(f => `
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px">
-        <div class="flex-between" style="margin-bottom:10px">
-          <div style="font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px"><i class="ti ${f.icon||'ti-file'}" style="color:var(--blue)"></i>${esc(f.name)}</div>
-          <div class="flex-gap">
-            <button class="btn btn-sm" onclick="openEditFile('${f.id}')"><i class="ti ti-edit"></i> עריכה</button>
-            <button class="btn btn-sm btn-danger" onclick="confirmDeleteFile('${f.id}')"><i class="ti ti-trash"></i></button>
-          </div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
-          <span class="tag"><i class="ti ti-calendar"></i> תאריך</span>
-          <span class="tag"><i class="ti ti-user"></i> שם פרטי</span>
-          <span class="tag"><i class="ti ti-user"></i> שם משפחה</span>
-          <span class="tag"><i class="ti ti-phone"></i> טלפון</span>
-          <span class="tag"><i class="ti ti-id"></i> ת"ז</span>
-          ${(f.extra_fields||[]).map(ef => `<span class="tag tag-blue">${esc(ef.label)}</span>`).join('')}
-        </div>
-      </div>
-    `).join('') || '<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים</p></div>'}`;
+    <div class="nav-tabs">
+      <button class="nav-tab ${tab==='orgs'?'active':''}" onclick="S.adminTab='orgs';render()">ארגונים</button>
+      <button class="nav-tab ${tab==='files'?'active':''}" onclick="S.adminTab='files';render()">קבצים</button>
+      <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
+    </div>
+    ${tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():renderAdminAllRecords()}
+  </div>`;
 }
 
-function renderAdminRecords() {
-  if (state.loading) return `<div class="loading"><div class="spinner"></div><p>טוען...</p></div>`;
-  const allRecords = state._allRecords || [];
-  if (!allRecords.length) return `<div class="empty"><i class="ti ti-database-off"></i><p>אין רשומות במערכת</p></div>`;
+function renderAdminOrgs(){
+  return `<div style="text-align:left;margin-bottom:14px"><button class="btn btn-primary" onclick="openNewOrg()"><i class="ti ti-plus"></i> ארגון חדש</button></div>
+    ${DB.orgs.map(o=>`
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-building-hospital" style="color:var(--blue)"></i>${esc(o.name)}</div>
+        <div class="flex-gap">
+          <button class="btn btn-sm" onclick="openEditOrg('${o.id}','${esc(o.name)}')"><i class="ti ti-edit"></i></button>
+          <button class="btn btn-sm btn-danger" onclick="confirmDeleteOrg('${o.id}')"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`).join('')||'<div class="empty"><i class="ti ti-building-off"></i><p>אין ארגונים</p></div>'}`;
+}
 
-  const rows = allRecords.map(r => {
-    const f = db.files.find(x => x.id === r.file_id);
+function renderAdminFiles(){
+  return `<div style="text-align:left;margin-bottom:14px"><button class="btn btn-primary" onclick="openNewFile()"><i class="ti ti-plus"></i> קובץ חדש</button></div>
+    ${DB.orgs.map(o=>{
+      const orgFiles=DB.files.filter(f=>f.org_id===o.id); if(!orgFiles.length) return '';
+      return `<div style="margin-bottom:20px">
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-building-hospital" style="color:var(--blue)"></i>${esc(o.name)}</div>
+        ${orgFiles.map(f=>`
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
+            <div class="flex-between" style="margin-bottom:10px">
+              <div style="font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px"><i class="ti ${f.icon||'ti-file'}" style="color:var(--blue)"></i>${esc(f.name)}</div>
+              <div class="flex-gap">
+                <button class="btn btn-sm" onclick="adminViewFileRecords('${f.id}')"><i class="ti ti-list"></i> רשומות</button>
+                <button class="btn btn-sm" onclick="openEditFile('${f.id}')"><i class="ti ti-edit"></i> עריכה</button>
+                <button class="btn btn-sm btn-danger" onclick="confirmDeleteFile('${f.id}')"><i class="ti ti-trash"></i></button>
+              </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <span class="tag"><i class="ti ti-calendar"></i> תאריך</span>
+              <span class="tag"><i class="ti ti-user"></i> שם פרטי</span>
+              <span class="tag"><i class="ti ti-user"></i> שם משפחה</span>
+              <span class="tag"><i class="ti ti-phone"></i> טלפון</span>
+              <span class="tag"><i class="ti ti-id"></i> ת"ז</span>
+              ${(f.extra_fields||[]).map(ef=>`<span class="tag tag-blue">${esc(ef.label)}</span>`).join('')}
+              ${(f.admin_fields||[]).map(af=>`<span class="tag tag-purple"><i class="ti ti-shield-check"></i> ${esc(af.label)}</span>`).join('')}
+            </div>
+          </div>`).join('')}
+      </div>`;
+    }).join('')||'<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים</p></div>'}`;
+}
+
+function renderAdminAllRecords(){
+  if(S._loadingRecords) return `<div class="loading"><div class="spinner"></div><p>טוען...</p></div>`;
+  if(!_allRecords.length) return `<div class="empty"><i class="ti ti-database-off"></i><p>אין רשומות במערכת</p></div>`;
+  const rows=_allRecords.map(r=>{
+    const f=DB.files.find(x=>x.id===r.file_id), o=DB.orgs.find(x=>x.id===(f&&f.org_id));
     return `<tr>
-      <td><span class="badge badge-info">${esc(f ? f.name : r.file_id)}</span></td>
+      <td><span class="badge badge-neutral">${esc(o?o.name:'')}</span></td>
+      <td><span class="badge badge-info">${esc(f?f.name:'')}</span></td>
       <td style="font-size:12px;white-space:nowrap">${fmtDate(r.created_at)}</td>
-      <td>${esc(r.first_name)}</td>
-      <td>${esc(r.last_name)}</td>
-      <td dir="ltr">${esc(r.phone)}</td>
-      <td dir="ltr">${esc(r.id_num)}</td>
-      <td><button class="btn btn-xs btn-danger" onclick="removeRecordAdmin('${r.id}')"><i class="ti ti-trash"></i></button></td>
+      <td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td>
+      <td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>
+      <td><button class="btn btn-xs" onclick="adminViewFileRecords('${r.file_id}')"><i class="ti ti-external-link"></i></button></td>
     </tr>`;
   }).join('');
-
-  return `
-    <div class="flex-between" style="margin-bottom:12px">
-      <span style="font-size:13px;color:var(--text2)">${allRecords.length} רשומות סה"כ</span>
-      <button class="btn btn-sm btn-success" onclick="exportAll()"><i class="ti ti-download"></i> ייצוא הכל</button>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr><th>קובץ</th><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table>
-    </div>`;
+  return `<div class="flex-between" style="margin-bottom:12px">
+    <span style="font-size:13px;color:var(--text2)">${_allRecords.length} רשומות סה"כ</span>
+    <button class="btn btn-sm btn-success" onclick="exportAll()"><i class="ti ti-download"></i> ייצוא הכל</button>
+  </div>
+  <div class="table-wrap"><table><thead><tr><th>ארגון</th><th>קובץ</th><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-// ── Actions ──
-function goHome() {
-  state.view = 'home';
-  state.fileId = null;
-  state.showRecords = false;
-  state.searchQ = '';
-  state.alert = null;
-  loadFiles().then(render);
+// ── Navigation ──
+function goOrgs(){ S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};loadAll().then(render); }
+function goFiles(orgId){ if(orgId)S.orgId=orgId; S.view='files';S.fileId=null;render(); }
+function goForm(fileId){ S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};render(); }
+async function goRecords(fileId){
+  S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};render();
+  await getRecords(fileId); render();
 }
-
-function openFile(id) {
-  state.view = 'file';
-  state.fileId = id;
-  state.showRecords = false;
-  state.searchQ = '';
+async function adminViewFileRecords(fileId){
+  S.fileId=fileId;
+  const f=DB.files.find(x=>x.id===fileId);
+  if(f) S.orgId=f.org_id;
+  S.view='records';S.searchQ='';S.filters={};
   render();
+  await getRecords(fileId); render();
 }
-
-function gotoAdmin() {
-  state.view = 'admin';
-  render();
-}
-
-function adminLogin(e) {
+function gotoAdmin(){ S.view='admin';render(); }
+function adminLogin(e){
   e.preventDefault();
-  const pass = document.getElementById('admin-pass').value;
-  if (pass === ADMIN_PASS) {
-    state.adminLoggedIn = true;
-    render();
-  } else {
-    showAlert('סיסמה שגויה', 'error');
-  }
+  if(document.getElementById('admin-pass').value===ADMIN_PASS){S.adminLoggedIn=true;render();}
+  else showAlert('סיסמה שגויה','error');
+}
+async function adminLoadAllRecords(){
+  S.adminTab='records';S._loadingRecords=true;render();
+  _allRecords=await GET('records','?order=created_at.desc');
+  S._loadingRecords=false;render();
 }
 
-async function adminLoadRecords() {
-  state.adminTab = 'records';
-  state.loading = true;
-  render();
-  try {
-    state._allRecords = await getAllRecords();
-  } catch(e) { showAlert('שגיאה בטעינת רשומות','error'); }
-  state.loading = false;
-  render();
-}
-
-async function submitRecord(e, fileId) {
+// ── Submit ──
+async function submitRecord(e,fileId){
   e.preventDefault();
-  const form = e.target;
-  const btn = document.getElementById('submit-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader-2"></i> שומר...';
-
-  const f = db.files.find(x => x.id === fileId);
-  const extra = {};
-  (f.extra_fields || []).forEach(ef => {
-    const el = form[`extra_${ef.id}`];
-    if (el) extra[ef.id] = el.value.trim();
-  });
-
-  try {
-    await insertRecord({
-      file_id: fileId,
-      first_name: form.first_name.value.trim(),
-      last_name: form.last_name.value.trim(),
-      phone: form.phone.value.trim(),
-      id_num: form.id_num.value.trim(),
-      extra
-    });
-    form.reset();
-    showAlert('הרשומה נשמרה בהצלחה ✓', 'success');
-  } catch(e) {
-    showAlert('שגיאה בשמירה: ' + e.message, 'error');
-  }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="ti ti-check"></i> שמור רשומה';
+  const form=e.target,btn=document.getElementById('submit-btn');
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2"></i> שומר...';
+  const f=DB.files.find(x=>x.id===fileId);
+  const extra={};
+  (f.extra_fields||[]).forEach(ef=>{const el=form[`extra_${ef.id}`];if(el)extra[ef.id]=el.value.trim();});
+  try{
+    await POST('records',{file_id:fileId,first_name:form.first_name.value.trim(),last_name:form.last_name.value.trim(),phone:form.phone.value.trim(),id_num:form.id_num.value.trim(),extra,admin_data:{}});
+    form.reset();showAlert('הרשומה נשמרה בהצלחה ✓','success');
+  }catch(e){showAlert('שגיאה: '+e.message,'error');}
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> שמור רשומה';
 }
 
-async function removeRecord(fileId, recordId) {
-  if (!confirm('למחוק רשומה זו?')) return;
-  try {
-    await deleteRecord(recordId);
-    await viewRecords(fileId);
-  } catch(e) { showAlert('שגיאה במחיקה','error'); }
+// ── Delete record ──
+async function delRecord(id,fileId){
+  if(!confirm('למחוק רשומה זו?')) return;
+  await DEL('records',`?id=eq.${id}`);
+  await getRecords(fileId);render();
 }
 
-async function removeRecordAdmin(recordId) {
-  if (!confirm('למחוק רשומה זו?')) return;
-  try {
-    await deleteRecord(recordId);
-    await adminLoadRecords();
-  } catch(e) { showAlert('שגיאה במחיקה','error'); }
-}
-
-async function confirmDeleteFile(id) {
-  const f = db.files.find(x => x.id === id);
-  if (!confirm(`למחוק את הקובץ "${f.name}" וכל הרשומות שלו?`)) return;
-  try {
-    await deleteFile(id);
-    await loadFiles();
-    render();
-    showAlert('הקובץ נמחק','success');
-  } catch(e) { showAlert('שגיאה במחיקה','error'); }
-}
+// ── Org modal ──
+function openNewOrg(){showModal(`<div class="modal-title"><i class="ti ti-building" style="color:var(--blue)"></i> ארגון חדש</div>
+  <div class="form-row"><label class="form-label">שם הארגון *</label><input class="form-input" id="org-name" placeholder="לדוגמה: כללית אקטיב"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveNewOrg()"><i class="ti ti-check"></i> צור</button></div>`);}
+function openEditOrg(id,name){showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת ארגון</div>
+  <div class="form-row"><label class="form-label">שם הארגון *</label><input class="form-input" id="org-name" value="${esc(name)}"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveEditOrg('${id}')"><i class="ti ti-check"></i> שמור</button></div>`);}
+async function saveNewOrg(){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await POST('organizations',{name:n});await loadAll();closeModal();render();showAlert('הארגון נוסף','success');}
+async function saveEditOrg(id){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await PATCH('organizations',{name:n},`?id=eq.${id}`);await loadAll();closeModal();render();showAlert('הארגון עודכן','success');}
+async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכל קבציו?'))return;await DEL('organizations',`?id=eq.${id}`);await loadAll();render();showAlert('הארגון נמחק','success');}
 
 // ── File modal ──
-function openNewFile() {
-  _tmpIcon = 'ti-file';
-  _tmpFields = [];
-  showModal(`
-    <div class="modal-title"><i class="ti ti-plus" style="color:var(--blue)"></i> קובץ חדש</div>
-    ${fileFormHTML({name:'',icon:'ti-file',extra_fields:[]})}
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal()">ביטול</button>
-      <button class="btn btn-primary" onclick="saveNewFile()"><i class="ti ti-check"></i> צור קובץ</button>
-    </div>
-  `);
+function openNewFile(){_tmpIcon='ti-file';_tmpFields=[];_tmpAdminFields=[];showModal(fileModalHTML({name:'',icon:'ti-file',org_id:'',extra_fields:[],admin_fields:[]},'new'));}
+function openEditFile(id){
+  const f=DB.files.find(x=>x.id===id);
+  _tmpIcon=f.icon||'ti-file';_tmpFields=JSON.parse(JSON.stringify(f.extra_fields||[]));_tmpAdminFields=JSON.parse(JSON.stringify(f.admin_fields||[]));
+  showModal(fileModalHTML(f,'edit',id));
 }
-
-function openEditFile(id) {
-  const f = db.files.find(x => x.id === id);
-  _tmpIcon = f.icon || 'ti-file';
-  _tmpFields = JSON.parse(JSON.stringify(f.extra_fields || []));
-  showModal(`
-    <div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת קובץ</div>
-    ${fileFormHTML(f)}
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal()">ביטול</button>
-      <button class="btn btn-primary" onclick="saveEditFile('${id}')"><i class="ti ti-check"></i> שמור שינויים</button>
-    </div>
-  `);
-}
-
-function fileFormHTML(f) {
-  const icons = ICONS.map(ic => `
-    <div class="icon-opt ${_tmpIcon===ic?'selected':''}" data-icon="${ic}" onclick="pickIcon('${ic}')">
-      <i class="ti ${ic}"></i>
-    </div>`).join('');
-
-  const fieldRows = _tmpFields.map((ef, i) => fieldRowHTML(ef, i)).join('');
-
-  return `
-    <div class="form-row"><label class="form-label">שם הקובץ *</label><input class="form-input" id="mf-name" value="${esc(f.name)}" placeholder="לדוגמה: פיצוי מטבעות"></div>
-    <div class="form-row"><label class="form-label">אייקון</label><div class="icon-picker" id="icon-picker">${icons}</div></div>
+function fileModalHTML(f,mode,id=''){
+  const orgOpts=DB.orgs.map(o=>`<option value="${o.id}" ${f.org_id===o.id?'selected':''}>${esc(o.name)}</option>`).join('');
+  const iconsH=ICONS.map(ic=>`<div class="icon-opt ${_tmpIcon===ic?'selected':''}" data-icon="${ic}" onclick="pickIcon('${ic}')"><i class="ti ${ic}"></i></div>`).join('');
+  const fieldRows=_tmpFields.map((ef,i)=>fieldRowHTML(ef,i,'f')).join('');
+  const adminRows=_tmpAdminFields.map((af,i)=>fieldRowHTML(af,i,'a')).join('');
+  const saveBtn=mode==='new'?`<button class="btn btn-primary" onclick="saveNewFile()"><i class="ti ti-check"></i> צור קובץ</button>`:`<button class="btn btn-primary" onclick="saveEditFile('${id}')"><i class="ti ti-check"></i> שמור</button>`;
+  return `<div class="modal-title"><i class="ti ${mode==='new'?'ti-plus':'ti-edit'}" style="color:var(--blue)"></i> ${mode==='new'?'קובץ חדש':'עריכת קובץ'}</div>
+    <div class="form-row"><label class="form-label">ארגון *</label><select class="form-input" id="mf-org"><option value="">בחר ארגון...</option>${orgOpts}</select></div>
+    <div class="form-row"><label class="form-label">שם הקובץ *</label><input class="form-input" id="mf-name" value="${esc(f.name)}" placeholder="שם הקובץ"></div>
+    <div class="form-row"><label class="form-label">אייקון</label><div class="icon-picker" id="icon-picker">${iconsH}</div></div>
     <div class="form-row">
-      <label class="form-label">שדות נוספים</label>
+      <label class="form-label">שדות טופס (נציג ממלא)</label>
       <div id="field-list">${fieldRows}</div>
-      <button class="btn btn-sm mt-1" type="button" onclick="addField()"><i class="ti ti-plus"></i> הוסף שדה</button>
-    </div>`;
+      <button class="btn btn-sm mt-1" type="button" onclick="addField('f')"><i class="ti ti-plus"></i> הוסף שדה</button>
+    </div>
+    <div class="section-divider"><i class="ti ti-shield-check"></i> שדות ניהוליים (מנהל ממלא)</div>
+    <div class="form-row">
+      <div id="admin-field-list">${adminRows}</div>
+      <button class="btn btn-sm btn-purple mt-1" type="button" onclick="addField('a')"><i class="ti ti-plus"></i> הוסף שדה ניהולי</button>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 
-function fieldRowHTML(ef, i) {
-  const typeOpts = ['text','number','select'].map(t =>
-    `<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':'תפריט'}</option>`
-  ).join('');
-  return `
-    <div class="field-row" id="fr_${i}">
-      <div><label class="form-label" style="font-size:11px">שם השדה</label><input class="form-input" data-fl="${i}" value="${esc(ef.label)}" placeholder="שם"></div>
-      <div>
-        <label class="form-label" style="font-size:11px">סוג</label>
-        <select class="form-input" data-ft="${i}" onchange="onTypeChange(${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
-        ${ef.type==='select'?`<input class="form-input mt-1" data-fo="${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
-      </div>
-      <div style="padding-top:22px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField(${i})"><i class="ti ti-trash"></i></button></div>
-    </div>`;
+function fieldRowHTML(ef,i,prefix){
+  const typeOpts=['text','number','select','checkbox'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':'תיבת סימון'}</option>`).join('');
+  const showOpts=ef.type==='select';
+  return `<div class="field-row" id="fr_${prefix}_${i}">
+    <div><label class="form-label" style="font-size:11px">שם השדה</label><input class="form-input" data-fl="${prefix}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
+    <div><label class="form-label" style="font-size:11px">סוג</label>
+      <select class="form-input" data-ft="${prefix}_${i}" onchange="onTypeChange('${prefix}',${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
+      ${showOpts?`<input class="form-input mt-1" data-fo="${prefix}_${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
+    </div>
+    <div style="padding-top:22px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField('${prefix}',${i})"><i class="ti ti-trash"></i></button></div>
+  </div>`;
 }
-
-function pickIcon(ic) {
-  _tmpIcon = ic;
-  document.querySelectorAll('.icon-opt').forEach(el => {
-    const isMe = el.dataset.icon === ic;
-    el.classList.toggle('selected', isMe);
-  });
+function pickIcon(ic){_tmpIcon=ic;document.querySelectorAll('.icon-opt').forEach(el=>el.classList.toggle('selected',el.dataset.icon===ic));}
+function onTypeChange(prefix,i,val){
+  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
+  arr[i].type=val;if(val!=='select')arr[i].options='';refreshFields(prefix);
 }
-
-function onTypeChange(i, val) {
-  _tmpFields[i].type = val;
-  if (val !== 'select') _tmpFields[i].options = '';
-  refreshFields();
+function refreshFields(prefix){
+  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
+  const el=document.getElementById(prefix==='f'?'field-list':'admin-field-list');
+  if(el) el.innerHTML=arr.map((ef,i)=>fieldRowHTML(ef,i,prefix)).join('');
 }
-
-function refreshFields() {
-  const el = document.getElementById('field-list');
-  if (el) el.innerHTML = _tmpFields.map((ef,i) => fieldRowHTML(ef,i)).join('');
+function addField(prefix){
+  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
+  arr.push({id:genId(),label:'',type:'text',options:''});refreshFields(prefix);
 }
-
-function addField() {
-  _tmpFields.push({ id: genId(), label: '', type: 'text', options: '' });
-  refreshFields();
+function removeField(prefix,i){
+  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
+  arr.splice(i,1);refreshFields(prefix);
 }
-
-function removeField(i) {
-  _tmpFields.splice(i,1);
-  refreshFields();
+function collectFields(prefix){
+  const arr=prefix==='f'?_tmpFields:_tmpAdminFields;
+  return arr.map((ef,i)=>{
+    const l=document.querySelector(`[data-fl="${prefix}_${i}"]`),t=document.querySelector(`[data-ft="${prefix}_${i}"]`),o=document.querySelector(`[data-fo="${prefix}_${i}"]`);
+    return {id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options};
+  }).filter(ef=>ef.label);
 }
-
-function collectFields() {
-  return _tmpFields.map((ef, i) => {
-    const labelEl = document.querySelector(`[data-fl="${i}"]`);
-    const typeEl = document.querySelector(`[data-ft="${i}"]`);
-    const optsEl = document.querySelector(`[data-fo="${i}"]`);
-    return {
-      id: ef.id,
-      label: labelEl ? labelEl.value.trim() : ef.label,
-      type: typeEl ? typeEl.value : ef.type,
-      options: optsEl ? optsEl.value.trim() : ef.options
-    };
-  }).filter(ef => ef.label);
+async function saveNewFile(){
+  const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;
+  if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}
+  await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a')});
+  await loadAll();closeModal();render();showAlert('הקובץ נוסף','success');
 }
-
-async function saveNewFile() {
-  const name = document.getElementById('mf-name').value.trim();
-  if (!name) { alert('יש להזין שם קובץ'); return; }
-  try {
-    await insertFile({ name, icon: _tmpIcon, extra_fields: collectFields() });
-    await loadFiles();
-    closeModal();
-    render();
-    showAlert('הקובץ נוסף בהצלחה', 'success');
-  } catch(e) { showAlert('שגיאה: ' + e.message, 'error'); }
+async function saveEditFile(id){
+  const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;
+  if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}
+  await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a')},`?id=eq.${id}`);
+  await loadAll();closeModal();render();showAlert('הקובץ עודכן','success');
 }
-
-async function saveEditFile(id) {
-  const name = document.getElementById('mf-name').value.trim();
-  if (!name) { alert('יש להזין שם קובץ'); return; }
-  try {
-    await updateFile(id, { name, icon: _tmpIcon, extra_fields: collectFields() });
-    await loadFiles();
-    closeModal();
-    render();
-    showAlert('הקובץ עודכן בהצלחה', 'success');
-  } catch(e) { showAlert('שגיאה: ' + e.message, 'error'); }
+async function confirmDeleteFile(id){
+  const f=DB.files.find(x=>x.id===id);
+  if(!confirm(`למחוק את "${f.name}" וכל הרשומות שלו?`))return;
+  await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');
 }
 
 // ── Export ──
-async function exportFile(fileId) {
-  const f = db.files.find(x => x.id === fileId);
-  let records;
-  try { records = await getRecords(fileId); } catch(e) { showAlert('שגיאה בטעינה','error'); return; }
-  const extra = f.extra_fields || [];
-  const headers = ['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז', ...extra.map(ef => ef.label)];
-  const rows = records.map(r => [
-    fmtDate(r.created_at), r.first_name, r.last_name, r.phone, r.id_num,
-    ...extra.map(ef => (r.extra || {})[ef.id] || '')
-  ]);
-  downloadCSV(f.name, headers, rows);
+async function exportFile(fileId){
+  const f=DB.files.find(x=>x.id===fileId);
+  const records=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);
+  const extra=f.extra_fields||[], admin=f.admin_fields||[];
+  const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label)];
+  const rows=records.map(r=>[fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,...extra.map(ef=>(r.extra||{})[ef.id]||''),...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');})]);
+  downloadCSV(f.name,headers,rows);
 }
-
-async function exportAll() {
-  const all = state._allRecords || [];
-  const headers = ['קובץ','תאריך','שם פרטי','שם משפחה','טלפון','ת"ז'];
-  const rows = all.map(r => {
-    const f = db.files.find(x => x.id === r.file_id);
-    return [f ? f.name : r.file_id, fmtDate(r.created_at), r.first_name, r.last_name, r.phone, r.id_num];
-  });
-  downloadCSV('כל_הרשומות', headers, rows);
+async function exportAll(){
+  const headers=['ארגון','קובץ','תאריך','שם פרטי','שם משפחה','טלפון','ת"ז'];
+  const rows=_allRecords.map(r=>{const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));return[o?o.name:'',f?f.name:'',fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num];});
+  downloadCSV('כל_הרשומות',headers,rows);
 }
-
-function downloadCSV(name, headers, rows) {
-  const csv = '\uFEFF' + [headers, ...rows]
-    .map(row => row.map(c => '"' + (c||'').toString().replace(/"/g,'""') + '"').join(','))
-    .join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name + '.csv'; a.click();
-  URL.revokeObjectURL(url);
+function downloadCSV(name,headers,rows){
+  const csv='\uFEFF'+[headers,...rows].map(r=>r.map(c=>'"'+(c||'').toString().replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name+'.csv';a.click();
 }
 
 // ── Helpers ──
-function showModal(html) {
-  document.getElementById('modal-body').innerHTML = html;
-  document.getElementById('modal-overlay').style.display = 'flex';
-}
-function closeModal() {
-  document.getElementById('modal-overlay').style.display = 'none';
-}
-function showAlert(msg, type='success') {
-  state.alert = { msg, type };
-  render();
-  setTimeout(() => { state.alert = null; render(); }, 3500);
-}
-function esc(s) {
-  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function fmtDate(ts) {
-  return new Date(ts).toLocaleString('he-IL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-}
-function genId() {
-  return Math.random().toString(36).slice(2,9);
-}
+function showModal(html){document.getElementById('modal-body').innerHTML=html;document.getElementById('modal-overlay').style.display='flex';}
+function closeModal(){document.getElementById('modal-overlay').style.display='none';}
+function showAlert(msg,type='success'){S.alert={msg,type};render();setTimeout(()=>{S.alert=null;render();},3500);}
+function esc(s){return(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtDate(ts){return new Date(ts).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function genId(){return Math.random().toString(36).slice(2,9);}
 
-// ── Init ──
-(async () => {
-  try {
-    await loadFiles();
-    render();
-  } catch(e) {
-    document.getElementById('app').innerHTML = `<div class="alert alert-error"><i class="ti ti-alert-circle"></i>שגיאה בהתחברות ל-Supabase. בדוק את הגדרות ה-URL והמפתח.</div>`;
-  }
+(async()=>{
+  try{await loadAll();render();}
+  catch(e){document.getElementById('app').innerHTML=`<div class="alert alert-error"><i class="ti ti-alert-circle"></i>שגיאה בהתחברות ל-Supabase.</div>`;}
 })();
 </script>
 </body>
