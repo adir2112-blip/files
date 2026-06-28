@@ -25,67 +25,56 @@
 body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.5}
 
 /* ══ LOGIN ══ */
-#login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#0f2044 100%);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
-.login-wrap{width:100%;max-width:420px}
-@keyframes fadeUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-.login-card{background:rgba(255,255,255,.97);border-radius:20px;padding:36px 32px;box-shadow:var(--shadow-lg);animation:fadeUp .3s ease;backdrop-filter:blur(8px)}
-
-/* login header */
+#login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999;padding:16px;overflow:hidden;background:#0d1635}
+#login-bg-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+.login-wrap{width:100%;max-width:420px;position:relative;z-index:2}
+@keyframes fadeUp{from{transform:translateY(22px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.login-card{background:rgba(235,240,255,0.92);border:1px solid rgba(255,255,255,.7);border-radius:22px;padding:36px 32px;box-shadow:0 8px 48px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.9);animation:fadeUp .35s ease;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
 .login-header{text-align:center;margin-bottom:28px}
-.login-movement-logo{display:flex;align-items:center;justify-content:center;margin-bottom:14px}
-.login-subtitle{font-size:13px;color:var(--text3);margin-top:4px}
-.login-divider{height:1px;background:var(--border);margin:20px 0}
-
-/* mode buttons */
+.login-movement-logo{display:flex;align-items:center;justify-content:center;margin-bottom:14px;animation:float 5s ease-in-out infinite}
+.login-subtitle{font-size:13px;color:rgba(30,50,120,.55);margin-top:4px}
+.login-divider{height:1px;background:rgba(30,60,180,.15);margin:20px 0}
+.login-section-title{font-size:16px;font-weight:700;color:#1e3a8a;margin-bottom:16px;display:flex;align-items:center;gap:8px}
 .mode-btns{display:flex;flex-direction:column;gap:10px}
-.mode-btn{display:flex;align-items:center;gap:14px;padding:15px 18px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;color:var(--text);transition:all .15s;text-align:right;width:100%}
-.mode-btn:hover{border-color:var(--blue);background:var(--blue-light);transform:translateX(-2px)}
-.mode-btn .mb-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px}
-.mode-btn.agent-btn .mb-icon{background:#eff4ff;color:var(--blue)}
-.mode-btn.manager-btn .mb-icon{background:#f5f3ff;color:var(--purple)}
-.mode-btn .mb-sub{font-size:12px;font-weight:400;color:var(--text3);margin-top:2px}
-
-/* agent login */
-.login-back{background:none;border:none;cursor:pointer;font-size:13px;color:var(--text3);font-family:inherit;display:flex;align-items:center;gap:5px;margin-bottom:18px;padding:0;transition:color .15s}
-.login-back:hover{color:var(--blue)}
-.login-section-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:16px;display:flex;align-items:center;gap:8px}
-
-/* agent list */
+.mode-btn{display:flex;align-items:center;gap:14px;padding:16px 18px;border:1px solid rgba(30,80,200,.15);border-radius:14px;background:rgba(255,255,255,.6);cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;color:#1e3a8a;transition:all .22s;text-align:right;width:100%}
+.mode-btn:hover{border-color:rgba(37,99,235,.5);background:rgba(255,255,255,.85);transform:translateX(-3px) translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.15)}
+.mode-btn .mb-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px}
+.mode-btn.agent-btn .mb-icon{background:linear-gradient(135deg,#2563eb,#3b82f6);box-shadow:0 4px 14px rgba(37,99,235,.55)}
+.mode-btn.manager-btn .mb-icon{background:linear-gradient(135deg,#7c3aed,#a855f7);box-shadow:0 4px 14px rgba(124,58,237,.55)}
+.mode-btn .mb-sub{font-size:12px;font-weight:400;color:rgba(30,58,138,.5);margin-top:2px}
+.mode-btn .mb-chevron{margin-right:auto;color:rgba(30,58,138,.3);font-size:16px;transition:all .22s}
+.mode-btn:hover .mb-chevron{transform:translateX(-4px);color:#2563eb}
+.login-back{background:none;border:none;cursor:pointer;font-size:13px;color:rgba(30,58,138,.5);font-family:inherit;display:flex;align-items:center;gap:5px;margin-bottom:18px;padding:0;transition:color .15s}
+.login-back:hover{color:#1e3a8a}
 .agent-search-wrap{position:relative;margin-bottom:8px}
-.agent-search-wrap .ti{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:16px;pointer-events:none}
-.agent-search-wrap input{padding-right:36px;width:100%;padding-top:10px;padding-bottom:10px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:var(--surface2);color:var(--text);transition:border-color .15s}
-.agent-search-wrap input:focus{outline:none;border-color:var(--blue);background:var(--surface);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-.agent-list{max-height:210px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);scrollbar-width:thin}
-.agent-list-item{padding:10px 14px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .1s;user-select:none}
+.agent-search-wrap .ti{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:rgba(30,58,138,.4);font-size:16px;pointer-events:none}
+.agent-search-wrap input{padding-right:36px;width:100%;padding-top:10px;padding-bottom:10px;border:1px solid rgba(30,80,200,.2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:rgba(255,255,255,.7);color:#1e3a8a;transition:all .15s}
+.agent-search-wrap input::placeholder{color:rgba(30,58,138,.4)}
+.agent-search-wrap input:focus{outline:none;border-color:rgba(99,136,255,.55);background:rgba(255,255,255,.11);box-shadow:0 0 0 3px rgba(37,99,235,.18)}
+.agent-list{max-height:210px;overflow-y:auto;border:1px solid rgba(30,80,200,.15);border-radius:var(--radius-sm);background:rgba(255,255,255,.75);scrollbar-width:thin}
+.agent-list-item{padding:10px 14px;cursor:pointer;font-size:14px;font-weight:500;color:#1e3a8a;border-bottom:1px solid rgba(30,80,200,.08);display:flex;align-items:center;gap:10px;transition:background .12s;user-select:none}
 .agent-list-item:last-child{border-bottom:none}
-.agent-list-item:hover{background:var(--blue-light);color:var(--blue-dark)}
-.agent-list-empty{padding:24px;text-align:center;color:var(--text3);font-size:13px}
+.agent-list-item:hover{background:rgba(37,99,235,.12);color:#1d4ed8}
+.agent-list-empty{padding:24px;text-align:center;color:rgba(30,58,138,.4);font-size:13px}
 .ali-avatar{width:34px;height:34px;background:linear-gradient(135deg,#2563eb,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0;letter-spacing:.5px}
-
-/* selected agent chip */
-.selected-chip{display:flex;align-items:center;gap:12px;padding:12px 14px;background:linear-gradient(135deg,#eff4ff,#f5f3ff);border:1.5px solid #bfdbfe;border-radius:var(--radius-sm);margin-bottom:18px}
-.selected-chip .sc-name{font-weight:700;color:var(--blue-dark);font-size:15px;flex:1}
-.selected-chip .sc-change{font-size:12px;color:var(--blue);cursor:pointer;text-decoration:underline;white-space:nowrap}
-
-/* PIN */
-.pin-label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:block}
+.selected-chip{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(37,99,235,.1);border:1.5px solid rgba(37,99,235,.3);border-radius:var(--radius-sm);margin-bottom:18px}
+.selected-chip .sc-name{font-weight:700;color:#1d4ed8;font-size:15px;flex:1}
+.selected-chip .sc-change{font-size:12px;color:#2563eb;cursor:pointer;text-decoration:underline;white-space:nowrap}
+.pin-label{font-size:12px;font-weight:600;color:rgba(30,58,138,.55);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:block}
 .pin-row{display:flex;gap:10px;justify-content:center;margin-bottom:4px}
-.pin-digit{width:60px;height:68px;border:2px solid var(--border2);border-radius:var(--radius-sm);font-size:28px;font-weight:800;text-align:center;background:var(--surface2);color:var(--text);font-family:inherit;transition:all .15s}
-.pin-digit:focus{outline:none;border-color:var(--blue);background:var(--surface);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-
-/* manager form */
+.pin-digit{width:60px;height:68px;border:2px solid rgba(30,80,200,.2);border-radius:var(--radius-sm);font-size:28px;font-weight:800;text-align:center;background:rgba(255,255,255,.7);color:#1e3a8a;font-family:inherit;transition:all .15s}
+.pin-digit:focus{outline:none;border-color:#2563eb;background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
 .form-group{margin-bottom:14px}
-.form-group label{display:block;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
-.form-group input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:14px;padding:11px 13px;font-family:inherit;transition:all .15s}
-.form-group input:focus{outline:none;border-color:var(--blue);background:var(--surface);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-
-/* login button */
-.login-btn{width:100%;padding:13px;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}
-.login-btn-primary{background:var(--black);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-.login-btn-primary:hover{background:#333;transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.25)}
-.login-btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.login-err{background:var(--red-light);border:1px solid #fecaca;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#b91c1c;font-weight:600;margin-bottom:14px;display:none;align-items:center;gap:8px}
-
+.form-group label{display:block;font-size:11px;font-weight:700;color:rgba(30,58,138,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.form-group input{width:100%;background:rgba(255,255,255,.7);border:1px solid rgba(30,80,200,.2);border-radius:var(--radius-sm);color:#1e3a8a;font-size:14px;padding:11px 13px;font-family:inherit;transition:all .15s}
+.form-group input::placeholder{color:rgba(30,58,138,.35)}
+.form-group input:focus{outline:none;border-color:#2563eb;background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.login-btn{width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}
+.login-btn-primary{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;box-shadow:0 4px 18px rgba(37,99,235,.45)}
+.login-btn-primary:hover{filter:brightness(1.12);transform:translateY(-1px);box-shadow:0 6px 28px rgba(37,99,235,.55)}
+.login-btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.login-err{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);border-radius:8px;padding:10px 14px;font-size:13px;color:#b91c1c;font-weight:600;margin-bottom:14px;display:none;align-items:center;gap:8px}
 /* ══ APP ══ */
 #app-screen{display:none}
 .topbar{background:var(--black);padding:0 28px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(0,0,0,.25)}
@@ -249,6 +238,7 @@ tr:hover td.admin-col{background:var(--purple-light)}
 
 <!-- ══ LOGIN ══ -->
 <div id="login-screen">
+<canvas id="login-bg-canvas"></canvas>
 <div class="login-wrap">
 
   <!-- MODE -->
@@ -262,7 +252,7 @@ tr:hover td.admin-col{background:var(--purple-light)}
           <text x="233" y="46" font-family="Arial,sans-serif" font-weight="900" font-size="44" fill="#111">›</text>
         </svg>
       </div>
-      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px">מערכת ניהול קבצים</div>
+      <div style="font-size:20px;font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;letter-spacing:-.3px">מערכת ניהול קבצים</div>
       <div class="login-subtitle">מוקד שירות לקוחות</div>
     </div>
     <div class="login-divider"></div>
@@ -680,6 +670,129 @@ function renderLookupOnly(){
 }
 
 // RECORDS PAGE
+// ── BULK SELECTION STATE ──
+let _selectedRows = new Set(); // record IDs
+let _bulkMode = false;
+
+function toggleBulkMode(){
+  _bulkMode=!_bulkMode;
+  _selectedRows.clear();
+  render();
+}
+function toggleRowSelect(id){
+  if(_selectedRows.has(id)) _selectedRows.delete(id);
+  else _selectedRows.add(id);
+  // update checkboxes without full re-render
+  const cb=document.getElementById('row-cb-'+id);
+  if(cb) cb.checked=_selectedRows.has(id);
+  updateBulkBar();
+}
+function selectAllFiltered(){
+  const ids=JSON.parse(document.getElementById('filtered-ids').value||'[]');
+  ids.forEach(id=>_selectedRows.add(id));
+  render();
+}
+function deselectAll(){
+  _selectedRows.clear();
+  render();
+}
+function updateBulkBar(){
+  const bar=document.getElementById('bulk-bar');
+  if(!bar) return;
+  const count=_selectedRows.size;
+  bar.innerHTML=bulkBarHTML(count);
+}
+function bulkBarHTML(count){
+  const f=DB.files.find(x=>x.id===S.fileId);
+  const adminFields=(f?.admin_fields||[]);
+  const checkboxFields=adminFields.filter(af=>af.type==='checkbox');
+  const selectFields=adminFields.filter(af=>af.type==='select');
+  return `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%">
+      <span style="font-size:13px;font-weight:700;color:var(--blue-dark);white-space:nowrap;background:var(--blue-light);padding:4px 10px;border-radius:20px">
+        <i class="ti ti-checks"></i> ${count} נבחרו
+      </span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1">
+        ${checkboxFields.map(af=>`
+          <button class="btn btn-sm btn-success" onclick="bulkSetField('${af.id}',true)"><i class="ti ti-check"></i> סמן "${esc(af.label)}"</button>
+          <button class="btn btn-sm" style="border-color:var(--border2)" onclick="bulkSetField('${af.id}',false)"><i class="ti ti-x"></i> בטל "${esc(af.label)}"</button>
+        `).join('')}
+        ${selectFields.map(af=>`
+          <div style="display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:4px 10px">
+            <span style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">${esc(af.label)}:</span>
+            <select class="admin-input" style="min-width:90px;border:none;padding:2px 6px" onchange="if(this.value)bulkSetField('${af.id}',this.value)">
+              <option value="">בחר...</option>
+              ${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('')}
+            </select>
+          </div>
+        `).join('')}
+        ${adminFields.length ? '<div style="width:1px;height:24px;background:var(--border);margin:0 2px"></div>' : ''}
+        <button class="btn btn-sm btn-success" onclick="exportSelected()"><i class="ti ti-download"></i> ייצוא נבחרים</button>
+        <button class="btn btn-sm btn-danger" onclick="bulkDelete()"><i class="ti ti-trash"></i> מחק נבחרים</button>
+      </div>
+      <button class="btn btn-xs" onclick="deselectAll()" title="בטל בחירה" style="padding:5px 8px"><i class="ti ti-x"></i></button>
+    </div>`;
+}
+
+async function exportSelected(){
+  if(_selectedRows.size===0) return;
+  const fileId=S.fileId;
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  const records=(_cachedRecords[fileId]||[]).filter(r=>_selectedRows.has(r.id));
+  const extra=f.extra_fields||[],admin=f.admin_fields||[];
+  const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label)];
+  const rows=records.map(r=>[fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||'',...extra.map(ef=>(r.extra||{})[ef.id]||''),...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');})]);
+  buildXLSX(f.name+'_נבחרים',headers,rows,admin.map((_,i)=>6+extra.length+i));
+  showAlert(`ייצא ${records.length} רשומות נבחרות`,'success');
+}
+
+async function bulkDelete(){
+  if(_selectedRows.size===0) return;
+  if(!confirm(`למחוק ${_selectedRows.size} רשומות? פעולה זו אינה ניתנת לביטול.`)) return;
+  const ids=[..._selectedRows];
+  const fileId=S.fileId;
+  await Promise.all(ids.map(id=>DEL('records',`?id=eq.${id}`)));
+  if(_cachedRecords[fileId]) _cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>!ids.includes(r.id));
+  _allRecords=_allRecords.filter(r=>!ids.includes(r.id));
+  await loadPendingCounts();
+  _selectedRows.clear();
+  _bulkMode=false;
+  render();
+  showAlert(`נמחקו ${ids.length} רשומות`,'success');
+}
+
+async function bulkSetField(fieldId, value){
+  if(_selectedRows.size===0){ showAlert('לא נבחרו רשומות','error'); return; }
+  const fileId=S.fileId;
+  const f=DB.files.find(x=>x.id===fileId);
+  const af=(f?.admin_fields||[]).find(x=>x.id===fieldId);
+  if(!af) return;
+  const label=af.label;
+  const displayVal=typeof value==='boolean'?(value?'✓ מסומן':'✗ מבוטל'):value;
+  if(!confirm(`לסמן "${label}" = "${displayVal}" על ${_selectedRows.size} רשומות?`)) return;
+
+  const ids=[..._selectedRows];
+  let done=0;
+  // show progress
+  showAlert(`מעדכן 0 / ${ids.length}...`,'success');
+
+  await Promise.all(ids.map(async id=>{
+    const recs=_cachedRecords[fileId]||[];
+    const record=recs.find(r=>r.id===id);
+    if(!record) return;
+    if(!record.admin_data) record.admin_data={};
+    record.admin_data[fieldId]=value;
+    await PATCH('records',{admin_data:record.admin_data},`?id=eq.${id}`);
+    done++;
+  }));
+
+  await loadPendingCounts();
+  _selectedRows.clear();
+  _bulkMode=false;
+  render();
+  showAlert(`✓ עודכנו ${done} רשומות בהצלחה`,'success');
+}
+
 function renderRecordsPage(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
   const isAdmin=S.adminLoggedIn;
@@ -716,10 +829,23 @@ function renderRecordsPage(){
       if(va<vb) return -S.sortDir; if(va>vb) return S.sortDir; return 0;
     });
   }
+
+  const filteredIds=filtered.map(r=>r.id);
+  const allSelectedInFiltered=filteredIds.length>0&&filteredIds.every(id=>_selectedRows.has(id));
+
+  const bulkCheckH=isAdmin&&_bulkMode?`<th style="width:36px;text-align:center">
+    <input type="checkbox" title="בחר הכל" ${allSelectedInFiltered?'checked':''} style="accent-color:var(--blue);width:15px;height:15px;cursor:pointer" onchange="${allSelectedInFiltered?'deselectAll()':'selectAllFiltered()'}">
+  </th>`:'';
   const extraH=extraFields.map(ef=>sortable('extra_'+ef.id,esc(ef.label))).join('');
   const adminH=adminFields.map(af=>sortable('admin_'+af.id,'<i class="ti ti-shield-check" style="font-size:10px"></i> '+esc(af.label),'admin-col')).join('');
   const delH=isAdmin?'<th></th>':'';
+
   const rows=filtered.map(r=>{
+    const isSelected=_selectedRows.has(r.id);
+    const bulkCb=isAdmin&&_bulkMode?`<td style="text-align:center;background:${isSelected?'var(--blue-light)':''}">
+      <input type="checkbox" id="row-cb-${r.id}" ${isSelected?'checked':''} style="accent-color:var(--blue);width:15px;height:15px;cursor:pointer" onchange="toggleRowSelect('${r.id}')">
+    </td>`:'';
+    const rowStyle=isSelected?'background:var(--blue-light)':'';
     const extraC=extraFields.map(ef=>{
       const v=(r.extra||{})[ef.id]||'';
       if(ef.type==='select'&&v){const cls=v==='טופל'?'badge-success':v==='לא טופל'?'badge-warning':'badge-info';return `<td><span class="badge ${cls}">${esc(v)}</span></td>`;}
@@ -732,13 +858,20 @@ function renderRecordsPage(){
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
         return `<td class="admin-col">${esc(val||'')}</td>`;
       }
+      if(_bulkMode){
+        // in bulk mode show read-only admin fields
+        if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center">${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3);opacity:.4"></i>'}</td>`;
+        if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
+        return `<td class="admin-col" style="color:var(--text3)">${esc(val||'—')}</td>`;
+      }
       if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></td>`;
       if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><select class="admin-input" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></td>`;}
       return `<td class="admin-col"><input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></td>`;
     }).join('');
     const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
-    const delC=isAdmin?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:'';
-    return `<tr><td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${delC}</tr>`;
+    const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
+    const trStyle=`${isSelected?'background:var(--blue-light);':rowStyle}${_bulkMode?';cursor:pointer':''}`;
+    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${delC}</tr>`;
   }).join('');
 
   const filterBar=adminFields.length?`<div class="filter-bar">
@@ -751,10 +884,25 @@ function renderRecordsPage(){
     <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
   </div>`:'';
 
+  // bulk action bar
+  const bulkBar=isAdmin&&_bulkMode&&_selectedRows.size>0?`
+    <div id="bulk-bar" style="background:var(--blue-light);border:1.5px solid var(--blue);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      ${bulkBarHTML(_selectedRows.size)}
+    </div>`:'';
+
+  // "select all filtered" shortcut
+  const selectAllBtn=isAdmin&&_bulkMode&&filtered.length>0&&!allSelectedInFiltered?`
+    <button class="btn btn-sm btn-primary" style="margin-bottom:10px" onclick="selectAllFiltered()">
+      <i class="ti ti-checks"></i> בחר את כל ${filtered.length} הרשומות המסוננות
+    </button>`:'';
+
   return `<div class="card">
     <div class="flex-between" style="margin-bottom:16px">
       <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)} — רשומות</div>
       <div class="flex-gap">
+        ${isAdmin?`<button class="btn btn-sm ${_bulkMode?'btn-primary':''}" onclick="toggleBulkMode()" title="עריכה מרובה">
+          <i class="ti ti-${_bulkMode?'x':'checkbox'}"></i> ${_bulkMode?'בטל בחירה':'בחירה מרובה'}
+        </button>`:''}
         <button class="btn btn-sm" onclick="goForm('${f.id}')"><i class="ti ti-edit"></i> הזנה חדשה</button>
         <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
       </div>
@@ -765,11 +913,14 @@ function renderRecordsPage(){
       <i class="ti ti-search"></i>
     </div>
     ${filterBar}
+    ${bulkBar}
+    ${selectAllBtn}
+    <input type="hidden" id="filtered-ids" value='${JSON.stringify(filteredIds)}'>
     ${!filtered.length
       ?`<div class="empty"><i class="ti ti-database-off"></i><p>${q?'לא נמצאו תוצאות':'אין רשומות עדיין'}</p></div>`
-      :`<div class="table-wrap"><table><thead><tr>${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
+      :`<div class="table-wrap"><table><thead><tr>${bulkCheckH}${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
     }
-    <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות</div>
+    <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות${_selectedRows.size>0?' · <strong style="color:var(--blue)">'+_selectedRows.size+' נבחרו</strong>':''}</div>
   </div>`;
 }
 
@@ -875,11 +1026,11 @@ function renderAdminAllRecords(){
 }
 
 // ── NAV ──
-function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;loadAll().then(()=>loadPendingCounts().then(render));}
-function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;render();}
-function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;render();}
-async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};render();await getRecords(fileId);render();}
-async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};render();await getRecords(fileId);render();}
+function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();loadAll().then(()=>loadPendingCounts().then(render));}
+function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;_bulkMode=false;_selectedRows.clear();render();}
+function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();render();}
+async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
+async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
 function gotoAdmin(){S.view='admin';render();}
 function toggleSort(col){if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;}render();}
 function setFilter(afId,val){S.filters[afId]=val;render();}
@@ -1066,8 +1217,127 @@ function esc(s){return(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt
 function fmtDate(ts){return new Date(ts).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function genId(){return Math.random().toString(36).slice(2,9);}
 
+// ══ ANIMATED BACKGROUND ══
+function initLoginBg(){
+  const canvas=document.getElementById('login-bg-canvas');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  let W,H,nodes,edges,tick=0;
+  const FILE_ICONS=['📁','📄','📊','📋','📑','🗂️','📂'];
+  const COLORS=['#2563eb','#7c3aed','#06b6d4','#3b82f6','#8b5cf6','#0ea5e9'];
+
+  function resize(){
+    W=canvas.width=window.innerWidth;
+    H=canvas.height=window.innerHeight;
+    buildGraph();
+  }
+
+  function buildGraph(){
+    const count=Math.max(18,Math.floor((W*H)/28000));
+    nodes=Array.from({length:count},(_,i)=>({
+      x:Math.random()*W, y:Math.random()*H,
+      vx:(Math.random()-.5)*0.35, vy:(Math.random()-.5)*0.35,
+      r:Math.random()*3+2,
+      color:COLORS[i%COLORS.length],
+      icon:Math.random()<0.3?FILE_ICONS[Math.floor(Math.random()*FILE_ICONS.length)]:null,
+      iconSize:Math.random()*10+14,
+      pulse:Math.random()*Math.PI*2,
+      alpha:Math.random()*.5+.3,
+    }));
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    tick++;
+
+    // subtle gradient overlay
+    const grad=ctx.createRadialGradient(W*.5,H*.4,.1,W*.5,H*.4,Math.max(W,H)*.75);
+    grad.addColorStop(0,'rgba(15,30,80,.0)');
+    grad.addColorStop(1,'rgba(5,8,20,.35)');
+    ctx.fillStyle=grad;
+    ctx.fillRect(0,0,W,H);
+
+    // edges
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<160){
+          const alpha=(1-dist/160)*0.18;
+          const grad2=ctx.createLinearGradient(nodes[i].x,nodes[i].y,nodes[j].x,nodes[j].y);
+          grad2.addColorStop(0,nodes[i].color.replace(')',`,${alpha})`).replace('rgb','rgba').replace('#',''));
+          // simple fallback
+          ctx.beginPath();
+          ctx.moveTo(nodes[i].x,nodes[i].y);
+          ctx.lineTo(nodes[j].x,nodes[j].y);
+          ctx.strokeStyle=`rgba(120,160,255,${alpha*1.8})`;
+          ctx.lineWidth=.8;
+          ctx.stroke();
+
+          // moving dot along edge
+          if(Math.random()<0.001){
+            const t=(tick*.01)%1;
+            const mx=nodes[i].x+(nodes[j].x-nodes[i].x)*t;
+            const my=nodes[i].y+(nodes[j].y-nodes[i].y)*t;
+            ctx.beginPath();
+            ctx.arc(mx,my,1.5,0,Math.PI*2);
+            ctx.fillStyle=`rgba(150,180,255,0.6)`;
+            ctx.fill();
+          }
+        }
+      }
+    }
+
+    // nodes
+    nodes.forEach((n,i)=>{
+      n.pulse+=0.02;
+      const pulsed=n.r+Math.sin(n.pulse)*1.2;
+      // glow
+      const glow=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulsed*6);
+      glow.addColorStop(0,n.color+'55');
+      glow.addColorStop(1,n.color+'00');
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulsed*6,0,Math.PI*2);
+      ctx.fillStyle=glow;
+      ctx.fill();
+      // dot
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulsed,0,Math.PI*2);
+      ctx.fillStyle=n.color+'cc';
+      ctx.fill();
+      // icon
+      if(n.icon){
+        ctx.font=`${n.iconSize}px serif`;
+        ctx.globalAlpha=n.alpha*(0.7+Math.sin(n.pulse)*.15);
+        ctx.fillText(n.icon,n.x-n.iconSize*.5,n.y-pulsed-6);
+        ctx.globalAlpha=1;
+      }
+      // move
+      n.x+=n.vx; n.y+=n.vy;
+      if(n.x<-30) n.x=W+30;
+      if(n.x>W+30) n.x=-30;
+      if(n.y<-30) n.y=H+30;
+      if(n.y>H+30) n.y=-30;
+    });
+
+    // "movement" watermark text
+    ctx.save();
+    ctx.font='900 clamp(40px,8vw,100px) Arial Black,Arial,sans-serif';
+    ctx.fillStyle='rgba(37,99,235,0.06)';
+    ctx.textAlign='center';
+    ctx.fillText('movement»',W*.5,H*.55);
+    ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize',resize);
+  resize();
+  draw();
+}
+
 async function initApp(){await loadAll();await loadPendingCounts();render();}
-window.addEventListener('DOMContentLoaded',()=>initLogin());
+window.addEventListener('DOMContentLoaded',()=>{initLoginBg();initLogin();});
 </script>
 </body>
 </html>
