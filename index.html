@@ -340,12 +340,20 @@ const ICONS=['ti-file','ti-coin','ti-clock-off','ti-steps','ti-alert-circle','ti
 
 // ── Org visual config ──
 const ORG_STYLES = {
-  'כללית אקטיב':  { bg:'linear-gradient(135deg,#1e3a8a,#1d4ed8)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="#1d4ed8"/><text x="24" y="32" text-anchor="middle" font-size="28" font-weight="900" fill="white" font-family="Arial">כ</text><text x="38" y="18" text-anchor="middle" font-size="16" fill="#22c55e" font-weight="900" font-family="Arial">+</text></svg>` },
-  'לאומית FIT':   { bg:'linear-gradient(135deg,#581c87,#7c3aed)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="#7c3aed"/><text x="24" y="30" text-anchor="middle" font-size="16" font-weight="900" fill="white" font-family="Arial Black,Arial">FIT</text><text x="38" y="14" text-anchor="middle" font-size="14" fill="#f472b6" font-weight="900" font-family="Arial">+</text></svg>` },
+  'כללית אקטיב':    { bg:'linear-gradient(135deg,#1e3a8a,#1d4ed8)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="#1d4ed8"/><text x="24" y="32" text-anchor="middle" font-size="28" font-weight="900" fill="white" font-family="Arial">כ</text><text x="38" y="18" text-anchor="middle" font-size="16" fill="#22c55e" font-weight="900" font-family="Arial">+</text></svg>` },
+  'כללית אקטיב+':   { bg:'linear-gradient(135deg,#1e3a8a,#1d4ed8)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="#1d4ed8"/><text x="24" y="32" text-anchor="middle" font-size="28" font-weight="900" fill="white" font-family="Arial">כ</text><text x="38" y="18" text-anchor="middle" font-size="16" fill="#22c55e" font-weight="900" font-family="Arial">+</text></svg>` },
+  'לאומית FIT':     { bg:'linear-gradient(135deg,#581c87,#7c3aed)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="#7c3aed"/><text x="24" y="30" text-anchor="middle" font-size="16" font-weight="900" fill="white" font-family="Arial Black,Arial">FIT</text><text x="38" y="14" text-anchor="middle" font-size="14" fill="#f472b6" font-weight="900" font-family="Arial">+</text></svg>` },
+  'לאומית FIT+':    { bg:'linear-gradient(135deg,#581c87,#7c3aed)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="#7c3aed"/><text x="24" y="30" text-anchor="middle" font-size="16" font-weight="900" fill="white" font-family="Arial Black,Arial">FIT</text><text x="38" y="14" text-anchor="middle" font-size="14" fill="#f472b6" font-weight="900" font-family="Arial">+</text></svg>` },
   'עובדים בריא 360':{ bg:'linear-gradient(135deg,#0e7490,#0891b2)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.15)"/><ellipse cx="20" cy="26" rx="11" ry="11" fill="#f97316" opacity=".85"/><ellipse cx="30" cy="22" rx="11" ry="11" fill="#06b6d4" opacity=".85"/><text x="24" y="44" text-anchor="middle" font-size="9" fill="white" font-weight="700" font-family="Arial">360°</text></svg>` },
-  'מעוף לעמית':   { bg:'linear-gradient(135deg,#1e2d5a,#2d3f7a)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.12)"/><text x="24" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="white" font-family="Arial">מעוף</text><text x="24" y="36" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.7)" font-family="Arial">לעמית</text><polygon points="34,10 42,18 34,14" fill="#f97316"/><polygon points="40,6 48,14 40,10" fill="#fbbf24"/></svg>` },
+  'מעוף לעמית':    { bg:'linear-gradient(135deg,#1e2d5a,#2d3f7a)', logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.12)"/><text x="24" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="white" font-family="Arial">מעוף</text><text x="24" y="36" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.7)" font-family="Arial">לעמית</text><polygon points="34,10 42,18 34,14" fill="#f97316"/><polygon points="40,6 48,14 40,10" fill="#fbbf24"/></svg>` },
 };
-function orgStyle(name){ return ORG_STYLES[name]||{bg:'linear-gradient(135deg,#374151,#4b5563)',logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.15)"/><text x="24" y="32" text-anchor="middle" font-size="24" fill="white" font-family="Arial">🏢</text></svg>`}; }
+function orgStyle(name){
+  // exact match first
+  if(ORG_STYLES[name]) return ORG_STYLES[name];
+  // fuzzy: find key that is contained in name or vice versa
+  const key=Object.keys(ORG_STYLES).find(k=>name.includes(k)||k.includes(name));
+  return key ? ORG_STYLES[key] : {bg:'linear-gradient(135deg,#374151,#4b5563)',logo:`<svg viewBox="0 0 48 48" width="36"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.15)"/><text x="24" y="32" text-anchor="middle" font-size="24" fill="white" font-family="Arial">🏢</text></svg>`};
+}
 
 let sbClient = window.supabase.createClient(SB_URL, SB_KEY);
 let currentUser = null;
@@ -537,6 +545,57 @@ async function loadAll(){[DB.orgs,DB.files]=await Promise.all([GET('organization
 async function getRecords(fileId){const r=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);_cachedRecords[fileId]=r;return r;}
 
 // pending
+// ══ ALERT RULES ══
+// alert_rule: { enabled, days, fieldId, condition: 'empty'|'not_value', value }
+// A record triggers the alert if:
+//   - it was created more than `days` days ago
+//   - AND the specified field matches the condition
+
+function recordMatchesAlert(record, file){
+  const rule = file.alert_rule||{};
+  if(!rule.enabled || !rule.fieldId) return false;
+
+  // check days
+  if(rule.days){
+    const age = (Date.now() - new Date(record.created_at).getTime()) / 86400000;
+    if(age < parseFloat(rule.days)) return false;
+  }
+
+  // get field value (extra or admin)
+  const extraFields = file.extra_fields||[];
+  const adminFields = file.admin_fields||[];
+  const isAdmin = adminFields.find(f=>f.id===rule.fieldId);
+  const val = isAdmin
+    ? ((record.admin_data||{})[rule.fieldId]||'').toString()
+    : ((record.extra||{})[rule.fieldId]||'').toString();
+
+  if(rule.condition==='empty')     return !val || val.trim()==='';
+  if(rule.condition==='not_value') return val !== (rule.value||'');
+  if(rule.condition==='value')     return val === (rule.value||'');
+  return false;
+}
+
+let _alertCounts = {}; // fileId -> count
+
+async function loadAlertCounts(){
+  _alertCounts = {};
+  const filesWithAlerts = DB.files.filter(f=>f.alert_rule?.enabled && f.alert_rule?.fieldId);
+  if(!filesWithAlerts.length) return;
+  await Promise.all(filesWithAlerts.map(async f=>{
+    try{
+      const recs = await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+      _alertCounts[f.id] = recs.filter(r=>recordMatchesAlert(r,f)).length;
+    }catch(e){ _alertCounts[f.id]=0; }
+  }));
+}
+
+function alertForOrg(orgId){
+  return DB.files.filter(f=>f.org_id===orgId).reduce((s,f)=>s+(_alertCounts[f.id]||0),0);
+}
+function totalAlerts(){
+  return Object.values(_alertCounts).reduce((s,v)=>s+v,0);
+}
+
 function isRecordPending(record,file){
   const rules=file.pending_rules||{};
   for(const af of(file.admin_fields||[])){
@@ -548,6 +607,10 @@ function isRecordPending(record,file){
   }
   return false;
 }
+async function loadAllCounts(){
+  await Promise.all([loadPendingCounts(), loadAlertCounts()]);
+}
+
 async function loadPendingCounts(){
   _pendingCounts={};
   const files=DB.files.filter(f=>Object.values(f.pending_rules||{}).some(r=>r!=='ignore'));
@@ -589,7 +652,20 @@ function renderOrgs(){
       const o=DB.orgs.find(x=>x.id===f.org_id);
       return `<div class="aab-chip" onclick="adminViewFileRecords('${f.id}')"><i class="ti ti-folder"></i>${esc(o?o.name:'')} › ${esc(f.name)}<span style="background:#fca5a5;color:#7f1d1d;border-radius:20px;padding:1px 8px;font-weight:800;font-size:11px">${_pendingCounts[f.id]}</span></div>`;
     }).join('')}</div></div>`:'';
-  return alertBar+`<div class="page-title">בחר ארגון</div><div class="page-sub">לחץ על הארגון הרלוונטי להזנת פניות</div>
+
+  const totalAl=totalAlerts();
+  const alertsBar=S.adminLoggedIn&&totalAl>0?`<div class="admin-alert-bar" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fed7aa">
+    <div class="aab-title" style="color:#c2410c"><i class="ti ti-bell-ringing"></i> התראות פעילות</div>
+    <div class="aab-items">${DB.files.filter(f=>(_alertCounts[f.id]||0)>0).map(f=>{
+      const o=DB.orgs.find(x=>x.id===f.org_id);
+      const rule=f.alert_rule||{};
+      return `<div class="aab-chip" style="border-color:#fed7aa;color:#9a3412" onclick="adminViewFileRecords('${f.id}')">
+        <i class="ti ti-bell"></i>${esc(o?o.name:'')} › ${esc(f.name)}
+        <span style="background:#fed7aa;color:#7c2d12;border-radius:20px;padding:1px 8px;font-weight:800;font-size:11px">${_alertCounts[f.id]}</span>
+        ${rule.days?`<span style="font-size:10px;opacity:.7">מעל ${rule.days} ימים</span>`:''}
+      </div>`;
+    }).join('')}</div></div>`:'';
+  return alertBar+alertsBar+`<div class="page-title">בחר ארגון</div><div class="page-sub">לחץ על הארגון הרלוונטי להזנת פניות</div>
   <div class="org-grid">${DB.orgs.map(o=>{
     const st=orgStyle(o.name);
     const p=pendingForOrg(o.id);
@@ -729,7 +805,8 @@ function selectUnselectedFromFiltered(){
       if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
       else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      return v.includes(val.toLowerCase());
+      if(field.type==='select') return v===val;
+      return v.toLowerCase().includes(val.toLowerCase());
     });
   });
 
@@ -862,7 +939,7 @@ async function bulkDelete(){
   await Promise.all(ids.map(id=>DEL('records',`?id=eq.${id}`)));
   if(_cachedRecords[fileId]) _cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>!ids.includes(r.id));
   _allRecords=_allRecords.filter(r=>!ids.includes(r.id));
-  await loadPendingCounts();
+  await loadAllCounts();
   _selectedRows.clear();
   _bulkMode=false;
   render();
@@ -884,9 +961,10 @@ async function bulkUpdateAll(fieldId, value, isAdminField){
     const af=adminFields.find(x=>x.id===afId), ef=extraFields.find(x=>x.id===afId);
     const field=af||ef; if(!field) return;
     filtered=filtered.filter(r=>{
-      const v=af?((r.admin_data||{})[afId]||'').toString().toLowerCase():((r.extra||{})[afId]||'').toString().toLowerCase();
+      const v=af?((r.admin_data||{})[afId]||'').toString():((r.extra||{})[afId]||'').toString();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      return v.includes(val.toLowerCase());
+      if(field.type==='select') return v===val; // exact match for select
+      return v.toLowerCase().includes(val.toLowerCase()); // partial for text
     });
   });
 
@@ -907,7 +985,7 @@ async function bulkUpdateAll(fieldId, value, isAdminField){
       await PATCH('records',{extra:r.extra},`?id=eq.${r.id}`);
     }
   }));
-  await loadPendingCounts();
+  await loadAllCounts();
   render();
   showAlert(`✓ עודכנו ${filtered.length} רשומות`,'success');
 }
@@ -928,7 +1006,7 @@ async function bulkSetExtraField(fieldId, value){
     r.extra[fieldId]=typeof value==='boolean'?(value?'כן':'לא'):value;
     await PATCH('records',{extra:r.extra},`?id=eq.${r.id}`);
   }));
-  await loadPendingCounts();
+  await loadAllCounts();
   _selectedRows.clear(); _bulkMode=false;
   render();
   showAlert(`✓ עודכנו ${ids.length} רשומות`,'success');
@@ -959,7 +1037,7 @@ async function bulkSetField(fieldId, value){
     done++;
   }));
 
-  await loadPendingCounts();
+  await loadAllCounts();
   _selectedRows.clear();
   _bulkMode=false;
   render();
@@ -983,7 +1061,8 @@ function renderRecordsPage(){
       if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
       else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      return v.includes(val.toLowerCase());
+      if(field.type==='select') return v===val;
+      return v.toLowerCase().includes(val.toLowerCase());
     });
   });
   const sortable=(col,label,cls='')=>{
@@ -1065,7 +1144,7 @@ function renderRecordsPage(){
       const badge=field._isAdmin?'<i class="ti ti-shield-check" style="font-size:10px;color:var(--purple)"></i>':'';
       if(field.type==='checkbox') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option><option value="yes" ${cur==='yes'?'selected':''}>✓ מסומן</option><option value="no" ${cur==='no'?'selected':''}>✗ לא מסומן</option></select>`;
       if(field.type==='select') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option>${(field.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${cur===esc(o.trim())?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
-      return `<input type="text" placeholder="סנן ${esc(field.label)}..." value="${cur}" oninput="setFilter('${fid}',this.value)" style="min-width:120px${field._isAdmin?';border-color:var(--purple)':''}">`;
+      return `<input type="text" placeholder="סנן ${esc(field.label)}..." value="${cur}" id="filter-txt-${fid}" oninput="debounceFilter('${fid}',this.value)" style="min-width:120px${field._isAdmin?';border-color:var(--purple)':''}">`;
     }).join('')}
     <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
   </div>`:'';
@@ -1251,7 +1330,7 @@ function renderAdminAllRecords(){
 }
 
 // ── NAV ──
-function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();loadAll().then(()=>loadPendingCounts().then(render));}
+function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();loadAll().then(()=>loadAllCounts().then(render));}
 function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;_bulkMode=false;_selectedRows.clear();render();}
 function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();render();}
 async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
@@ -1262,6 +1341,17 @@ function setFilter(afId,val){
   if(val===''){ delete S.filters[afId]; }
   else { S.filters[afId]=val; }
   render();
+  // restore focus to text input after render
+  setTimeout(()=>{
+    const el=document.getElementById('filter-txt-'+afId);
+    if(el){ el.focus(); const l=el.value.length; el.setSelectionRange(l,l); }
+  },10);
+}
+
+let _filterTimers={};
+function debounceFilter(afId,val){
+  clearTimeout(_filterTimers[afId]);
+  _filterTimers[afId]=setTimeout(()=>setFilter(afId,val),350);
 }
 async function adminLoadAllRecords(){S.adminTab='records';S._loadingRecords=true;render();_allRecords=await GET('records','?order=created_at.desc');S._loadingRecords=false;render();}
 
@@ -1281,7 +1371,7 @@ async function submitRecord(e,fileId){
   try{
     await POST('records',{file_id:fileId,first_name:form.first_name.value.trim(),last_name:form.last_name.value.trim(),phone:form.phone.value.trim(),id_num:form.id_num.value.trim(),extra,admin_data:{},agent_name:_agentName});
     form.reset();S.phoneSearch='';S.phoneLookup=null;
-    await loadPendingCounts();
+    await loadAllCounts();
     showAlert('הרשומה נשמרה בהצלחה ✓','success');
   }catch(err){showAlert('שגיאה: '+err.message,'error');}
   btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> שמור רשומה';
@@ -1293,7 +1383,7 @@ async function saveAdminField(recordId,fieldId,value,fileId){
   const record=recs.find(r=>r.id===recordId);if(!record)return;
   if(!record.admin_data)record.admin_data={};
   record.admin_data[fieldId]=value;
-  try{await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`);await loadPendingCounts();}
+  try{await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`);await loadAllCounts();}
   catch(e){showAlert('שגיאה בשמירה','error');}
 }
 function debounceAdminField(recordId,fieldId,value,fileId){
@@ -1311,7 +1401,7 @@ async function doDelRecord(id,fileId){
   closeModal();
   await DEL('records',`?id=eq.${id}`);
   if(fileId&&fileId!=='null'){await getRecords(fileId);}else{_allRecords=_allRecords.filter(r=>r.id!==id);}
-  await loadPendingCounts();render();showAlert('הרשומה נמחקה','success');
+  await loadAllCounts();render();showAlert('הרשומה נמחקה','success');
 }
 
 // ── AGENTS CRUD ──
@@ -1489,11 +1579,114 @@ async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכ
 // ── FILE MODAL ──
 function openNewFile(){_tmpIcon='ti-file';_tmpFields=[];_tmpAdminFields=[];showModal(fileModalHTML({name:'',icon:'ti-file',org_id:'',extra_fields:[],admin_fields:[],pending_rules:{}},'new'));}
 function openEditFile(id){const f=DB.files.find(x=>x.id===id);_tmpIcon=f.icon||'ti-file';_tmpFields=JSON.parse(JSON.stringify(f.extra_fields||[]));_tmpAdminFields=JSON.parse(JSON.stringify(f.admin_fields||[]));showModal(fileModalHTML(f,'edit',id));}
+function buildAlertRuleHTML(f){
+  const rule = f.alert_rule||{};
+  const allFields = [...(f.extra_fields||[]),...(f.admin_fields||[])];
+  if(!allFields.length) return `<div style="font-size:13px;color:var(--text3)">יש להגדיר שדות תחילה</div>`;
+
+  const fieldOpts = allFields.map(fld=>`<option value="${fld.id}" ${rule.fieldId===fld.id?'selected':''}>${esc(fld.label)}</option>`).join('');
+  const selField = allFields.find(fld=>fld.id===rule.fieldId);
+
+  let condOpts = `<option value="empty" ${rule.condition==='empty'?'selected':''}>ריק / לא מולא</option>`;
+  if(selField?.type==='select'){
+    condOpts += `<option value="not_value" ${rule.condition==='not_value'?'selected':''}>שונה מ...</option>`;
+    condOpts += `<option value="value" ${rule.condition==='value'?'selected':''}>שווה ל...</option>`;
+  } else if(selField?.type==='checkbox'){
+    condOpts += `<option value="not_value" ${rule.condition==='not_value'?'selected':''}>לא מסומן</option>`;
+    condOpts += `<option value="value" ${rule.condition==='value'?'selected':''}>מסומן</option>`;
+  } else {
+    condOpts += `<option value="not_value" ${rule.condition==='not_value'?'selected':''}>שונה מ...</option>`;
+  }
+
+  let valueInput = '';
+  if(rule.condition==='not_value'||rule.condition==='value'){
+    if(selField?.type==='select'){
+      const vopts=(selField.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${rule.value===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');
+      valueInput=`<select class="form-input" id="ar-value" style="font-size:13px;padding:6px 10px"><option value="">בחר...</option>${vopts}</select>`;
+    } else {
+      valueInput=`<input class="form-input" id="ar-value" value="${esc(rule.value||'')}" placeholder="הזן ערך..." style="font-size:13px;padding:6px 10px">`;
+    }
+  }
+
+  return `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:600">
+          <input type="checkbox" id="ar-enabled" ${rule.enabled?'checked':''} style="width:16px;height:16px;accent-color:#c2410c">
+          הפעל התראה לקובץ זה
+        </label>
+      </div>
+      <div id="ar-body" style="${rule.enabled?'':'opacity:.4;pointer-events:none'}">
+        <div style="display:grid;grid-template-columns:auto 1fr auto 1fr;gap:10px;align-items:center;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap">אם עברו יותר מ</span>
+          <input class="form-input" id="ar-days" type="number" min="0" value="${rule.days||''}" placeholder="ימים (0 = תמיד)" style="font-size:13px;padding:6px 10px">
+          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap">ימים מהזנה</span>
+          <div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:auto 1fr auto 1fr;gap:10px;align-items:center">
+          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap">ושדה</span>
+          <select class="form-input" id="ar-field" style="font-size:13px;padding:6px 10px" onchange="refreshAlertModal()">
+            <option value="">בחר שדה...</option>${fieldOpts}
+          </select>
+          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap">הוא</span>
+          <div style="display:flex;gap:8px">
+            <select class="form-input" id="ar-condition" style="font-size:13px;padding:6px 10px" onchange="refreshAlertModal()">
+              ${condOpts}
+            </select>
+            ${valueInput?`<div id="ar-value-wrap">${valueInput}</div>`:''}
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--text3)">
+          <i class="ti ti-info-circle"></i> השאר ימים ריק או 0 לבדיקה ללא תנאי זמן
+        </div>
+      </div>
+    </div>`;
+}
+
+function refreshAlertModal(){
+  // re-render just the alert section without closing modal
+  const f = _editingFile || {extra_fields:_tmpFields,admin_fields:_tmpAdminFields,alert_rule:collectAlertRule()};
+  const sec = document.getElementById('alert-rule-section');
+  if(sec) sec.innerHTML = buildAlertRuleHTML(f);
+  // toggle enabled
+  const cb = document.getElementById('ar-enabled');
+  const body = document.getElementById('ar-body');
+  if(cb&&body){
+    cb.addEventListener('change',()=>{ body.style.opacity=cb.checked?'1':'0.4'; body.style.pointerEvents=cb.checked?'':'none'; });
+  }
+}
+
+function collectAlertRule(){
+  const enabled = document.getElementById('ar-enabled')?.checked||false;
+  const days = document.getElementById('ar-days')?.value||'';
+  const fieldId = document.getElementById('ar-field')?.value||'';
+  const condition = document.getElementById('ar-condition')?.value||'empty';
+  const valueEl = document.getElementById('ar-value');
+  const value = valueEl?.value||'';
+  return {enabled, days:days?parseFloat(days):0, fieldId, condition, value};
+}
+
+let _editingFile = null;
+
 function fileModalHTML(f,mode,id=''){
   const orgOpts=DB.orgs.map(o=>`<option value="${o.id}" ${f.org_id===o.id?'selected':''}>${esc(o.name)}</option>`).join('');
   const iconsH=ICONS.map(ic=>`<div class="icon-opt ${_tmpIcon===ic?'selected':''}" data-icon="${ic}" onclick="pickIcon('${ic}')"><i class="ti ${ic}"></i></div>`).join('');
   const fieldRows=_tmpFields.map((ef,i)=>fieldRowHTML(ef,i,'f')).join('');
   const adminRows=_tmpAdminFields.map((af,i)=>fieldRowHTML(af,i,'a')).join('');
+  _editingFile = null; // reset
+  const alertRuleHTML = `<div id="alert-rule-section">${buildAlertRuleHTML({...f,extra_fields:_tmpFields,admin_fields:_tmpAdminFields})}</div>`;
+  // wire enabled toggle after render
+  setTimeout(()=>{
+    const cb=document.getElementById('ar-enabled');
+    const body=document.getElementById('ar-body');
+    if(cb&&body){
+      cb.onchange=()=>{
+        body.style.opacity=cb.checked?'1':'0.4';
+        body.style.pointerEvents=cb.checked?'':'none';
+      };
+    }
+  },80);
+
   const rules=f.pending_rules||{};
   const pendingHTML=_tmpAdminFields.filter(af=>af.label).length?`
     <div class="section-divider" style="color:#b45309"><i class="ti ti-bell"></i> הגדרת סטטוס "ממתין לטיפול"</div>
@@ -1517,6 +1710,9 @@ function fileModalHTML(f,mode,id=''){
     <div class="section-divider"><i class="ti ti-shield-check"></i> שדות ניהוליים (מנהל ממלא)</div>
     <div class="form-row"><div id="admin-field-list">${adminRows}</div><button class="btn btn-sm btn-purple mt-1" type="button" onclick="addField('a')"><i class="ti ti-plus"></i> הוסף שדה ניהולי</button></div>
     <div id="pending-rules-section">${pendingHTML}</div>
+    <div class="section-divider" style="color:#c2410c"><i class="ti ti-bell-ringing"></i> הגדרת התראה אוטומטית</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">התראה תופיע למנהל כשרשומה עומדת בתנאי — badge כתום על הקובץ ובמסך הבית</div>
+    ${alertRuleHTML}
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 function fieldRowHTML(ef,i,p){
@@ -1554,8 +1750,8 @@ function addField(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;arr.push({id:g
 function removeField(p,i){const arr=p==='f'?_tmpFields:_tmpAdminFields;arr.splice(i,1);refreshFields(p);}
 function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()});await loadAll();await loadPendingCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()},`?id=eq.${id}`);await loadAll();await loadPendingCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
 // ── EXPORT ──
@@ -1712,7 +1908,7 @@ function initLoginBg(){
   draw();
 }
 
-async function initApp(){await loadAll();await loadPendingCounts();render();}
+async function initApp(){await loadAll();await loadAllCounts();render();}
 window.addEventListener('DOMContentLoaded',()=>{initLoginBg();initLogin();});
 </script>
 </body>
