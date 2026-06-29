@@ -1244,8 +1244,9 @@ function renderAdmin(){
       <button class="nav-tab ${tab==='files'?'active':''}" onclick="S.adminTab='files';render()">קבצים</button>
       <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
       <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
+      <button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>
     </div>
-    ${tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():renderAdminAllRecords()}
+    ${tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -1335,6 +1336,95 @@ function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;_bul
 function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();render();}
 async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
 async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
+async function loadManagersTab(){
+  S.adminTab='managers'; S._managersLoading=true; render();
+  try{ S._managers=await GET('app_managers','?order=created_at.asc'); }
+  catch(e){ S._managers=[]; showAlert('שגיאה בטעינת מנהלים','error'); }
+  S._managersLoading=false; render();
+}
+
+function renderAdminManagers(){
+  if(S._managersLoading) return `<div class="loading"><div class="spinner"></div><p>טוען...</p></div>`;
+  const managers=S._managers||[];
+  return `
+    <div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-dark)">
+      <strong><i class="ti ti-info-circle"></i> איך להוסיף מנהל חדש:</strong><br>
+      1. כנס ל-Supabase → Authentication → Users → Add user (מייל + סיסמה, Auto Confirm = ON)<br>
+      2. חזור לכאן ולחץ <strong>"הוסף מנהל"</strong> עם אותו מייל
+    </div>
+    <div style="text-align:left;margin-bottom:14px">
+      <button class="btn btn-black" onclick="openNewManager()"><i class="ti ti-shield-plus"></i> הוסף מנהל</button>
+    </div>
+    ${!managers.length
+      ?`<div class="empty"><i class="ti ti-shield-off"></i><p>אין מנהלים מוגדרים</p></div>`
+      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>סטטוס</th><th>סופר מנהל</th><th></th></tr></thead><tbody>
+      ${managers.map(m=>`<tr>
+        <td dir="ltr" style="font-size:13px">${esc(m.email)}</td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <div class="ali-avatar" style="width:28px;height:28px;font-size:10px;background:linear-gradient(135deg,#7c3aed,#a855f7)">${(m.name||m.email).trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
+          ${esc(m.name||'—')}
+        </div></td>
+        <td><span class="badge ${m.active?'badge-success':'badge-warning'}">${m.active?'פעיל':'מושבת'}</span></td>
+        <td>${m.is_super_admin?'<span class="badge badge-purple"><i class="ti ti-star"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
+        <td><div class="flex-gap">
+          <button class="btn btn-xs" onclick="openEditManager('${esc(m.email)}','${esc(m.name||'')}',${m.active},${!!m.is_super_admin})"><i class="ti ti-edit"></i></button>
+          <button class="btn btn-xs btn-danger" onclick="confirmDeleteManager('${esc(m.email)}')"><i class="ti ti-trash"></i></button>
+        </div></td>
+      </tr>`).join('')}
+      </tbody></table></div>`}`;
+}
+
+function openNewManager(){
+  showModal(`<div class="modal-title"><i class="ti ti-shield-plus" style="color:var(--purple)"></i> הוסף מנהל</div>
+    <div class="alert alert-info" style="margin-bottom:16px;font-size:13px"><i class="ti ti-info-circle"></i> ודא שיצרת את המשתמש תחילה ב-Supabase Auth עם אותו מייל</div>
+    <div class="form-row"><label class="form-label">מייל *</label><input class="form-input" id="mgr-new-email" type="email" placeholder="manager@example.com" dir="ltr"></div>
+    <div class="form-row"><label class="form-label">שם *</label><input class="form-input" id="mgr-new-name" placeholder="שם מלא"></div>
+    <div class="form-row"><label class="form-label">סוג</label><select class="form-input" id="mgr-new-super"><option value="false">מנהל רגיל</option><option value="true">סופר מנהל</option></select></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-purple" onclick="saveNewManager()"><i class="ti ti-check"></i> הוסף</button></div>`);
+}
+
+function openEditManager(email,name,active,isSuper){
+  showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--purple)"></i> עריכת מנהל</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm)" dir="ltr">${esc(email)}</div>
+    <div class="form-row"><label class="form-label">שם *</label><input class="form-input" id="mgr-edit-name" value="${esc(name)}"></div>
+    <div class="form-row"><label class="form-label">סטטוס</label><select class="form-input" id="mgr-edit-active"><option value="true" ${active?'selected':''}>פעיל</option><option value="false" ${!active?'selected':''}>מושבת</option></select></div>
+    <div class="form-row"><label class="form-label">סוג</label><select class="form-input" id="mgr-edit-super"><option value="false" ${!isSuper?'selected':''}>מנהל רגיל</option><option value="true" ${isSuper?'selected':''}>סופר מנהל</option></select></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-purple" onclick="saveEditManager('${esc(email)}')"><i class="ti ti-check"></i> שמור</button></div>`);
+}
+
+async function saveNewManager(){
+  const email=document.getElementById('mgr-new-email').value.trim();
+  const name=document.getElementById('mgr-new-name').value.trim();
+  const isSuper=document.getElementById('mgr-new-super').value==='true';
+  if(!email||!name){showAlert('יש למלא מייל ושם','error');return;}
+  try{
+    await POST('app_managers',{email,name,active:true,is_super_admin:isSuper});
+    await loadManagersTab(); closeModal(); showAlert('המנהל נוסף בהצלחה','success');
+  }catch(e){
+    showAlert(e.message.includes('duplicate')||e.message.includes('unique')?'מייל זה כבר קיים':'שגיאה: '+e.message,'error');
+  }
+}
+
+async function saveEditManager(email){
+  const name=document.getElementById('mgr-edit-name').value.trim();
+  const active=document.getElementById('mgr-edit-active').value==='true';
+  const isSuper=document.getElementById('mgr-edit-super').value==='true';
+  if(!name){showAlert('יש להזין שם','error');return;}
+  try{
+    await PATCH('app_managers',{name,active,is_super_admin:isSuper},`?email=eq.${encodeURIComponent(email)}`);
+    await loadManagersTab(); closeModal(); showAlert('המנהל עודכן','success');
+  }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
+}
+
+async function confirmDeleteManager(email){
+  if(currentUser?.email===email){showAlert('לא ניתן למחוק את עצמך','error');return;}
+  if(!confirm(`למחוק את המנהל ${email}?`)) return;
+  try{
+    await DEL('app_managers',`?email=eq.${encodeURIComponent(email)}`);
+    await loadManagersTab(); showAlert('המנהל הוסר','success');
+  }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
+}
+
 function gotoAdmin(){S.view='admin';render();}
 function toggleSort(col){if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;}render();}
 function setFilter(afId,val){
@@ -1730,24 +1820,45 @@ function fieldRowHTML(ef,i,p){
   </div>`;
 }
 function pickIcon(ic){_tmpIcon=ic;document.querySelectorAll('.icon-opt').forEach(el=>el.classList.toggle('selected',el.dataset.icon===ic));}
-function onTypeChange(p,i,val){const arr=p==='f'?_tmpFields:_tmpAdminFields;arr[i].type=val;if(val!=='select')arr[i].options='';refreshFields(p);}
+function saveFieldsFromDOM(p){
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  arr.forEach((ef,i)=>{
+    const l=document.querySelector('[data-fl="'+p+'_'+i+'"]');
+    const t=document.querySelector('[data-ft="'+p+'_'+i+'"]');
+    const o=document.querySelector('[data-fo="'+p+'_'+i+'"]');
+    const r=document.querySelector('[data-fr="'+p+'_'+i+'"]');
+    if(l) ef.label=l.value;
+    if(t&&t.value) ef.type=t.value;
+    if(o) ef.options=o.value;
+    if(r) ef.required=r.checked;
+  });
+}
+function onTypeChange(p,i,val){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  arr[i].type=val;
+  if(val!=='select') arr[i].options='';
+  refreshFields(p);
+}
 function refreshFields(p){
+  saveFieldsFromDOM(p);
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
   const el=document.getElementById(p==='f'?'field-list':'admin-field-list');
   if(el)el.innerHTML=arr.map((ef,i)=>fieldRowHTML(ef,i,p)).join('');
   if(p==='a')refreshPendingRules();
 }
-function refreshPendingRules(){
-  const sec=document.getElementById('pending-rules-section');if(!sec)return;
-  const fields=_tmpAdminFields.filter(af=>af.label);if(!fields.length){sec.innerHTML='';return;}
-  const cur={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value)cur[el.dataset.pr]=el.value;});
-  sec.innerHTML=`<div class="section-divider" style="color:#b45309"><i class="ti ti-bell"></i> הגדרת סטטוס "ממתין"</div>
-    ${fields.map(af=>{const rule=cur[af.id]||'ignore';let opts=`<option value="ignore" ${rule==='ignore'?'selected':''}>התעלם</option><option value="must_fill" ${rule==='must_fill'?'selected':''}>חייב מלא</option>`;if(af.type==='checkbox')opts+=`<option value="must_check" ${rule==='must_check'?'selected':''}>חייב מסומן</option>`;if(af.type==='select'&&af.options)af.options.split(',').forEach(o=>{const v='value:'+o.trim();opts+=`<option value="${esc(v)}" ${rule===v?'selected':''}>${esc(o.trim())}</option>`;});
-    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-xs);padding:10px"><div style="font-size:13px;font-weight:600;color:var(--purple)"><i class="ti ti-shield-check"></i> ${esc(af.label)}</div><select class="form-input" style="font-size:13px;padding:6px 10px" data-pr="${af.id}">${opts}</select></div>`;
-  }).join('')}`;
+function addField(p){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  arr.push({id:genId(),label:'',type:'text',options:'',required:false});
+  refreshFields(p);
 }
-function addField(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;arr.push({id:genId(),label:'',type:'text',options:''});refreshFields(p);}
-function removeField(p,i){const arr=p==='f'?_tmpFields:_tmpAdminFields;arr.splice(i,1);refreshFields(p);}
+function removeField(p,i){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  arr.splice(i,1);
+  refreshFields(p);
+}
 function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
 async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
