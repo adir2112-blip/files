@@ -371,19 +371,40 @@ function showLogin(screen){
     document.getElementById('agent-step1').style.display='block';
     document.getElementById('agent-step2').style.display='none';
     document.getElementById('agent-err').style.display='none';
-    populateAgents(allAgents);
+    // תמיד מציג רק פעילים במסך כניסה
+    populateAgents(allAgents.filter(u=>u.active!==false));
     setTimeout(()=>{ const el=document.getElementById('agent-search'); if(el){el.value='';el.focus();} },60);
   }
   if(screen==='manager') setTimeout(()=>document.getElementById('mgr-email').focus(),60);
+}
+
+function populateAgents(list){
+  const el=document.getElementById('agent-list'); if(!el) return;
+  // במסך כניסה — מציג רק פעילים
+  const activeOnly=list.filter(u=>u.active!==false);
+  if(!activeOnly.length){el.innerHTML=`<div class="agent-list-empty"><i class="ti ti-search"></i><br>לא נמצאו נציגים</div>`;return;}
+  el.innerHTML=activeOnly.map(u=>{
+    const initials=u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    return `<div class="agent-list-item" onclick="selectAgent(${u.id})">
+      <div class="ali-avatar">${initials}</div>
+      <span>${esc(u.name)}</span>
+      <i class="ti ti-chevron-left" style="margin-right:auto;color:rgba(30,58,138,.3);font-size:13px"></i>
+    </div>`;
+  }).join('');
 }
 
 async function initLogin(){
   const {data:{session}}=await sbClient.auth.getSession();
   if(session?.user){
     const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',session.user.email).eq('active',true).single();
-    if(mgr){enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin});return;}
+    if(mgr){
+      // load all agents for admin management
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
+      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin});return;
+    }
   }
-  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin');
+  // load only active agents for login list
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active');
   allAgents=data||[];
   showLogin('mode');
 }
@@ -403,7 +424,8 @@ function populateAgents(list){
 
 function filterAgents(){
   const q=document.getElementById('agent-search').value.trim();
-  populateAgents(q?allAgents.filter(u=>u.name.includes(q)):allAgents);
+  const activeAgents=allAgents.filter(u=>u.active!==false);
+  populateAgents(q?activeAgents.filter(u=>u.name.includes(q)):activeAgents);
 }
 
 function selectAgent(id){
@@ -479,6 +501,10 @@ function enterApp(user){
   document.getElementById('admin-btn').style.display=user.role==='manager'?'':'none';
   S.adminLoggedIn=user.role==='manager';
   _agentName=user.name;
+  // מנהל רואה את כל הנציגים כולל מושבתים
+  if(user.role==='manager'){
+    GET('app_users','?order=name.asc&select=id,name,pin,active').then(data=>{ allAgents=data||[]; render(); });
+  }
   initApp();
 }
 
@@ -486,6 +512,9 @@ async function doLogout(){
   if(currentUser?.role==='manager') await sbClient.auth.signOut();
   currentUser=null; _agentName=''; _selectedAgent=null;
   S={...S_DEFAULT()}; DB={orgs:[],files:[]}; _cachedRecords={}; _allRecords=[]; _pendingCounts={};
+  // reload only active for login list
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active');
+  allAgents=data||[];
   document.getElementById('app-screen').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('mgr-email').value=''; document.getElementById('mgr-pass').value='';
@@ -614,14 +643,6 @@ function renderForm(){
         <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
       </div>
     </div>
-    <div class="form-row">
-      <label class="form-label"><i class="ti ti-phone" style="font-size:12px"></i> חיפוש לפי טלפון</label>
-      <div class="search-wrap" style="margin-bottom:0">
-        <input class="form-input" id="phone-search-input" type="text" dir="ltr" placeholder="05X-XXXXXXX" value="${esc(S.phoneSearch)}" oninput="onPhoneSearch(this.value)">
-        <i class="ti ti-search"></i>
-      </div>
-    </div>
-    <div id="lookup-box"></div>
     <form id="entry-form" onsubmit="submitRecord(event,'${f.id}')">
       <div class="form-grid-2">
         <div class="form-row"><label class="form-label">שם פרטי *</label><input class="form-input" name="first_name" required placeholder="שם פרטי"></div>
@@ -673,6 +694,7 @@ function renderLookupOnly(){
 // ── BULK SELECTION STATE ──
 let _selectedRows = new Set(); // record IDs
 let _bulkMode = false;
+let _lastUnselectedIds = [];
 
 function toggleBulkMode(){
   _bulkMode=!_bulkMode;
@@ -686,6 +708,44 @@ function toggleRowSelect(id){
   const cb=document.getElementById('row-cb-'+id);
   if(cb) cb.checked=_selectedRows.has(id);
   updateBulkBar();
+}
+function selectUnselectedFromFiltered(){
+  // compute unselected at click time from current cached records
+  const fileId = S.fileId;
+  const records = _cachedRecords[fileId] || [];
+  const q = (S.searchQ||'').toLowerCase();
+  const f = DB.files.find(x=>x.id===fileId);
+  const adminFields = f?.admin_fields||[];
+
+  // apply same filters as render
+  let filtered = q ? records.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num+' '+(r.agent_name||'')).toLowerCase().includes(q)) : records;
+  Object.entries(S.filters||{}).forEach(([afId,val])=>{
+    if(!val) return;
+    const af=adminFields.find(x=>x.id===afId);
+    const ef=extraFields.find(x=>x.id===afId);
+    const field=af||ef; if(!field) return;
+    filtered=filtered.filter(r=>{
+      let v;
+      if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
+      else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
+      if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
+      return v.includes(val.toLowerCase());
+    });
+  });
+
+  // add only those NOT already selected
+  let added = 0;
+  filtered.forEach(r=>{
+    if(!_selectedRows.has(r.id)){
+      _selectedRows.add(r.id);
+      added++;
+    }
+  });
+  render();
+}
+function selectSpecificIds(ids){
+  ids.forEach(id=>_selectedRows.add(id));
+  render();
 }
 function selectAllFiltered(){
   const ids=JSON.parse(document.getElementById('filtered-ids').value||'[]');
@@ -702,37 +762,85 @@ function updateBulkBar(){
   const count=_selectedRows.size;
   bar.innerHTML=bulkBarHTML(count);
 }
-function bulkBarHTML(count){
-  const f=DB.files.find(x=>x.id===S.fileId);
-  const adminFields=(f?.admin_fields||[]);
-  const checkboxFields=adminFields.filter(af=>af.type==='checkbox');
-  const selectFields=adminFields.filter(af=>af.type==='select');
+function makeFieldCard(af, isAdmin){
+  let actionHTML='';
+  const fn = isAdmin ? 'bulkSetField' : 'bulkSetExtraField';
+  if(af.type==='checkbox'){
+    actionHTML=`
+      <button class="btn btn-sm btn-success" style="flex:1;justify-content:center" onclick="${fn}('${af.id}',true)">
+        <i class="ti ti-check"></i> סמן הכל
+      </button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center;border-color:var(--border2)" onclick="${fn}('${af.id}',false)">
+        <i class="ti ti-x"></i> בטל הכל
+      </button>`;
+  } else if(af.type==='select'){
+    const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');
+    actionHTML=`
+      <select class="form-input" style="font-size:13px;padding:6px 10px"
+        onchange="if(this.value){${fn}('${af.id}',this.value);this.value=''}">
+        <option value="">החל על כל הנבחרים...</option>${opts}
+      </select>`;
+  } else {
+    actionHTML=`
+      <div style="display:flex;gap:6px;width:100%">
+        <input type="text" class="form-input" id="bulk-txt-${isAdmin?'a':'e'}-${af.id}"
+          style="font-size:13px;padding:6px 10px" placeholder="הזן ערך...">
+        <button class="btn btn-sm btn-primary"
+          onclick="const v=document.getElementById('bulk-txt-${isAdmin?'a':'e'}-${af.id}').value.trim();if(v)${fn}('${af.id}',v)">
+          <i class="ti ti-check"></i>
+        </button>
+      </div>`;
+  }
+  const color = isAdmin ? 'var(--purple)' : 'var(--blue)';
+  const icon  = isAdmin ? 'ti-shield-check' : 'ti-forms';
   return `
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%">
-      <span style="font-size:13px;font-weight:700;color:var(--blue-dark);white-space:nowrap;background:var(--blue-light);padding:4px 10px;border-radius:20px">
-        <i class="ti ti-checks"></i> ${count} נבחרו
-      </span>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1">
-        ${checkboxFields.map(af=>`
-          <button class="btn btn-sm btn-success" onclick="bulkSetField('${af.id}',true)"><i class="ti ti-check"></i> סמן "${esc(af.label)}"</button>
-          <button class="btn btn-sm" style="border-color:var(--border2)" onclick="bulkSetField('${af.id}',false)"><i class="ti ti-x"></i> בטל "${esc(af.label)}"</button>
-        `).join('')}
-        ${selectFields.map(af=>`
-          <div style="display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:4px 10px">
-            <span style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">${esc(af.label)}:</span>
-            <select class="admin-input" style="min-width:90px;border:none;padding:2px 6px" onchange="if(this.value)bulkSetField('${af.id}',this.value)">
-              <option value="">בחר...</option>
-              ${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('')}
-            </select>
-          </div>
-        `).join('')}
-        ${adminFields.length ? '<div style="width:1px;height:24px;background:var(--border);margin:0 2px"></div>' : ''}
-        <button class="btn btn-sm btn-success" onclick="exportSelected()"><i class="ti ti-download"></i> ייצוא נבחרים</button>
-        <button class="btn btn-sm btn-danger" onclick="bulkDelete()"><i class="ti ti-trash"></i> מחק נבחרים</button>
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);
+                padding:12px 14px;min-width:160px;flex:1">
+      <div style="font-size:11px;font-weight:700;color:${color};letter-spacing:.05em;
+                  margin-bottom:8px;display:flex;align-items:center;gap:4px">
+        <i class="ti ${icon}" style="font-size:11px"></i> ${esc(af.label)}
       </div>
-      <button class="btn btn-xs" onclick="deselectAll()" title="בטל בחירה" style="padding:5px 8px"><i class="ti ti-x"></i></button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${actionHTML}</div>
     </div>`;
 }
+
+function bulkBarHTML(count){
+  const f=DB.files.find(x=>x.id===S.fileId);
+  const extraFields=(f?.extra_fields||[]).filter(ef=>ef.type!=='checkbox'||true);
+  const adminFields=(f?.admin_fields||[]);
+  const extraCards = extraFields.map(ef=>makeFieldCard(ef,false)).join('');
+  const adminCards = adminFields.map(af=>makeFieldCard(af,true)).join('');
+  const hasFields = extraFields.length||adminFields.length;
+
+  return `
+    <div style="width:100%">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:14px;font-weight:700;color:var(--blue-dark);display:flex;align-items:center;gap:8px">
+          <span style="background:var(--blue);color:#fff;border-radius:20px;padding:3px 14px;font-size:13px">
+            <i class="ti ti-checks"></i> ${count} נבחרו
+          </span>
+          החל פעולה על הנבחרים:
+        </span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-success" onclick="exportSelected()"><i class="ti ti-download"></i> ייצוא נבחרים</button>
+          <button class="btn btn-sm btn-danger" onclick="bulkDelete()"><i class="ti ti-trash"></i> מחק נבחרים</button>
+          <button class="btn btn-sm" onclick="deselectAll()"><i class="ti ti-x"></i> בטל בחירה</button>
+        </div>
+      </div>
+      ${!hasFields ? '<div style="font-size:13px;color:var(--text2)">אין שדות — ניתן לייצא או למחוק.</div>' : ''}
+      ${extraFields.length ? `
+        <div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+          <i class="ti ti-forms"></i> שדות טופס
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${extraCards}</div>` : ''}
+      ${adminFields.length ? `
+        <div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+          <i class="ti ti-shield-check"></i> שדות ניהוליים
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${adminCards}</div>` : ''}
+    </div>`;
+}
+
 
 async function exportSelected(){
   if(_selectedRows.size===0) return;
@@ -759,6 +867,71 @@ async function bulkDelete(){
   _bulkMode=false;
   render();
   showAlert(`נמחקו ${ids.length} רשומות`,'success');
+}
+
+async function bulkUpdateAll(fieldId, value, isAdminField){
+  // operates on ALL currently filtered records — no selection needed
+  const fileId=S.fileId;
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  const records=_cachedRecords[fileId]||[];
+  const extraFields=f.extra_fields||[], adminFields=f.admin_fields||[];
+
+  // apply current filters to get filtered list
+  const q=(S.searchQ||'').toLowerCase();
+  let filtered=q?records.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num+' '+(r.agent_name||'')).toLowerCase().includes(q)):records;
+  Object.entries(S.filters||{}).forEach(([afId,val])=>{
+    if(!val) return;
+    const af=adminFields.find(x=>x.id===afId), ef=extraFields.find(x=>x.id===afId);
+    const field=af||ef; if(!field) return;
+    filtered=filtered.filter(r=>{
+      const v=af?((r.admin_data||{})[afId]||'').toString().toLowerCase():((r.extra||{})[afId]||'').toString().toLowerCase();
+      if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
+      return v.includes(val.toLowerCase());
+    });
+  });
+
+  if(!filtered.length){showAlert('אין רשומות מסוננות','error');return;}
+  const field=isAdminField?adminFields.find(x=>x.id===fieldId):extraFields.find(x=>x.id===fieldId);
+  const label=field?field.label:fieldId;
+  const displayVal=typeof value==='boolean'?(value?'כן':'לא'):value;
+  if(!confirm(`לעדכן "${label}" = "${displayVal}" על כל ${filtered.length} הרשומות המסוננות?`)) return;
+
+  await Promise.all(filtered.map(async r=>{
+    if(isAdminField){
+      if(!r.admin_data) r.admin_data={};
+      r.admin_data[fieldId]=value;
+      await PATCH('records',{admin_data:r.admin_data},`?id=eq.${r.id}`);
+    } else {
+      if(!r.extra) r.extra={};
+      r.extra[fieldId]=typeof value==='boolean'?(value?'כן':'לא'):value;
+      await PATCH('records',{extra:r.extra},`?id=eq.${r.id}`);
+    }
+  }));
+  await loadPendingCounts();
+  render();
+  showAlert(`✓ עודכנו ${filtered.length} רשומות`,'success');
+}
+
+async function bulkSetExtraField(fieldId, value){
+  if(_selectedRows.size===0){ showAlert('לא נבחרו רשומות','error'); return; }
+  const fileId=S.fileId;
+  const f=DB.files.find(x=>x.id===fileId);
+  const ef=(f?.extra_fields||[]).find(x=>x.id===fieldId);
+  if(!ef) return;
+  const ids=[..._selectedRows];
+  const label=ef.label;
+  const displayVal=typeof value==='boolean'?(value?'כן':'לא'):value;
+  if(!confirm(`לעדכן "${label}" = "${displayVal}" על ${ids.length} רשומות?`)) return;
+  const recs=(_cachedRecords[fileId]||[]).filter(r=>ids.includes(r.id));
+  await Promise.all(recs.map(async r=>{
+    if(!r.extra) r.extra={};
+    r.extra[fieldId]=typeof value==='boolean'?(value?'כן':'לא'):value;
+    await PATCH('records',{extra:r.extra},`?id=eq.${r.id}`);
+  }));
+  await loadPendingCounts();
+  _selectedRows.clear(); _bulkMode=false;
+  render();
+  showAlert(`✓ עודכנו ${ids.length} רשומות`,'success');
 }
 
 async function bulkSetField(fieldId, value){
@@ -802,10 +975,14 @@ function renderRecordsPage(){
   let filtered=q?records.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num+' '+(r.agent_name||'')).toLowerCase().includes(q)):records;
   Object.entries(S.filters||{}).forEach(([afId,val])=>{
     if(!val) return;
-    const af=adminFields.find(x=>x.id===afId); if(!af) return;
+    const af=adminFields.find(x=>x.id===afId);
+    const ef=extraFields.find(x=>x.id===afId);
+    const field=af||ef; if(!field) return;
     filtered=filtered.filter(r=>{
-      const v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
-      if(af.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
+      let v;
+      if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
+      else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
+      if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
       return v.includes(val.toLowerCase());
     });
   });
@@ -874,15 +1051,57 @@ function renderRecordsPage(){
     return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${delC}</tr>`;
   }).join('');
 
-  const filterBar=adminFields.length?`<div class="filter-bar">
+  // ALL fields available for filtering (extra + admin)
+  const allFilterableFields = [
+    ...extraFields.map(ef=>({...ef,_isAdmin:false})),
+    ...adminFields.map(af=>({...af,_isAdmin:true}))
+  ];
+
+  const filterBar=allFilterableFields.length?`<div class="filter-bar">
     <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
-    ${adminFields.map(af=>{
-      if(af.type==='checkbox') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option><option value="yes">✓ מסומן</option><option value="no">✗ לא מסומן</option></select>`;
-      if(af.type==='select') return `<select onchange="setFilter('${af.id}',this.value)"><option value="">כל ${esc(af.label)}</option>${(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('')}</select>`;
-      return `<input type="text" placeholder="סנן ${esc(af.label)}..." value="${esc(S.filters[af.id]||'')}" oninput="setFilter('${af.id}',this.value)" style="min-width:130px">`;
+    ${allFilterableFields.map(field=>{
+      const fid=field.id;
+      const cur=esc(S.filters[fid]||'');
+      const badge=field._isAdmin?'<i class="ti ti-shield-check" style="font-size:10px;color:var(--purple)"></i>':'';
+      if(field.type==='checkbox') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option><option value="yes" ${cur==='yes'?'selected':''}>✓ מסומן</option><option value="no" ${cur==='no'?'selected':''}>✗ לא מסומן</option></select>`;
+      if(field.type==='select') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option>${(field.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${cur===esc(o.trim())?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
+      return `<input type="text" placeholder="סנן ${esc(field.label)}..." value="${cur}" oninput="setFilter('${fid}',this.value)" style="min-width:120px${field._isAdmin?';border-color:var(--purple)':''}">`;
     }).join('')}
     <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
   </div>`:'';
+
+  // BULK UPDATE ALL FILTERED — no selection needed
+  const bulkAllBar = isAdmin && filtered.length>0 && allFilterableFields.length ? `
+    <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <i class="ti ti-bolt"></i> עדכון גורף — החל על כל ${filtered.length} הרשומות המסוננות
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${[...extraFields,...adminFields].map(field=>{
+          const isAdm=adminFields.includes(field);
+          const color=isAdm?'var(--purple)':'var(--blue)';
+          const icon=isAdm?'ti-shield-check':'ti-forms';
+          let ctrl='';
+          if(field.type==='checkbox'){
+            ctrl=`<button class="btn btn-xs btn-success" onclick="bulkUpdateAll('${field.id}',true,${isAdm})"><i class="ti ti-check"></i> סמן</button>
+                  <button class="btn btn-xs" style="border-color:var(--border2)" onclick="bulkUpdateAll('${field.id}',false,${isAdm})"><i class="ti ti-x"></i> בטל</button>`;
+          } else if(field.type==='select'){
+            const opts=(field.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');
+            ctrl=`<select class="admin-input" style="font-size:12px" onchange="if(this.value){bulkUpdateAll('${field.id}',this.value,${isAdm});this.value=''}">
+              <option value="">בחר ערך...</option>${opts}</select>`;
+          } else {
+            ctrl=`<input type="text" class="admin-input" id="bua-${field.id}" style="font-size:12px;min-width:90px" placeholder="הזן...">
+                  <button class="btn btn-xs btn-primary" onclick="const v=document.getElementById('bua-${field.id}').value.trim();if(v)bulkUpdateAll('${field.id}',v,${isAdm})"><i class="ti ti-check"></i></button>`;
+          }
+          return `<div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.08);border-radius:var(--radius-xs);padding:5px 9px">
+            <span style="font-size:11px;font-weight:700;color:${color};white-space:nowrap;display:flex;align-items:center;gap:3px">
+              <i class="ti ${icon}" style="font-size:11px"></i>${esc(field.label)}:
+            </span>
+            ${ctrl}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
 
   // bulk action bar
   const bulkBar=isAdmin&&_bulkMode&&_selectedRows.size>0?`
@@ -890,10 +1109,12 @@ function renderRecordsPage(){
       ${bulkBarHTML(_selectedRows.size)}
     </div>`:'';
 
-  // "select all filtered" shortcut
-  const selectAllBtn=isAdmin&&_bulkMode&&filtered.length>0&&!allSelectedInFiltered?`
-    <button class="btn btn-sm btn-primary" style="margin-bottom:10px" onclick="selectAllFiltered()">
-      <i class="ti ti-checks"></i> בחר את כל ${filtered.length} הרשומות המסוננות
+  // "select all filtered" shortcut — only show unselected remainder
+  const unselectedInFiltered = filteredIds.filter(id=>!_selectedRows.has(id));
+  const unselectedCount = unselectedInFiltered.length;
+  const selectAllBtn=isAdmin&&_bulkMode&&unselectedCount>0?`
+    <button class="btn btn-sm btn-primary" style="margin-bottom:10px" onclick="selectUnselectedFromFiltered()">
+      <i class="ti ti-checks"></i> בחר את ${unselectedCount} הרשומות שטרם נבחרו
     </button>`:'';
 
   return `<div class="card">
@@ -913,6 +1134,7 @@ function renderRecordsPage(){
       <i class="ti ti-search"></i>
     </div>
     ${filterBar}
+    ${bulkAllBar}
     ${bulkBar}
     ${selectAllBtn}
     <input type="hidden" id="filtered-ids" value='${JSON.stringify(filteredIds)}'>
@@ -986,7 +1208,10 @@ function renderAdminFiles(){
 }
 
 function renderAdminAgents(){
-  return `<div style="text-align:left;margin-bottom:14px"><button class="btn btn-black" onclick="openNewAgent()"><i class="ti ti-user-plus"></i> נציג חדש</button></div>
+  return `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button class="btn btn-black" onclick="openNewAgent()"><i class="ti ti-user-plus"></i> נציג חדש</button>
+    <button class="btn btn-sm" onclick="openImportAgents()" style="border-color:var(--green);color:var(--green)"><i class="ti ti-table-import"></i> ייבוא מ-Excel</button>
+  </div>
   <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th></th></tr></thead><tbody>
   ${allAgents.map(u=>`<tr>
     <td><div style="display:flex;align-items:center;gap:8px"><div class="ali-avatar" style="width:28px;height:28px;font-size:10px">${u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>${esc(u.name)}</div></td>
@@ -1033,7 +1258,11 @@ async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S
 async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
 function gotoAdmin(){S.view='admin';render();}
 function toggleSort(col){if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;}render();}
-function setFilter(afId,val){S.filters[afId]=val;render();}
+function setFilter(afId,val){
+  if(val===''){ delete S.filters[afId]; }
+  else { S.filters[afId]=val; }
+  render();
+}
 async function adminLoadAllRecords(){S.adminTab='records';S._loadingRecords=true;render();_allRecords=await GET('records','?order=created_at.desc');S._loadingRecords=false;render();}
 
 // ── SUBMIT ──
@@ -1095,9 +1324,156 @@ function openEditAgent(id,name,pin,active){showModal(`<div class="modal-title"><
   <div class="form-row"><label class="form-label">PIN חדש (השאר ריק לאי-שינוי)</label><input class="form-input" id="ag-pin" maxlength="4" placeholder="----" dir="ltr"></div>
   <div class="form-row"><label class="form-label">סטטוס</label><select class="form-input" id="ag-active"><option value="true" ${active?'selected':''}>פעיל</option><option value="false" ${!active?'selected':''}>מושבת</option></select></div>
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-black" onclick="saveEditAgent(${id})"><i class="ti ti-check"></i> שמור</button></div>`);}
-async function saveNewAgent(){const n=document.getElementById('ag-name').value.trim(),pin=document.getElementById('ag-pin').value.trim();if(!n||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}await POST('app_users',{name:n,pin,active:true});allAgents=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin');closeModal();render();showAlert('הנציג נוסף','success');}
-async function saveEditAgent(id){const n=document.getElementById('ag-name').value.trim(),pin=document.getElementById('ag-pin').value.trim(),active=document.getElementById('ag-active').value==='true';if(!n){alert('יש להזין שם');return;}const body={name:n,active};if(pin.length===4)body.pin=pin;await PATCH('app_users',body,`?id=eq.${id}`);allAgents=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin');closeModal();render();showAlert('הנציג עודכן','success');}
-async function confirmDeleteAgent(id,name){if(!confirm(`למחוק את הנציג "${name}"?`))return;await DEL('app_users',`?id=eq.${id}`);allAgents=allAgents.filter(u=>u.id!==id);render();showAlert('הנציג נמחק','success');}
+function openImportAgents(){
+  showModal(`
+    <div class="modal-title"><i class="ti ti-table-import" style="color:var(--green)"></i> ייבוא נציגים מ-Excel</div>
+    <div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-dark)">
+      <strong>מבנה הקובץ הנדרש:</strong><br>
+      עמודה A — שם הנציג<br>
+      עמודה B — ת"ז (המערכת תיקח את 4 הספרות האחרונות כ-PIN)
+    </div>
+    <div class="form-row">
+      <label class="form-label">בחר קובץ Excel</label>
+      <input type="file" id="import-excel-file" accept=".xlsx,.xls,.csv"
+        class="form-input" style="padding:8px" onchange="previewImport()">
+    </div>
+    <div id="import-preview" style="margin-top:12px"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">ביטול</button>
+      <button class="btn btn-success" id="import-confirm-btn" style="display:none" onclick="confirmImport()">
+        <i class="ti ti-check"></i> ייבא נציגים
+      </button>
+    </div>`);
+}
+
+let _importData = [];
+
+function previewImport(){
+  const file = document.getElementById('import-excel-file').files[0];
+  if(!file) return;
+  const preview = document.getElementById('import-preview');
+  preview.innerHTML = '<div class="loading"><div class="spinner"></div><p>קורא קובץ...</p></div>';
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      _importData = [];
+      const errors = [];
+
+      rows.forEach((row, i)=>{
+        if(!row[0] && !row[1]) return; // skip empty
+        const name = (row[0]||'').toString().trim();
+        const idNum = (row[1]||'').toString().replace(/\D/g,'').trim();
+        if(!name){ errors.push(`שורה ${i+1}: חסר שם`); return; }
+        if(idNum.length < 4){ errors.push(`שורה ${i+1}: ת"ז קצרה מדי (${idNum})`); return; }
+        const pin = idNum.slice(-4);
+        _importData.push({name, pin, idNum});
+      });
+
+      if(!_importData.length && !errors.length){
+        preview.innerHTML = '<div class="alert alert-error"><i class="ti ti-alert-circle"></i> הקובץ ריק</div>';
+        return;
+      }
+
+      // check duplicates with existing
+      const existingNames = allAgents.map(u=>u.name.trim());
+      const newAgents = _importData.filter(d=>!existingNames.includes(d.name));
+      const dupes = _importData.filter(d=>existingNames.includes(d.name));
+
+      let html = '';
+      if(errors.length){
+        html += `<div class="alert alert-error" style="margin-bottom:10px"><i class="ti ti-alert-circle"></i> ${errors.length} שגיאות: ${errors.join(' | ')}</div>`;
+      }
+      html += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">
+        תצוגה מקדימה — ${newAgents.length} נציגים חדשים לייבוא:
+        ${dupes.length ? `<span style="color:var(--amber);margin-right:8px">(${dupes.length} כבר קיימים — יידלגו)</span>` : ''}
+      </div>`;
+
+      if(newAgents.length){
+        html += `<div class="table-wrap" style="max-height:220px;overflow-y:auto">
+          <table><thead><tr><th>#</th><th>שם נציג</th><th>ת"ז</th><th>PIN</th></tr></thead><tbody>
+          ${newAgents.map((d,i)=>`<tr>
+            <td style="color:var(--text3)">${i+1}</td>
+            <td><div style="display:flex;align-items:center;gap:8px">
+              <div class="ali-avatar" style="width:26px;height:26px;font-size:9px">${d.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
+              ${esc(d.name)}
+            </div></td>
+            <td dir="ltr" style="color:var(--text3)">${esc(d.idNum)}</td>
+            <td dir="ltr"><span style="letter-spacing:4px;font-weight:700">••••</span> <span style="color:var(--text3);font-size:11px">(${esc(d.pin)})</span></td>
+          </tr>`).join('')}
+          </tbody></table>
+        </div>`;
+        document.getElementById('import-confirm-btn').style.display = '';
+        document.getElementById('import-confirm-btn').textContent = '';
+        document.getElementById('import-confirm-btn').innerHTML = `<i class="ti ti-check"></i> ייבא ${newAgents.length} נציגים`;
+        // store only new
+        _importData = newAgents;
+      } else {
+        html += `<div class="alert alert-error"><i class="ti ti-alert-circle"></i> כל הנציגים כבר קיימים במערכת</div>`;
+        document.getElementById('import-confirm-btn').style.display = 'none';
+      }
+      preview.innerHTML = html;
+    } catch(err){
+      preview.innerHTML = `<div class="alert alert-error"><i class="ti ti-alert-circle"></i> שגיאה בקריאת הקובץ: ${esc(err.message)}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmImport(){
+  if(!_importData.length) return;
+  const btn = document.getElementById('import-confirm-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> מייבא...';
+  let done = 0, errors = 0;
+  for(const d of _importData){
+    try{
+      await POST('app_users',{name:d.name, pin:d.pin, active:true});
+      done++;
+    } catch(e){ errors++; }
+  }
+  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active');
+  closeModal();
+  render();
+  showAlert(`✓ יובאו ${done} נציגים${errors?` · ${errors} שגיאות`:''}`, done>0?'success':'error');
+  _importData = [];
+}
+
+async function saveNewAgent(){
+  const n=document.getElementById('ag-name').value.trim();
+  const pin=document.getElementById('ag-pin').value.trim();
+  if(!n||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}
+  try{
+    await POST('app_users',{name:n,pin,active:true});
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
+    closeModal();render();showAlert('הנציג נוסף','success');
+  }catch(e){showAlert('שגיאה: '+e.message,'error');}
+}
+async function saveEditAgent(id){
+  const n=document.getElementById('ag-name').value.trim();
+  const pin=document.getElementById('ag-pin').value.trim();
+  const active=document.getElementById('ag-active').value==='true';
+  if(!n){alert('יש להזין שם');return;}
+  const body={name:n,active};
+  if(pin.length===4) body.pin=pin;
+  try{
+    await PATCH('app_users',body,`?id=eq.${id}`);
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
+    closeModal();render();showAlert('הנציג עודכן','success');
+  }catch(e){showAlert('שגיאה: '+e.message,'error');}
+}
+async function confirmDeleteAgent(id,name){
+  if(!confirm(`למחוק את הנציג "${name}"?`))return;
+  try{
+    await DEL('app_users',`?id=eq.${id}`);
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
+    render();showAlert('הנציג נמחק','success');
+  }catch(e){showAlert('שגיאה: '+e.message,'error');}
+}
 
 // ── ORG MODAL ──
 function openNewOrg(){showModal(`<div class="modal-title"><i class="ti ti-building" style="color:var(--blue)"></i> ארגון חדש</div>
@@ -1265,7 +1641,7 @@ function initLoginBg(){
         if(dist<160){
           const alpha=(1-dist/160)*0.18;
           const grad2=ctx.createLinearGradient(nodes[i].x,nodes[i].y,nodes[j].x,nodes[j].y);
-          grad2.addColorStop(0,nodes[i].color.replace(')',`,${alpha})`).replace('rgb','rgba').replace('#',''));
+          // skip grad2 per-node (use simple stroke instead)
           // simple fallback
           ctx.beginPath();
           ctx.moveTo(nodes[i].x,nodes[i].y);
@@ -1294,8 +1670,8 @@ function initLoginBg(){
       const pulsed=n.r+Math.sin(n.pulse)*1.2;
       // glow
       const glow=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulsed*6);
-      glow.addColorStop(0,n.color+'55');
-      glow.addColorStop(1,n.color+'00');
+      glow.addColorStop(0,'rgba(37,99,235,0.3)');
+      glow.addColorStop(1,'rgba(37,99,235,0)');
       ctx.beginPath();
       ctx.arc(n.x,n.y,pulsed*6,0,Math.PI*2);
       ctx.fillStyle=glow;
