@@ -87,6 +87,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text3);margin-bottom:18px;flex-wrap:wrap}
 .breadcrumb .bc-link{cursor:pointer;color:var(--blue);font-weight:500}.breadcrumb .bc-link:hover{text-decoration:underline}
 .container{max-width:1100px;margin:0 auto;padding:28px 20px}
+.container.full-width{max-width:none;padding:28px 24px}
 
 /* page title */
 .page-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px}
@@ -531,7 +532,7 @@ async function doLogout(){
 }
 
 // ══ APP STATE ══
-function S_DEFAULT(){return{view:'orgs',orgId:null,fileId:null,adminLoggedIn:false,adminTab:'orgs',searchQ:'',alert:null,filters:{},phoneSearch:'',phoneLookup:null,sortCol:null,sortDir:1};}
+function S_DEFAULT(){return{view:'orgs',orgId:null,fileId:null,adminLoggedIn:false,adminTab:'orgs',searchQ:'',alert:null,filters:{},phoneSearch:'',phoneLookup:null,sortCol:null,sortDir:1,showBulkAll:false};}
 let S=S_DEFAULT();
 let DB={orgs:[],files:[]};
 let _agentName='';
@@ -624,6 +625,7 @@ function totalPending(){return Object.values(_pendingCounts).reduce((s,v)=>s+v,0
 // ── RENDER ──
 function render(){
   const app=document.getElementById('app');
+  app.className = S.view==='records' ? 'container full-width' : 'container';
   let html=S.alert?`<div class="alert alert-${S.alert.type}"><i class="ti ${S.alert.type==='success'?'ti-check':'ti-alert-circle'}"></i>${S.alert.msg}</div>`:'';
   html+=renderBreadcrumb();
   if(S.view==='orgs')         html+=renderOrgs();
@@ -777,6 +779,10 @@ function toggleBulkMode(){
   _selectedRows.clear();
   render();
 }
+function toggleBulkAllBar(){
+  S.showBulkAll=!S.showBulkAll;
+  render();
+}
 function toggleRowSelect(id){
   if(_selectedRows.has(id)) _selectedRows.delete(id);
   else _selectedRows.add(id);
@@ -805,7 +811,7 @@ function selectUnselectedFromFiltered(){
       if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
       else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      if(field.type==='select') return v===val;
+      if(field.type==='select') return val==='__empty__' ? !v : v===val;
       return v.toLowerCase().includes(val.toLowerCase());
     });
   });
@@ -883,8 +889,8 @@ function makeFieldCard(af, isAdmin){
 
 function bulkBarHTML(count){
   const f=DB.files.find(x=>x.id===S.fileId);
-  const extraFields=(f?.extra_fields||[]).filter(ef=>ef.type!=='checkbox'||true);
-  const adminFields=(f?.admin_fields||[]);
+  const extraFields=(f?.extra_fields||[]).filter(ef=>ef.bulkEnabled!==false);
+  const adminFields=(f?.admin_fields||[]).filter(af=>af.bulkEnabled!==false);
   const extraCards = extraFields.map(ef=>makeFieldCard(ef,false)).join('');
   const adminCards = adminFields.map(af=>makeFieldCard(af,true)).join('');
   const hasFields = extraFields.length||adminFields.length;
@@ -963,7 +969,7 @@ async function bulkUpdateAll(fieldId, value, isAdminField){
     filtered=filtered.filter(r=>{
       const v=af?((r.admin_data||{})[afId]||'').toString():((r.extra||{})[afId]||'').toString();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      if(field.type==='select') return v===val; // exact match for select
+      if(field.type==='select') return val==='__empty__' ? !v : v===val; // exact match for select
       return v.toLowerCase().includes(val.toLowerCase()); // partial for text
     });
   });
@@ -1061,7 +1067,7 @@ function renderRecordsPage(){
       if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
       else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      if(field.type==='select') return v===val;
+      if(field.type==='select') return val==='__empty__' ? !v : v===val;
       return v.toLowerCase().includes(val.toLowerCase());
     });
   });
@@ -1080,6 +1086,7 @@ function renderRecordsPage(){
       else if(col==='phone'){va=a.phone;vb=b.phone;}
       else if(col==='id_num'){va=a.id_num;vb=b.id_num;}
       else if(col==='agent'){va=a.agent_name||'';vb=b.agent_name||'';}
+      else if(col==='treated_at'){va=a.treated_at||'';vb=b.treated_at||'';}
       else if(col.startsWith('extra_')){const id=col.slice(6);va=(a.extra||{})[id]||'';vb=(b.extra||{})[id]||'';}
       else if(col.startsWith('admin_')){const id=col.slice(6);va=((a.admin_data||{})[id]||'').toString();vb=((b.admin_data||{})[id]||'').toString();}
       if(va<vb) return -S.sortDir; if(va>vb) return S.sortDir; return 0;
@@ -1094,6 +1101,7 @@ function renderRecordsPage(){
   </th>`:'';
   const extraH=extraFields.map(ef=>sortable('extra_'+ef.id,esc(ef.label))).join('');
   const adminH=adminFields.map(af=>sortable('admin_'+af.id,'<i class="ti ti-shield-check" style="font-size:10px"></i> '+esc(af.label),'admin-col')).join('');
+  const treatedH=(isAdmin&&adminFields.length)?sortable('treated_at','<i class="ti ti-clock-check" style="font-size:10px"></i> תאריך טיפול','admin-col'):'';
   const delH=isAdmin?'<th></th>':'';
 
   const rows=filtered.map(r=>{
@@ -1105,6 +1113,10 @@ function renderRecordsPage(){
     const extraC=extraFields.map(ef=>{
       const v=(r.extra||{})[ef.id]||'';
       if(ef.type==='select'&&v){const cls=v==='טופל'?'badge-success':v==='לא טופל'?'badge-warning':'badge-info';return `<td><span class="badge ${cls}">${esc(v)}</span></td>`;}
+      if(ef.type==='link'&&v){
+        const url=v.match(/^https?:\/\//)?v:('https://'+v);
+        return `<td><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;
+      }
       return `<td>${esc(v)}</td>`;
     }).join('');
     const adminC=adminFields.map(af=>{
@@ -1112,22 +1124,29 @@ function renderRecordsPage(){
       if(!isAdmin){
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center">${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</td>`;
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
+        if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;}
         return `<td class="admin-col">${esc(val||'')}</td>`;
       }
       if(_bulkMode){
         // in bulk mode show read-only admin fields
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center">${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3);opacity:.4"></i>'}</td>`;
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
+        if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;}
         return `<td class="admin-col" style="color:var(--text3)">${esc(val||'—')}</td>`;
       }
       if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></td>`;
       if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><select class="admin-input" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></td>`;}
+      if(af.type==='link') return `<td class="admin-col" style="display:flex;gap:4px;align-items:center">
+        <input class="admin-input" type="text" value="${esc(val||'')}" placeholder="https://..." dir="ltr" style="font-size:11px" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">
+        ${val?`<a href="${(val.match(/^https?:\/\//)?val:'https://'+val).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue);flex-shrink:0" title="פתח קישור"><i class="ti ti-external-link"></i></a>`:''}
+      </td>`;
       return `<td class="admin-col"><input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></td>`;
     }).join('');
     const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
+    const treatedC=(isAdmin&&adminFields.length)?`<td class="admin-col" id="treated-at-${r.id}" style="font-size:11px;color:var(--text3);white-space:nowrap">${r.treated_at?fmtDate(r.treated_at):'—'}</td>`:'';
     const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
     const trStyle=`${isSelected?'background:var(--blue-light);':rowStyle}${_bulkMode?';cursor:pointer':''}`;
-    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${delC}</tr>`;
+    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${treatedC}${delC}</tr>`;
   }).join('');
 
   // ALL fields available for filtering (extra + admin)
@@ -1143,20 +1162,21 @@ function renderRecordsPage(){
       const cur=esc(S.filters[fid]||'');
       const badge=field._isAdmin?'<i class="ti ti-shield-check" style="font-size:10px;color:var(--purple)"></i>':'';
       if(field.type==='checkbox') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option><option value="yes" ${cur==='yes'?'selected':''}>✓ מסומן</option><option value="no" ${cur==='no'?'selected':''}>✗ לא מסומן</option></select>`;
-      if(field.type==='select') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option>${(field.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${cur===esc(o.trim())?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
+      if(field.type==='select') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option><option value="__empty__" ${cur==='__empty__'?'selected':''}>— ריק / טרם נבחר —</option>${(field.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${cur===esc(o.trim())?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
       return `<input type="text" placeholder="סנן ${esc(field.label)}..." value="${cur}" id="filter-txt-${fid}" oninput="debounceFilter('${fid}',this.value)" style="min-width:120px${field._isAdmin?';border-color:var(--purple)':''}">`;
     }).join('')}
     <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
   </div>`:'';
 
   // BULK UPDATE ALL FILTERED — no selection needed
-  const bulkAllBar = isAdmin && filtered.length>0 && allFilterableFields.length ? `
+  const bulkEligibleFields = [...extraFields,...adminFields].filter(field=>field.bulkEnabled!==false);
+  const bulkAllBar = isAdmin && filtered.length>0 && bulkEligibleFields.length ? `
     <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px;display:flex;align-items:center;gap:6px">
         <i class="ti ti-bolt"></i> עדכון גורף — החל על כל ${filtered.length} הרשומות המסוננות
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${[...extraFields,...adminFields].map(field=>{
+        ${bulkEligibleFields.map(field=>{
           const isAdm=adminFields.includes(field);
           const color=isAdm?'var(--purple)':'var(--blue)';
           const icon=isAdm?'ti-shield-check':'ti-forms';
@@ -1203,6 +1223,9 @@ function renderRecordsPage(){
         ${isAdmin?`<button class="btn btn-sm ${_bulkMode?'btn-primary':''}" onclick="toggleBulkMode()" title="עריכה מרובה">
           <i class="ti ti-${_bulkMode?'x':'checkbox'}"></i> ${_bulkMode?'בטל בחירה':'בחירה מרובה'}
         </button>`:''}
+        ${isAdmin&&bulkEligibleFields.length?`<button class="btn btn-sm ${S.showBulkAll?'btn-success':''}" onclick="toggleBulkAllBar()" title="עדכון גורף לפי סינון">
+          <i class="ti ti-${S.showBulkAll?'x':'bolt'}"></i> ${S.showBulkAll?'סגור עדכון גורף':'עדכון גורף'}
+        </button>`:''}
         <button class="btn btn-sm" onclick="goForm('${f.id}')"><i class="ti ti-edit"></i> הזנה חדשה</button>
         <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
       </div>
@@ -1213,13 +1236,13 @@ function renderRecordsPage(){
       <i class="ti ti-search"></i>
     </div>
     ${filterBar}
-    ${bulkAllBar}
+    ${S.showBulkAll?bulkAllBar:''}
     ${bulkBar}
     ${selectAllBtn}
     <input type="hidden" id="filtered-ids" value='${JSON.stringify(filteredIds)}'>
     ${!filtered.length
       ?`<div class="empty"><i class="ti ti-database-off"></i><p>${q?'לא נמצאו תוצאות':'אין רשומות עדיין'}</p></div>`
-      :`<div class="table-wrap"><table><thead><tr>${bulkCheckH}${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
+      :`<div class="table-wrap"><table><thead><tr>${bulkCheckH}${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${treatedH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
     }
     <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות${_selectedRows.size>0?' · <strong style="color:var(--blue)">'+_selectedRows.size+' נבחרו</strong>':''}</div>
   </div>`;
@@ -1240,13 +1263,14 @@ function renderAdmin(){
   return `<div class="card">
     <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
     <div class="nav-tabs">
+      <button class="nav-tab ${tab==='dashboard'?'active':''}" onclick="loadDashboardTab()"><i class="ti ti-layout-dashboard" style="font-size:13px"></i> דשבורד</button>
       <button class="nav-tab ${tab==='orgs'?'active':''}" onclick="S.adminTab='orgs';render()">ארגונים</button>
       <button class="nav-tab ${tab==='files'?'active':''}" onclick="S.adminTab='files';render()">קבצים</button>
       <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
       <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
       <button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>
     </div>
-    ${tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -1333,9 +1357,122 @@ function renderAdminAllRecords(){
 // ── NAV ──
 function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();loadAll().then(()=>loadAllCounts().then(render));}
 function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;_bulkMode=false;_selectedRows.clear();render();}
-function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();render();}
-async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
-async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();render();await getRecords(fileId);render();}
+function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();}
+async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();await getRecords(fileId);render();}
+async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();await getRecords(fileId);render();}
+// ══ DASHBOARD ══
+async function loadDashboardTab(){
+  S.adminTab='dashboard'; S._dashLoading=true; render();
+  try{
+    // make sure files/orgs are fresh
+    await loadAll();
+    // load counts for every file that has admin fields (SLA can apply to any) — compute per-file
+    const filesWithAdmin = DB.files.filter(f=>(f.admin_fields||[]).length>0);
+    const results = await Promise.all(filesWithAdmin.map(async f=>{
+      try{
+        const recs = await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+        const total = recs.length;
+        const breached = recs.filter(r=>recordMatchesAlert(r,f)).length;
+        return {file:f, total, breached};
+      }catch(e){ return {file:f, total:0, breached:0}; }
+    }));
+    // also include files without admin fields / without alert rule, showing 0 breach
+    const filesWithoutAdmin = DB.files.filter(f=>!(f.admin_fields||[]).length);
+    const withoutResults = await Promise.all(filesWithoutAdmin.map(async f=>{
+      try{
+        const recs = await GET('records',`?file_id=eq.${f.id}&select=id`);
+        return {file:f, total:recs.length, breached:0};
+      }catch(e){ return {file:f, total:0, breached:0}; }
+    }));
+    S._dashboardData = [...results, ...withoutResults];
+  }catch(e){ S._dashboardData=[]; showAlert('שגיאה בטעינת דשבורד','error'); }
+  S._dashLoading=false; render();
+}
+
+function renderAdminDashboard(){
+  if(S._dashLoading) return `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`;
+  const data = S._dashboardData||[];
+  if(!data.length) return `<div class="empty"><i class="ti ti-layout-dashboard"></i><p>אין קבצים במערכת</p></div>`;
+
+  // sort: most breached first
+  const sorted = [...data].sort((a,b)=>b.breached-a.breached);
+  const totalBreached = sorted.reduce((s,d)=>s+d.breached,0);
+  const totalRecords = sorted.reduce((s,d)=>s+d.total,0);
+
+  const rows = sorted.map(d=>{
+    const o = DB.orgs.find(x=>x.id===d.file.org_id);
+    const rule = d.file.alert_rule||{};
+    const hasRule = rule.enabled && rule.fieldId;
+    const pct = d.total>0 ? Math.round((d.breached/d.total)*100) : 0;
+    const severity = d.breached===0 ? 'ok' : pct>50 ? 'high' : pct>20 ? 'med' : 'low';
+    const sevColor = {ok:'#16a34a',low:'#d97706',med:'#ea580c',high:'#dc2626'}[severity];
+    const sevBg    = {ok:'var(--green-light)',low:'var(--amber-light)',med:'#ffedd5',high:'var(--red-light)'}[severity];
+
+    return `<tr style="cursor:pointer" onclick="adminViewFileRecords('${d.file.id}')">
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="ti ${d.file.icon||'ti-file'}" style="color:var(--blue);font-size:18px"></i>
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:var(--text)">${esc(d.file.name)}</div>
+            <div style="font-size:11px;color:var(--text3)">${esc(o?o.name:'—')}</div>
+          </div>
+        </div>
+      </td>
+      <td style="text-align:center">
+        ${hasRule
+          ? `<div style="display:inline-flex;align-items:center;gap:8px">
+               <span style="background:${sevBg};color:${sevColor};font-weight:800;font-size:18px;border-radius:10px;padding:6px 16px;min-width:50px;display:inline-block;text-align:center">${d.breached}</span>
+               ${d.breached>0?`<span style="font-size:11px;color:${sevColor};font-weight:600">${pct}%</span>`:''}
+             </div>`
+          : `<span style="font-size:12px;color:var(--text3);font-style:italic">לא הוגדר SLA</span>`
+        }
+      </td>
+      <td style="text-align:center;color:var(--text2);font-size:13px">${d.total}</td>
+      <td style="font-size:12px;color:var(--text3)">
+        ${hasRule
+          ? `<i class="ti ti-clock" style="font-size:11px"></i> מעל ${rule.days||0} ימים${rule.fieldId?` · ${esc((([...d.file.extra_fields||[],...d.file.admin_fields||[]]).find(x=>x.id===rule.fieldId)||{}).label||'')}`:''}`
+          : '—'
+        }
+      </td>
+      <td style="text-align:left"><i class="ti ti-chevron-left" style="color:var(--text3)"></i></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-radius:var(--radius-sm);padding:16px">
+        <div style="font-size:12px;color:#b91c1c;font-weight:700;margin-bottom:4px"><i class="ti ti-alert-triangle"></i> סה"כ חריגות SLA</div>
+        <div style="font-size:28px;font-weight:900;color:#7f1d1d">${totalBreached}</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:var(--radius-sm);padding:16px">
+        <div style="font-size:12px;color:#1d4ed8;font-weight:700;margin-bottom:4px"><i class="ti ti-database"></i> סה"כ רשומות</div>
+        <div style="font-size:28px;font-weight:900;color:#1e3a8a">${totalRecords}</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:var(--radius-sm);padding:16px">
+        <div style="font-size:12px;color:#15803d;font-weight:700;margin-bottom:4px"><i class="ti ti-folder"></i> קבצים פעילים</div>
+        <div style="font-size:28px;font-weight:900;color:#14532d">${data.length}</div>
+      </div>
+    </div>
+    <div class="flex-between" style="margin-bottom:12px">
+      <span style="font-size:13px;color:var(--text2);font-weight:600">ריכוז חריגות לפי קובץ</span>
+      <button class="btn btn-sm" onclick="loadDashboardTab()"><i class="ti ti-refresh"></i> רענן</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>קובץ / ארגון</th>
+          <th style="text-align:center">חריגות SLA</th>
+          <th style="text-align:center">סה"כ רשומות</th>
+          <th>תנאי SLA</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 async function loadManagersTab(){
   S.adminTab='managers'; S._managersLoading=true; render();
   try{ S._managers=await GET('app_managers','?order=created_at.asc'); }
@@ -1473,7 +1610,15 @@ async function saveAdminField(recordId,fieldId,value,fileId){
   const record=recs.find(r=>r.id===recordId);if(!record)return;
   if(!record.admin_data)record.admin_data={};
   record.admin_data[fieldId]=value;
-  try{await PATCH('records',{admin_data:record.admin_data},`?id=eq.${recordId}`);await loadAllCounts();}
+  const treatedAt=new Date().toISOString();
+  record.treated_at=treatedAt;
+  try{
+    await PATCH('records',{admin_data:record.admin_data,treated_at:treatedAt},`?id=eq.${recordId}`);
+    await loadAllCounts();
+    // update the treated_at cell inline without full re-render
+    const cell=document.getElementById('treated-at-'+recordId);
+    if(cell) cell.textContent=fmtDate(treatedAt);
+  }
   catch(e){showAlert('שגיאה בשמירה','error');}
 }
 function debounceAdminField(recordId,fieldId,value,fileId){
@@ -1806,8 +1951,8 @@ function fileModalHTML(f,mode,id=''){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 function fieldRowHTML(ef,i,p){
-  const typeOpts=['text','number','select','checkbox'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':'תיבת סימון'}</option>`).join('');
-  return `<div class="field-row" style="grid-template-columns:1fr 1fr auto auto"><div><label class="form-label" style="font-size:10px">שם השדה</label><input class="form-input" data-fl="${p}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
+  const typeOpts=['text','number','select','checkbox','link'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':t==='link'?'קישור (URL)':'תיבת סימון'}</option>`).join('');
+  return `<div class="field-row" style="grid-template-columns:1fr 1fr auto auto auto"><div><label class="form-label" style="font-size:10px">שם השדה</label><input class="form-input" data-fl="${p}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
     <div><label class="form-label" style="font-size:10px">סוג</label>
       <select class="form-input" data-ft="${p}_${i}" onchange="onTypeChange('${p}',${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
       ${ef.type==='select'?`<input class="form-input mt-1" data-fo="${p}_${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
@@ -1815,6 +1960,10 @@ function fieldRowHTML(ef,i,p){
     <div style="padding-top:20px;text-align:center">
       <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block">חובה</label>
       <input type="checkbox" data-fr="${p}_${i}" ${ef.required?'checked':''} style="width:17px;height:17px;accent-color:var(--red);cursor:pointer" title="שדה חובה">
+    </div>
+    <div style="padding-top:20px;text-align:center">
+      <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--green)">עדכון גורף</label>
+      <input type="checkbox" data-fb="${p}_${i}" ${ef.bulkEnabled!==false?'checked':''} style="width:17px;height:17px;accent-color:var(--green);cursor:pointer" title="לאפשר עדכון גורף לשדה זה">
     </div>
     <div style="padding-top:38px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField('${p}',${i})"><i class="ti ti-trash"></i></button></div>
   </div>`;
@@ -1827,10 +1976,12 @@ function saveFieldsFromDOM(p){
     const t=document.querySelector('[data-ft="'+p+'_'+i+'"]');
     const o=document.querySelector('[data-fo="'+p+'_'+i+'"]');
     const r=document.querySelector('[data-fr="'+p+'_'+i+'"]');
+    const b=document.querySelector('[data-fb="'+p+'_'+i+'"]');
     if(l) ef.label=l.value;
     if(t&&t.value) ef.type=t.value;
     if(o) ef.options=o.value;
     if(r) ef.required=r.checked;
+    if(b) ef.bulkEnabled=b.checked;
   });
 }
 function onTypeChange(p,i,val){
@@ -1859,10 +2010,10 @@ function removeField(p,i){
   arr.splice(i,1);
   refreshFields(p);
 }
-function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required};}).filter(ef=>ef.label);}
+function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`),b=document.querySelector(`[data-fb="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false)};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
 // ── EXPORT ──
@@ -1870,8 +2021,8 @@ async function exportFile(fileId){
   const f=DB.files.find(x=>x.id===fileId);showAlert('מכין קובץ Excel...','success');
   const records=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);
   const extra=f.extra_fields||[],admin=f.admin_fields||[];
-  const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label)];
-  const rows=records.map(r=>[fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||'',...extra.map(ef=>(r.extra||{})[ef.id]||''),...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');})]);
+  const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label),...(admin.length?['תאריך טיפול']:[])];
+  const rows=records.map(r=>[fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||'',...extra.map(ef=>(r.extra||{})[ef.id]||''),...admin.map(af=>{const v=(r.admin_data||{})[af.id];return af.type==='checkbox'?(v?'כן':'לא'):(v||'');}),...(admin.length?[r.treated_at?fmtDate(r.treated_at):'']:[])]);
   buildXLSX(f.name,headers,rows,admin.map((_,i)=>6+extra.length+i));
 }
 async function exportAll(){
