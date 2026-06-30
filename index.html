@@ -460,8 +460,10 @@ async function initLogin(){
     const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',session.user.email).eq('active',true).single();
     if(mgr){
       // load all agents for admin management
-      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
-      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin});return;
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
+      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email});
+      PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
+      return;
     }
   }
   // load only active agents for login list
@@ -537,6 +539,8 @@ async function loginAgent(){
     document.getElementById('p0').focus(); return;
   }
   enterApp({name:_selectedAgent.name,role:'agent',is_super_admin:false});
+  // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
+  PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${_selectedAgent.id}`).catch(()=>{});
 }
 
 async function loginManager(){
@@ -550,7 +554,9 @@ async function loginManager(){
   if(error){showLoginErr('mgr-err','mgr-err-msg','מייל או סיסמה שגויים');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
   const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',email).eq('active',true).single();
   if(!mgr){await sbClient.auth.signOut();showLoginErr('mgr-err','mgr-err-msg','אין הרשאת מנהל');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
-  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin});
+  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email});
+  // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
+  PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
 }
 
 function enterApp(user){
@@ -564,7 +570,7 @@ function enterApp(user){
   _agentName=user.name;
   // מנהל רואה את כל הנציגים כולל מושבתים
   if(user.role==='manager'){
-    GET('app_users','?order=name.asc&select=id,name,pin,active').then(data=>{ allAgents=data||[]; render(); });
+    GET('app_users','?order=name.asc&select=id,name,pin,active,last_login').then(data=>{ allAgents=data||[]; render(); });
   }
   initApp();
 }
@@ -686,6 +692,33 @@ function render(){
   else if(S.view==='records') html+=renderRecordsPage();
   else if(S.view==='admin')   html+=renderAdmin();
   app.innerHTML=html;
+  if(S.view==='form') setTimeout(wireFormShortcuts,30);
+}
+
+// ── KEYBOARD SHORTCUTS for entry form ──
+function wireFormShortcuts(){
+  const form=document.getElementById('entry-form');
+  if(!form) return;
+  const fields=[...form.querySelectorAll('input,select,textarea')].filter(el=>el.type!=='checkbox'&&el.type!=='submit');
+  fields.forEach((el,i)=>{
+    el.addEventListener('keydown',(e)=>{
+      // Ctrl+Enter or Cmd+Enter — submit form immediately
+      if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){
+        e.preventDefault();
+        form.requestSubmit?form.requestSubmit():form.dispatchEvent(new Event('submit',{cancelable:true}));
+        return;
+      }
+      // plain Enter on text/number/select — move to next field (not textarea, not last field which submits)
+      if(e.key==='Enter'&&el.tagName!=='TEXTAREA'){
+        e.preventDefault();
+        const next=fields[i+1];
+        if(next){ next.focus(); if(next.select) next.select(); }
+        else { form.requestSubmit?form.requestSubmit():form.dispatchEvent(new Event('submit',{cancelable:true})); }
+      }
+    });
+  });
+  // focus first field automatically
+  if(fields[0]) fields[0].focus();
 }
 function renderBreadcrumb(){
   if(S.view==='orgs'||S.view==='admin') return '';
@@ -863,7 +896,13 @@ function renderForm(){
           <button type="submit" class="entry-submit-btn" id="submit-btn">
             <i class="ti ti-circle-check"></i> שמור רשומה
           </button>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span class="entry-agent-chip"><i class="ti ti-user-circle"></i> נציג: ${esc(_agentName)}</span>
+          <span style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">
+            <kbd style="background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-family:inherit;font-size:10px">Enter</kbd> שדה הבא ·
+            <kbd style="background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-family:inherit;font-size:10px">Ctrl+Enter</kbd> שמירה
+          </span>
+        </div>
         </div>
       </form>
     </div>
@@ -1235,6 +1274,7 @@ function renderRecordsPage(){
   const extraH=extraFields.map(ef=>sortable('extra_'+ef.id,esc(ef.label))).join('');
   const adminH=adminFields.map(af=>sortable('admin_'+af.id,'<i class="ti ti-shield-check" style="font-size:10px"></i> '+esc(af.label),'admin-col')).join('');
   const treatedH=(isAdmin&&adminFields.length)?sortable('treated_at','<i class="ti ti-clock-check" style="font-size:10px"></i> תאריך טיפול','admin-col'):'';
+  const histH=isAdmin?'<th></th>':'';
   const delH=isAdmin?'<th></th>':'';
 
   const rows=filtered.map(r=>{
@@ -1277,9 +1317,10 @@ function renderRecordsPage(){
     }).join('');
     const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
     const treatedC=(isAdmin&&adminFields.length)?`<td class="admin-col" id="treated-at-${r.id}" style="font-size:11px;color:var(--text3);white-space:nowrap">${r.treated_at?fmtDate(r.treated_at):'—'}</td>`:'';
+    const histC=(isAdmin&&!_bulkMode&&(r.change_log||[]).length)?`<td><button class="btn btn-xs" onclick='showChangeLog(${JSON.stringify(r.change_log).replace(/'/g,"&#39;")},"${esc(r.first_name)} ${esc(r.last_name)}")' title="היסטוריית שינויים"><i class="ti ti-history"></i></button></td>`:(isAdmin&&!_bulkMode?'<td></td>':'');
     const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
     const trStyle=`${isSelected?'background:var(--blue-light);':rowStyle}${_bulkMode?';cursor:pointer':''}`;
-    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${treatedC}${delC}</tr>`;
+    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${treatedC}${histC}${delC}</tr>`;
   }).join('');
 
   // ALL fields available for filtering (extra + admin)
@@ -1375,7 +1416,7 @@ function renderRecordsPage(){
     <input type="hidden" id="filtered-ids" value='${JSON.stringify(filteredIds)}'>
     ${!filtered.length
       ?`<div class="empty"><i class="ti ti-database-off"></i><p>${q?'לא נמצאו תוצאות':'אין רשומות עדיין'}</p></div>`
-      :`<div class="table-wrap"><table><thead><tr>${bulkCheckH}${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${treatedH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
+      :`<div class="table-wrap"><table><thead><tr>${bulkCheckH}${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${treatedH}${histH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
     }
     <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות${_selectedRows.size>0?' · <strong style="color:var(--blue)">'+_selectedRows.size+' נבחרו</strong>':''}</div>
   </div>`;
@@ -1397,13 +1438,15 @@ function renderAdmin(){
     <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
     <div class="nav-tabs">
       <button class="nav-tab ${tab==='dashboard'?'active':''}" onclick="loadDashboardTab()"><i class="ti ti-layout-dashboard" style="font-size:13px"></i> דשבורד</button>
+      <button class="nav-tab ${tab==='trends'?'active':''}" onclick="loadTrendsTab()"><i class="ti ti-chart-line" style="font-size:13px"></i> גרף מגמה</button>
+      <button class="nav-tab ${tab==='perf'?'active':''}" onclick="loadPerformanceTab()"><i class="ti ti-trophy" style="font-size:13px"></i> ביצועי נציגים</button>
       <button class="nav-tab ${tab==='orgs'?'active':''}" onclick="S.adminTab='orgs';render()">ארגונים</button>
       <button class="nav-tab ${tab==='files'?'active':''}" onclick="S.adminTab='files';render()">קבצים</button>
       <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
       <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
       <button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -1449,11 +1492,12 @@ function renderAdminAgents(){
     <button class="btn btn-black" onclick="openNewAgent()"><i class="ti ti-user-plus"></i> נציג חדש</button>
     <button class="btn btn-sm" onclick="openImportAgents()" style="border-color:var(--green);color:var(--green)"><i class="ti ti-table-import"></i> ייבוא מ-Excel</button>
   </div>
-  <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th></th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
   ${allAgents.map(u=>`<tr>
     <td><div style="display:flex;align-items:center;gap:8px"><div class="ali-avatar" style="width:28px;height:28px;font-size:10px">${u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>${esc(u.name)}</div></td>
     <td dir="ltr" style="letter-spacing:6px;color:var(--text3)">••••</td>
     <td><span class="badge ${u.active?'badge-success':'badge-warning'}">${u.active?'פעיל':'מושבת'}</span></td>
+    <td style="font-size:12px;color:var(--text2);white-space:nowrap">${u.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(u.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
     <td><div class="flex-gap">
       <button class="btn btn-xs" onclick="openEditAgent(${u.id},'${esc(u.name)}','${u.pin}',${u.active})"><i class="ti ti-edit"></i></button>
       <button class="btn btn-xs btn-danger" onclick="confirmDeleteAgent(${u.id},'${esc(u.name)}')"><i class="ti ti-trash"></i></button>
@@ -1606,6 +1650,221 @@ function renderAdminDashboard(){
     </div>`;
 }
 
+// ══ TRENDS TAB ══
+let _trendsFileId = null;
+let _trendsRange = 14; // days
+
+async function loadTrendsTab(){
+  S.adminTab='trends'; S._trendsLoading=true; render();
+  try{
+    await loadAll();
+    if(!_trendsFileId && DB.files.length) _trendsFileId = DB.files[0].id;
+  }catch(e){}
+  S._trendsLoading=false;
+  if(_trendsFileId) await loadTrendData();
+  render();
+}
+
+let _trendData = [];
+async function loadTrendData(){
+  if(!_trendsFileId) return;
+  S._trendsLoading=true; render();
+  try{
+    const since = new Date(Date.now() - _trendsRange*86400000).toISOString();
+    const recs = await GET('records',`?file_id=eq.${_trendsFileId}&created_at=gte.${since}&select=created_at`);
+    // bucket by day
+    const buckets = {};
+    for(let i=_trendsRange-1;i>=0;i--){
+      const d = new Date(Date.now() - i*86400000);
+      const key = d.toISOString().slice(0,10);
+      buckets[key] = 0;
+    }
+    recs.forEach(r=>{
+      const key = r.created_at.slice(0,10);
+      if(buckets[key]!==undefined) buckets[key]++;
+    });
+    _trendData = Object.entries(buckets).map(([date,count])=>({date,count}));
+  }catch(e){ _trendData=[]; }
+  S._trendsLoading=false; render();
+}
+
+function onTrendFileChange(id){ _trendsFileId=id; loadTrendData(); }
+function onTrendRangeChange(days){ _trendsRange=parseInt(days); loadTrendData(); }
+
+function renderAdminTrends(){
+  const fileOpts = DB.files.map(f=>{
+    const o=DB.orgs.find(x=>x.id===f.org_id);
+    return `<option value="${f.id}" ${_trendsFileId===f.id?'selected':''}>${esc(o?o.name+' › ':'')}${esc(f.name)}</option>`;
+  }).join('');
+
+  if(!DB.files.length) return `<div class="empty"><i class="ti ti-chart-line"></i><p>אין קבצים במערכת</p></div>`;
+
+  const maxCount = Math.max(1, ...(_trendData.map(d=>d.count)));
+  const totalInRange = _trendData.reduce((s,d)=>s+d.count,0);
+  const avgPerDay = _trendData.length ? (totalInRange/_trendData.length).toFixed(1) : 0;
+
+  // build SVG bar chart
+  const W=900, H=260, padL=40, padB=40, padT=20, padR=20;
+  const chartW = W-padL-padR, chartH = H-padT-padB;
+  const barGap = 4;
+  const barW = _trendData.length ? Math.max(4,(chartW/_trendData.length)-barGap) : 10;
+
+  const bars = _trendData.map((d,i)=>{
+    const x = padL + i*(chartW/_trendData.length) + barGap/2;
+    const h = maxCount>0 ? (d.count/maxCount)*chartH : 0;
+    const y = padT + chartH - h;
+    const dateObj = new Date(d.date);
+    const dayLabel = dateObj.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'});
+    const showLabel = _trendData.length<=14 || i%Math.ceil(_trendData.length/10)===0;
+    return `
+      <g>
+        <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="${d.count>0?'url(#barGrad)':'var(--border)'}" opacity="${d.count>0?1:0.3}">
+          <title>${dayLabel}: ${d.count} רשומות</title>
+        </rect>
+        ${d.count>0?`<text x="${x+barW/2}" y="${y-5}" text-anchor="middle" font-size="10" fill="var(--text2)" font-weight="700">${d.count}</text>`:''}
+        ${showLabel?`<text x="${x+barW/2}" y="${H-padB+16}" text-anchor="middle" font-size="9" fill="var(--text3)">${dayLabel}</text>`:''}
+      </g>`;
+  }).join('');
+
+  const gridLines = [0,0.25,0.5,0.75,1].map(p=>{
+    const y = padT + chartH*(1-p);
+    const val = Math.round(maxCount*p);
+    return `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,3"/>
+            <text x="${padL-8}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--text3)">${val}</text>`;
+  }).join('');
+
+  return `
+    <div class="flex-between" style="margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select class="form-input" style="min-width:200px" onchange="onTrendFileChange(this.value)">${fileOpts}</select>
+        <select class="form-input" style="width:auto" onchange="onTrendRangeChange(this.value)">
+          <option value="7" ${_trendsRange===7?'selected':''}>7 ימים אחרונים</option>
+          <option value="14" ${_trendsRange===14?'selected':''}>14 ימים אחרונים</option>
+          <option value="30" ${_trendsRange===30?'selected':''}>30 ימים אחרונים</option>
+          <option value="60" ${_trendsRange===60?'selected':''}>60 ימים אחרונים</option>
+        </select>
+      </div>
+      <button class="btn btn-sm" onclick="loadTrendData()"><i class="ti ti-refresh"></i> רענן</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px">
+      <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:var(--radius-sm);padding:14px">
+        <div style="font-size:11px;color:#1d4ed8;font-weight:700">סה"כ בתקופה</div>
+        <div style="font-size:24px;font-weight:900;color:#1e3a8a">${totalInRange}</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:var(--radius-sm);padding:14px">
+        <div style="font-size:11px;color:#15803d;font-weight:700">ממוצע ליום</div>
+        <div style="font-size:24px;font-weight:900;color:#14532d">${avgPerDay}</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fcd34d;border-radius:var(--radius-sm);padding:14px">
+        <div style="font-size:11px;color:#92400e;font-weight:700">שיא יומי</div>
+        <div style="font-size:24px;font-weight:900;color:#78350f">${maxCount}</div>
+      </div>
+    </div>
+
+    ${S._trendsLoading
+      ? `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`
+      : `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;overflow-x:auto">
+          <svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${Math.max(W,_trendData.length*30)}px" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2563eb"/>
+                <stop offset="100%" stop-color="#60a5fa"/>
+              </linearGradient>
+            </defs>
+            ${gridLines}
+            ${bars}
+          </svg>
+        </div>`
+    }`;
+}
+
+// ══ PERFORMANCE TAB ══
+async function loadPerformanceTab(){
+  S.adminTab='perf'; S._perfLoading=true; render();
+  try{
+    await loadAll();
+    const allRecs = await GET('records','?select=agent_name,created_at,admin_data,treated_at,file_id');
+    // group by agent
+    const byAgent = {};
+    allRecs.forEach(r=>{
+      const name = r.agent_name || 'ללא שיוך';
+      if(!byAgent[name]) byAgent[name] = {name, total:0, treated:0, avgTreatHours:[], files:new Set()};
+      byAgent[name].total++;
+      byAgent[name].files.add(r.file_id);
+      if(r.treated_at){
+        byAgent[name].treated++;
+        const hours = (new Date(r.treated_at)-new Date(r.created_at))/3600000;
+        if(hours>=0) byAgent[name].avgTreatHours.push(hours);
+      }
+    });
+    S._perfData = Object.values(byAgent).map(a=>({
+      name:a.name,
+      total:a.total,
+      treated:a.treated,
+      filesCount:a.files.size,
+      avgHours: a.avgTreatHours.length ? (a.avgTreatHours.reduce((s,h)=>s+h,0)/a.avgTreatHours.length) : null,
+      pct: a.total>0 ? Math.round((a.treated/a.total)*100) : 0
+    })).sort((a,b)=>b.total-a.total);
+  }catch(e){ S._perfData=[]; showAlert('שגיאה בטעינת ביצועים','error'); }
+  S._perfLoading=false; render();
+}
+
+function renderAdminPerformance(){
+  if(S._perfLoading) return `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`;
+  const data = S._perfData||[];
+  if(!data.length) return `<div class="empty"><i class="ti ti-trophy"></i><p>אין נתונים עדיין</p></div>`;
+
+  const totalAll = data.reduce((s,d)=>s+d.total,0);
+  const maxTotal = Math.max(1,...data.map(d=>d.total));
+
+  const rows = data.map((d,i)=>{
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    const barPct = Math.round((d.total/maxTotal)*100);
+    return `<tr>
+      <td style="width:30px;text-align:center;font-size:18px">${medal||(i+1)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="ali-avatar" style="width:30px;height:30px;font-size:11px">${d.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
+          <strong>${esc(d.name)}</strong>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;background:var(--surface2);border-radius:20px;height:8px;overflow:hidden;min-width:80px">
+            <div style="width:${barPct}%;height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:20px"></div>
+          </div>
+          <span style="font-weight:700;font-size:14px;min-width:30px">${d.total}</span>
+        </div>
+      </td>
+      <td style="text-align:center">
+        <span class="badge ${d.pct>=80?'badge-success':d.pct>=50?'badge-warning':'badge-neutral'}">${d.pct}%</span>
+      </td>
+      <td style="text-align:center;font-size:13px;color:var(--text2)">${d.avgHours!==null?d.avgHours.toFixed(1)+' שעות':'—'}</td>
+      <td style="text-align:center;font-size:13px;color:var(--text3)">${d.filesCount}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="flex-between" style="margin-bottom:16px">
+      <span style="font-size:13px;color:var(--text2);font-weight:600">דוח ביצועים — ${data.length} נציגים · ${totalAll} רשומות סה"כ</span>
+      <button class="btn btn-sm" onclick="loadPerformanceTab()"><i class="ti ti-refresh"></i> רענן</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th></th>
+          <th>נציג</th>
+          <th>סה"כ רשומות</th>
+          <th style="text-align:center">% טופל</th>
+          <th style="text-align:center">זמן טיפול ממוצע</th>
+          <th style="text-align:center">קבצים</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 async function loadManagersTab(){
   S.adminTab='managers'; S._managersLoading=true; render();
   try{ S._managers=await GET('app_managers','?order=created_at.asc'); }
@@ -1627,7 +1886,7 @@ function renderAdminManagers(){
     </div>
     ${!managers.length
       ?`<div class="empty"><i class="ti ti-shield-off"></i><p>אין מנהלים מוגדרים</p></div>`
-      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>סטטוס</th><th>סופר מנהל</th><th></th></tr></thead><tbody>
+      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>סטטוס</th><th>סופר מנהל</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
       ${managers.map(m=>`<tr>
         <td dir="ltr" style="font-size:13px">${esc(m.email)}</td>
         <td><div style="display:flex;align-items:center;gap:8px">
@@ -1636,6 +1895,7 @@ function renderAdminManagers(){
         </div></td>
         <td><span class="badge ${m.active?'badge-success':'badge-warning'}">${m.active?'פעיל':'מושבת'}</span></td>
         <td>${m.is_super_admin?'<span class="badge badge-purple"><i class="ti ti-star"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--text2);white-space:nowrap">${m.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(m.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
         <td><div class="flex-gap">
           <button class="btn btn-xs" onclick="openEditManager('${esc(m.email)}','${esc(m.name||'')}',${m.active},${!!m.is_super_admin})"><i class="ti ti-edit"></i></button>
           <button class="btn btn-xs btn-danger" onclick="confirmDeleteManager('${esc(m.email)}')"><i class="ti ti-trash"></i></button>
@@ -1741,14 +2001,27 @@ async function submitRecord(e,fileId){
 async function saveAdminField(recordId,fieldId,value,fileId){
   const recs=_cachedRecords[fileId]||[];
   const record=recs.find(r=>r.id===recordId);if(!record)return;
+  const f=DB.files.find(x=>x.id===fileId);
+  const af=(f?.admin_fields||[]).find(x=>x.id===fieldId);
+  const oldVal=(record.admin_data||{})[fieldId];
   if(!record.admin_data)record.admin_data={};
   record.admin_data[fieldId]=value;
   const treatedAt=new Date().toISOString();
   record.treated_at=treatedAt;
+  // build change log entry
+  if(!record.change_log) record.change_log=[];
+  record.change_log.push({
+    ts: treatedAt,
+    by: currentUser?.name||_agentName||'מנהל',
+    field: af?af.label:fieldId,
+    from: oldVal===undefined||oldVal===null||oldVal===''?'—':(oldVal===true?'מסומן':oldVal===false?'לא מסומן':String(oldVal)),
+    to: value===true?'מסומן':value===false?'לא מסומן':String(value)
+  });
+  // keep only last 30 entries per record
+  if(record.change_log.length>30) record.change_log=record.change_log.slice(-30);
   try{
-    await PATCH('records',{admin_data:record.admin_data,treated_at:treatedAt},`?id=eq.${recordId}`);
+    await PATCH('records',{admin_data:record.admin_data,treated_at:treatedAt,change_log:record.change_log},`?id=eq.${recordId}`);
     await loadAllCounts();
-    // update the treated_at cell inline without full re-render
     const cell=document.getElementById('treated-at-'+recordId);
     if(cell) cell.textContent=fmtDate(treatedAt);
   }
@@ -1760,6 +2033,33 @@ function debounceAdminField(recordId,fieldId,value,fileId){
 }
 
 // ── DELETE ──
+function showChangeLog(log,customerName){
+  const sorted=[...log].reverse(); // newest first
+  const rows=sorted.map(entry=>`
+    <div style="display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="width:32px;height:32px;border-radius:50%;background:var(--purple-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="ti ti-edit" style="color:var(--purple);font-size:14px"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(entry.field)} שונה</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">
+          <span style="color:var(--text3)">${esc(entry.from)}</span>
+          <i class="ti ti-arrow-left" style="font-size:11px;margin:0 4px;color:var(--text3)"></i>
+          <span style="color:var(--green);font-weight:600">${esc(entry.to)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          <i class="ti ti-user" style="font-size:10px"></i> ${esc(entry.by)} · ${fmtDate(entry.ts)}
+        </div>
+      </div>
+    </div>`).join('');
+  showModal(`
+    <div class="modal-title"><i class="ti ti-history" style="color:var(--purple)"></i> היסטוריית שינויים — ${esc(customerName)}</div>
+    <div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm)">
+      ${rows||'<div style="padding:20px;text-align:center;color:var(--text3)">אין שינויים</div>'}
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">סגור</button></div>`);
+}
+
 function confirmDelRecord(id,fileId){
   showModal(`<div class="modal-title" style="color:var(--red)"><i class="ti ti-alert-triangle"></i> מחיקת רשומה</div>
     <p style="color:var(--text2);margin-bottom:8px">האם אתה בטוח? פעולה זו אינה ניתנת לביטול.</p>
@@ -1894,7 +2194,7 @@ async function confirmImport(){
       done++;
     } catch(e){ errors++; }
   }
-  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active');
+  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
   closeModal();
   render();
   showAlert(`✓ יובאו ${done} נציגים${errors?` · ${errors} שגיאות`:''}`, done>0?'success':'error');
@@ -1907,7 +2207,7 @@ async function saveNewAgent(){
   if(!n||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}
   try{
     await POST('app_users',{name:n,pin,active:true});
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
     closeModal();render();showAlert('הנציג נוסף','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -1920,7 +2220,7 @@ async function saveEditAgent(id){
   if(pin.length===4) body.pin=pin;
   try{
     await PATCH('app_users',body,`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
     closeModal();render();showAlert('הנציג עודכן','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -1928,7 +2228,7 @@ async function confirmDeleteAgent(id,name){
   if(!confirm(`למחוק את הנציג "${name}"?`))return;
   try{
     await DEL('app_users',`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
     render();showAlert('הנציג נמחק','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
