@@ -129,6 +129,58 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 select.form-input{cursor:pointer}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 
+/* ── ENTRY FORM (NICE) ── */
+.entry-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06),0 10px 40px rgba(0,0,0,.06)}
+.entry-hero{background:linear-gradient(135deg,#0f172a 0%,#1e293b 55%,#1d2a52 100%);padding:28px 30px 24px;position:relative;overflow:hidden}
+.entry-hero::before{content:'';position:absolute;top:-40%;left:-10%;width:300px;height:300px;background:radial-gradient(circle,rgba(37,99,235,.35),transparent 70%);pointer-events:none}
+.entry-hero::after{content:'';position:absolute;bottom:-50%;right:-10%;width:260px;height:260px;background:radial-gradient(circle,rgba(124,58,237,.3),transparent 70%);pointer-events:none}
+.entry-hero-top{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.entry-hero-icon{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;flex-shrink:0}
+.entry-hero-title{font-size:19px;font-weight:800;color:#fff;letter-spacing:-.2px}
+.entry-hero-sub{font-size:12px;color:rgba(255,255,255,.5);margin-top:2px}
+.entry-hero-actions{display:flex;gap:8px;position:relative;z-index:1}
+.entry-hero-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.9);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.entry-hero-btn:hover{background:rgba(255,255,255,.18);transform:translateY(-1px)}
+.entry-hero-btn.green{background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.3);color:#86efac}
+.entry-hero-btn.green:hover{background:rgba(34,197,94,.28)}
+
+.entry-body{padding:26px 30px 28px}
+
+.entry-section-title{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.entry-section-title:not(:first-child){margin-top:26px}
+.entry-section-title .ti{font-size:13px;color:var(--blue)}
+
+.entry-field{position:relative;margin-bottom:14px}
+.entry-field-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.entry-field-label .ti{font-size:13px;color:var(--text3)}
+.entry-field-label .req-star{color:var(--red);font-weight:800}
+.entry-input-wrap{position:relative}
+.entry-input-wrap .field-icon{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none;transition:color .15s}
+.entry-input{width:100%;padding:12px 40px 12px 14px;border:1.5px solid var(--border2);border-radius:11px;background:var(--surface2);color:var(--text);font-size:14px;font-family:inherit;transition:all .18s}
+.entry-input:focus{outline:none;border-color:var(--blue);background:var(--surface);box-shadow:0 0 0 4px rgba(37,99,235,.08)}
+.entry-input:focus ~ .field-icon, .entry-input-wrap:focus-within .field-icon{color:var(--blue)}
+.entry-input::placeholder{color:var(--text3);opacity:.7}
+select.entry-input{cursor:pointer;padding-left:36px}
+.entry-checkbox-row{display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:11px;cursor:pointer;transition:all .15s}
+.entry-checkbox-row:hover{border-color:var(--blue);background:var(--blue-light)}
+.entry-checkbox-row input{width:18px;height:18px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+.entry-checkbox-row span{font-size:14px;color:var(--text);font-weight:500}
+.entry-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+.entry-submit-bar{margin-top:24px;padding-top:20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.entry-submit-btn{display:inline-flex;align-items:center;gap:8px;padding:13px 28px;border-radius:12px;border:none;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:all .18s;box-shadow:0 4px 14px rgba(15,23,42,.25)}
+.entry-submit-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(15,23,42,.35)}
+.entry-submit-btn:active{transform:scale(.98)}
+.entry-submit-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.entry-agent-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text2);font-weight:500}
+.entry-agent-chip .ti{color:var(--blue);font-size:13px}
+
+@media(max-width:600px){
+  .entry-hero{padding:22px 20px 18px}
+  .entry-body{padding:20px 18px 22px}
+  .entry-grid-2{grid-template-columns:1fr}
+}
+
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
 .btn:hover{background:var(--surface2)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5;cursor:not-allowed}
@@ -700,40 +752,121 @@ function renderFiles(){
 }
 
 // FORM
+function fieldIconGuess(label){
+  const l=(label||'').toLowerCase();
+  if(l.includes('טלפון')||l.includes('נייד')) return 'ti-phone';
+  if(l.includes('מייל')||l.includes('אימייל')) return 'ti-mail';
+  if(l.includes('כתובת')) return 'ti-map-pin';
+  if(l.includes('הערה')||l.includes('הערות')) return 'ti-notes';
+  if(l.includes('סטטוס')) return 'ti-flag';
+  if(l.includes('תאריך')) return 'ti-calendar';
+  if(l.includes('סכום')||l.includes('מחיר')||l.includes('עלות')) return 'ti-coin';
+  if(l.includes('סיבה')) return 'ti-help-circle';
+  if(l.includes('קוד')) return 'ti-barcode';
+  if(l.includes('קישור')||l.includes('לינק')) return 'ti-link';
+  if(l.includes('שם')) return 'ti-user';
+  return 'ti-edit-circle';
+}
+
 function renderForm(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
   const extraF=(f.extra_fields||[]).map(ef=>{
     const req=ef.required?'required':'';
-    const reqMark=ef.required?`<span style="color:var(--red);margin-right:3px">*</span>`:'';
+    const reqMark=ef.required?`<span class="req-star">*</span>`:'';
+    const icon=fieldIconGuess(ef.label);
+
+    if(ef.type==='checkbox'){
+      return `<div class="entry-field">
+        <label class="entry-checkbox-row">
+          <input type="checkbox" name="extra_${ef.id}">
+          <span>${esc(ef.label)}</span>
+        </label>
+      </div>`;
+    }
+
     let inp='';
-    if(ef.type==='select'){const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');inp=`<select class="form-input" name="extra_${ef.id}" ${req}><option value="">בחר...</option>${opts}</select>`;}
-    else if(ef.type==='number') inp=`<input class="form-input" type="number" name="extra_${ef.id}" placeholder="${esc(ef.label)}" ${req}>`;
-    else if(ef.type==='checkbox') inp=`<div style="padding:8px 0"><input type="checkbox" name="extra_${ef.id}" style="width:18px;height:18px;accent-color:var(--blue);cursor:pointer;vertical-align:middle"> <span style="font-size:14px;color:var(--text)">${esc(ef.label)}</span></div>`;
-    else inp=`<input class="form-input" type="text" name="extra_${ef.id}" placeholder="${esc(ef.label)}" ${req}>`;
-    if(ef.type==='checkbox') return `<div class="form-row">${inp}</div>`;
-    return `<div class="form-row"><label class="form-label">${reqMark}${esc(ef.label)}</label>${inp}</div>`;
+    if(ef.type==='select'){
+      const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');
+      inp=`<select class="entry-input" name="extra_${ef.id}" ${req}><option value="">בחר ${esc(ef.label)}...</option>${opts}</select>`;
+    } else if(ef.type==='number'){
+      inp=`<input class="entry-input" type="number" name="extra_${ef.id}" placeholder="הזן ${esc(ef.label)}" ${req}>`;
+    } else if(ef.type==='link'){
+      inp=`<input class="entry-input" type="text" name="extra_${ef.id}" placeholder="https://..." dir="ltr" ${req}>`;
+    } else {
+      inp=`<input class="entry-input" type="text" name="extra_${ef.id}" placeholder="הזן ${esc(ef.label)}" ${req}>`;
+    }
+
+    return `<div class="entry-field">
+      <label class="entry-field-label"><i class="ti ${icon}"></i> ${esc(ef.label)} ${reqMark}</label>
+      <div class="entry-input-wrap">
+        ${inp}
+        <i class="ti ${icon} field-icon"></i>
+      </div>
+    </div>`;
   }).join('');
-  return `<div class="card">
-    <div class="flex-between" style="margin-bottom:18px">
-      <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)}</div>
-      <div class="flex-gap">
-        <button class="btn btn-sm" onclick="goRecords('${f.id}')"><i class="ti ti-list"></i> רשומות</button>
-        <button class="btn btn-sm btn-success" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> ייצוא Excel</button>
+
+  return `<div class="entry-card">
+    <div class="entry-hero">
+      <div class="entry-hero-top">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div class="entry-hero-icon"><i class="ti ${f.icon||'ti-file'}"></i></div>
+          <div>
+            <div class="entry-hero-title">${esc(f.name)}</div>
+            <div class="entry-hero-sub">טופס הזנת פנייה חדשה</div>
+          </div>
+        </div>
+        <div class="entry-hero-actions">
+          <button class="entry-hero-btn" onclick="goRecords('${f.id}')"><i class="ti ti-list"></i> רשומות</button>
+          <button class="entry-hero-btn green" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> Excel</button>
+        </div>
       </div>
     </div>
-    <form id="entry-form" onsubmit="submitRecord(event,'${f.id}')">
-      <div class="form-grid-2">
-        <div class="form-row"><label class="form-label">שם פרטי *</label><input class="form-input" name="first_name" required placeholder="שם פרטי"></div>
-        <div class="form-row"><label class="form-label">שם משפחה *</label><input class="form-input" name="last_name" required placeholder="שם משפחה"></div>
-        <div class="form-row"><label class="form-label">טלפון *</label><input class="form-input" name="phone" id="phone-form-input" required placeholder="05X-XXXXXXX" dir="ltr" value="${esc(S.phoneSearch)}"></div>
-        <div class="form-row"><label class="form-label">ת"ז *</label><input class="form-input" name="id_num" required placeholder="9 ספרות" dir="ltr" maxlength="9"></div>
-      </div>
-      ${extraF}
-      <div class="mt-2 flex-gap">
-        <button type="submit" class="btn btn-black" id="submit-btn"><i class="ti ti-check"></i> שמור רשומה</button>
-        <span style="font-size:12px;color:var(--text3)"><i class="ti ti-user" style="font-size:12px"></i> ${esc(_agentName)}</span>
-      </div>
-    </form>
+
+    <div class="entry-body">
+      <div class="entry-section-title"><i class="ti ti-id-badge-2"></i> פרטי לקוח</div>
+
+      <form id="entry-form" onsubmit="submitRecord(event,'${f.id}')">
+        <div class="entry-grid-2">
+          <div class="entry-field">
+            <label class="entry-field-label"><i class="ti ti-user"></i> שם פרטי <span class="req-star">*</span></label>
+            <div class="entry-input-wrap">
+              <input class="entry-input" name="first_name" required placeholder="הזן שם פרטי">
+              <i class="ti ti-user field-icon"></i>
+            </div>
+          </div>
+          <div class="entry-field">
+            <label class="entry-field-label"><i class="ti ti-user"></i> שם משפחה <span class="req-star">*</span></label>
+            <div class="entry-input-wrap">
+              <input class="entry-input" name="last_name" required placeholder="הזן שם משפחה">
+              <i class="ti ti-user field-icon"></i>
+            </div>
+          </div>
+          <div class="entry-field">
+            <label class="entry-field-label"><i class="ti ti-phone"></i> טלפון <span class="req-star">*</span></label>
+            <div class="entry-input-wrap">
+              <input class="entry-input" name="phone" id="phone-form-input" required placeholder="05X-XXXXXXX" dir="ltr" value="${esc(S.phoneSearch)}" style="padding-left:40px;padding-right:14px;text-align:left">
+              <i class="ti ti-phone field-icon" style="right:auto;left:13px"></i>
+            </div>
+          </div>
+          <div class="entry-field">
+            <label class="entry-field-label"><i class="ti ti-id"></i> תעודת זהות <span class="req-star">*</span></label>
+            <div class="entry-input-wrap">
+              <input class="entry-input" name="id_num" required placeholder="9 ספרות" dir="ltr" maxlength="9" style="padding-left:40px;padding-right:14px;text-align:left">
+              <i class="ti ti-id field-icon" style="right:auto;left:13px"></i>
+            </div>
+          </div>
+        </div>
+
+        ${extraF?`<div class="entry-section-title"><i class="ti ti-clipboard-list"></i> פרטים נוספים</div>${extraF}`:''}
+
+        <div class="entry-submit-bar">
+          <button type="submit" class="entry-submit-btn" id="submit-btn">
+            <i class="ti ti-circle-check"></i> שמור רשומה
+          </button>
+          <span class="entry-agent-chip"><i class="ti ti-user-circle"></i> נציג: ${esc(_agentName)}</span>
+        </div>
+      </form>
+    </div>
   </div>`;
 }
 
