@@ -1551,32 +1551,81 @@ function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};
 async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();await getRecords(fileId);render();}
 async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();await getRecords(fileId);render();}
 // ══ DASHBOARD ══
+// ── Dashboard period helpers ──
+const DASH_PERIODS = [
+  { key:'today',   label:'היום' },
+  { key:'yesterday',label:'אתמול' },
+  { key:'week',    label:'שבוע נוכחי' },
+  { key:'month',   label:'חודש נוכחי' },
+  { key:'3months', label:'3 חודשים' },
+  { key:'6months', label:'חצי שנה' },
+  { key:'year',    label:'שנה' },
+  { key:'all',     label:'הכל' },
+];
+
+function dashPeriodRange(key){
+  const now = new Date();
+  let from = null;
+  if(key==='today'){
+    from = new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  } else if(key==='yesterday'){
+    const y = new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);
+    return { from: y.toISOString(), to: new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString() };
+  } else if(key==='week'){
+    const day = now.getDay(); // 0=Sun
+    from = new Date(now.getFullYear(),now.getMonth(),now.getDate()-day);
+  } else if(key==='month'){
+    from = new Date(now.getFullYear(),now.getMonth(),1);
+  } else if(key==='3months'){
+    from = new Date(now.getFullYear(),now.getMonth()-3,now.getDate());
+  } else if(key==='6months'){
+    from = new Date(now.getFullYear(),now.getMonth()-6,now.getDate());
+  } else if(key==='year'){
+    from = new Date(now.getFullYear()-1,now.getMonth(),now.getDate());
+  }
+  return { from: from?from.toISOString():null, to: null };
+}
+
+let _dashPeriod = 'all';
+
 async function loadDashboardTab(){
   S.adminTab='dashboard'; S._dashLoading=true; render();
   try{
-    // make sure files/orgs are fresh
     await loadAll();
-    // load counts for every file that has admin fields (SLA can apply to any) — compute per-file
-    const filesWithAdmin = DB.files.filter(f=>(f.admin_fields||[]).length>0);
-    const results = await Promise.all(filesWithAdmin.map(async f=>{
-      try{
-        const recs = await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
-        const total = recs.length;
-        const breached = recs.filter(r=>recordMatchesAlert(r,f)).length;
-        return {file:f, total, breached};
-      }catch(e){ return {file:f, total:0, breached:0}; }
-    }));
-    // also include files without admin fields / without alert rule, showing 0 breach
-    const filesWithoutAdmin = DB.files.filter(f=>!(f.admin_fields||[]).length);
-    const withoutResults = await Promise.all(filesWithoutAdmin.map(async f=>{
-      try{
-        const recs = await GET('records',`?file_id=eq.${f.id}&select=id`);
-        return {file:f, total:recs.length, breached:0};
-      }catch(e){ return {file:f, total:0, breached:0}; }
-    }));
-    S._dashboardData = [...results, ...withoutResults];
+    await loadDashDataForPeriod();
   }catch(e){ S._dashboardData=[]; showAlert('שגיאה בטעינת דשבורד','error'); }
   S._dashLoading=false; render();
+}
+
+async function setDashPeriod(key){
+  _dashPeriod=key;
+  S._dashLoading=true; render();
+  await loadDashDataForPeriod();
+  S._dashLoading=false; render();
+}
+
+async function loadDashDataForPeriod(){
+  const {from, to} = dashPeriodRange(_dashPeriod);
+  await Promise.all(DB.files.map(async f=>{
+    try{
+      let params=`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`;
+      if(from) params+=`&created_at=gte.${encodeURIComponent(from)}`;
+      if(to)   params+=`&created_at=lt.${encodeURIComponent(to)}`;
+      const recs = await GET('records', params);
+      const total = recs.length;
+      const breached = recs.filter(r=>recordMatchesAlert(r,f)).length;
+      // store on data item
+      if(!S._dashboardData) S._dashboardData=[];
+      const existing = S._dashboardData.find(d=>d.file.id===f.id);
+      if(existing){ existing.total=total; existing.breached=breached; }
+      else S._dashboardData.push({file:f, total, breached});
+    }catch(e){}
+  }));
+  // ensure all files present
+  DB.files.forEach(f=>{
+    if(!S._dashboardData) S._dashboardData=[];
+    if(!S._dashboardData.find(d=>d.file.id===f.id)) S._dashboardData.push({file:f,total:0,breached:0});
+  });
 }
 
 function renderAdminDashboard(){
@@ -1631,14 +1680,23 @@ function renderAdminDashboard(){
   }).join('');
 
   return `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
+      ${DASH_PERIODS.map(p=>`
+        <button onclick="setDashPeriod('${p.key}')" class="btn btn-sm ${_dashPeriod===p.key?'btn-primary':''}"
+          style="${_dashPeriod===p.key?'':'border-color:var(--border2)'}">
+          ${p.label}
+        </button>`).join('')}
+    </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
       <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-radius:var(--radius-sm);padding:16px">
-        <div style="font-size:12px;color:#b91c1c;font-weight:700;margin-bottom:4px"><i class="ti ti-alert-triangle"></i> סה"כ חריגות SLA</div>
+        <div style="font-size:12px;color:#b91c1c;font-weight:700;margin-bottom:4px"><i class="ti ti-alert-triangle"></i> חריגות SLA</div>
         <div style="font-size:28px;font-weight:900;color:#7f1d1d">${totalBreached}</div>
+        <div style="font-size:11px;color:#b91c1c;opacity:.7;margin-top:2px">${DASH_PERIODS.find(p=>p.key===_dashPeriod)?.label||'הכל'}</div>
       </div>
       <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:var(--radius-sm);padding:16px">
-        <div style="font-size:12px;color:#1d4ed8;font-weight:700;margin-bottom:4px"><i class="ti ti-database"></i> סה"כ רשומות</div>
+        <div style="font-size:12px;color:#1d4ed8;font-weight:700;margin-bottom:4px"><i class="ti ti-database"></i> רשומות</div>
         <div style="font-size:28px;font-weight:900;color:#1e3a8a">${totalRecords}</div>
+        <div style="font-size:11px;color:#1d4ed8;opacity:.7;margin-top:2px">${DASH_PERIODS.find(p=>p.key===_dashPeriod)?.label||'הכל'}</div>
       </div>
       <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:var(--radius-sm);padding:16px">
         <div style="font-size:12px;color:#15803d;font-weight:700;margin-bottom:4px"><i class="ti ti-folder"></i> קבצים פעילים</div>
@@ -1646,7 +1704,7 @@ function renderAdminDashboard(){
       </div>
     </div>
     <div class="flex-between" style="margin-bottom:12px">
-      <span style="font-size:13px;color:var(--text2);font-weight:600">ריכוז חריגות לפי קובץ</span>
+      <span style="font-size:13px;color:var(--text2);font-weight:600">ריכוז חריגות לפי קובץ — <span style="color:var(--blue)">${DASH_PERIODS.find(p=>p.key===_dashPeriod)?.label||'הכל'}</span></span>
       <button class="btn btn-sm" onclick="loadDashboardTab()"><i class="ti ti-refresh"></i> רענן</button>
     </div>
     <div class="table-wrap">
