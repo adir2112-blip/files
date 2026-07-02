@@ -1547,8 +1547,9 @@ function renderAdmin(){
       <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
+      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="S.adminTab='backup';render()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -3296,7 +3297,167 @@ function initLoginBg(){
   draw();
 }
 
-// ══ WHATSAPP NOTIFICATIONS ══
+// ══ BACKUP TAB ══
+const SB_FUNC_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/functions/v1/backup-moked';
+
+function loadBackupDefaults(){
+  try{
+    const s=localStorage.getItem('moked_backup_config');
+    return s?JSON.parse(s):{
+      to:'', dayOfWeek:0, hour:8, enabled:false
+    };
+  }catch(e){return{to:'',dayOfWeek:0,hour:8,enabled:false};}
+}
+
+function saveBackupConfig(){
+  const cfg={
+    to: document.getElementById('bk-email')?.value.trim()||'',
+    dayOfWeek: parseInt(document.getElementById('bk-day')?.value||0),
+    hour: parseInt(document.getElementById('bk-hour')?.value||8),
+    enabled: document.getElementById('bk-enabled')?.checked||false,
+  };
+  localStorage.setItem('moked_backup_config', JSON.stringify(cfg));
+  startBackupAutoTimer();
+  showAlert('הגדרות גיבוי נשמרו','success');
+}
+
+let _backupTimer=null;
+function startBackupAutoTimer(){
+  clearInterval(_backupTimer);
+  const cfg=loadBackupDefaults();
+  if(!cfg.enabled||!cfg.to) return;
+  // check every 30 min if it's time to send
+  _backupTimer=setInterval(async()=>{
+    const now=new Date();
+    if(now.getDay()===cfg.dayOfWeek && now.getHours()===cfg.hour && now.getMinutes()<30){
+      const hist=JSON.parse(localStorage.getItem('moked_backup_history')||'[]');
+      const today=now.toISOString().slice(0,10);
+      if(!hist.find(h=>h.date===today)){
+        await runBackup(cfg.to, true);
+      }
+    }
+  }, 30*60*1000);
+}
+
+let _backupHistory=[];
+function loadBackupHistory(){
+  try{ _backupHistory=JSON.parse(localStorage.getItem('moked_backup_history')||'[]'); }
+  catch(e){ _backupHistory=[]; }
+}
+
+async function runBackup(toEmail, silent=false){
+  if(!toEmail){showAlert('יש להזין כתובת מייל','error');return;}
+  if(!silent){
+    const btn=document.getElementById('bk-send-btn');
+    if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2"></i> שולח...';}
+  }
+  try{
+    const res=await fetch(SB_FUNC_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({to:toEmail})
+    });
+    const data=await res.json();
+    const entry={date:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),to:toEmail,records:data.records||0,ok:data.ok};
+    _backupHistory=[entry,..._backupHistory].slice(0,50);
+    localStorage.setItem('moked_backup_history',JSON.stringify(_backupHistory));
+    if(!silent){
+      render();
+      showAlert(data.ok?`✓ גיבוי נשלח ל-${toEmail} (${data.records} רשומות)`:'שגיאה בשליחה: '+JSON.stringify(data.resend), data.ok?'success':'error');
+    }
+  }catch(e){
+    if(!silent) showAlert('שגיאה: '+e.message,'error');
+  }
+  if(!silent){const btn=document.getElementById('bk-send-btn');if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> שלח עכשיו';}}
+}
+
+function renderAdminBackup(){
+  const cfg=loadBackupDefaults();
+  loadBackupHistory();
+  const days=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const hours=Array.from({length:24},(_,i)=>i);
+
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+
+      <!-- CONFIG -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+        <div class="card-title" style="margin-bottom:16px;color:var(--blue)"><i class="ti ti-cloud-upload"></i> הגדרות גיבוי</div>
+
+        <div style="margin-bottom:14px;padding:10px 12px;background:${cfg.enabled?'var(--blue-light)':'var(--surface2)'};border:1px solid ${cfg.enabled?'#93c5fd':'var(--border)'};border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="bk-enabled" ${cfg.enabled?'checked':''} style="width:18px;height:18px;accent-color:var(--blue);cursor:pointer">
+          <label for="bk-enabled" style="font-weight:700;font-size:14px;cursor:pointer">גיבוי אוטומטי שבועי פעיל</label>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">כתובת מייל לשליחה *</label>
+          <input class="form-input" id="bk-email" type="email" placeholder="your@email.com" dir="ltr" value="${esc(cfg.to)}">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">יום שליחה</label>
+            <select class="form-input" id="bk-day">
+              ${days.map((d,i)=>`<option value="${i}" ${cfg.dayOfWeek===i?'selected':''}>${d}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">שעת שליחה</label>
+            <select class="form-input" id="bk-hour">
+              ${hours.map(h=>`<option value="${h}" ${cfg.hour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveBackupConfig()"><i class="ti ti-check"></i> שמור הגדרות</button>
+          <button class="btn btn-sm" id="bk-send-btn" onclick="runBackup(document.getElementById('bk-email').value.trim())" style="background:var(--green);border-color:var(--green);color:#fff">
+            <i class="ti ti-send"></i> שלח עכשיו
+          </button>
+        </div>
+      </div>
+
+      <!-- WHAT'S INCLUDED -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+        <div class="card-title" style="margin-bottom:16px"><i class="ti ti-file-spreadsheet" style="color:var(--green)"></i> מה כלול בגיבוי</div>
+        <div style="font-size:13px;color:var(--text2);line-height:2">
+          <div><i class="ti ti-check" style="color:var(--green)"></i> כל הרשומות מכל הקבצים</div>
+          <div><i class="ti ti-check" style="color:var(--green)"></i> שם, טלפון, ת"ז, נציג</div>
+          <div><i class="ti ti-check" style="color:var(--green)"></i> שדות מותאמים אישית</div>
+          <div><i class="ti ti-check" style="color:var(--green)"></i> תאריך הזנה + תאריך טיפול</div>
+          <div><i class="ti ti-check" style="color:var(--green)"></i> ריכוז לפי קובץ + % טיפול</div>
+        </div>
+        <div style="margin-top:14px;padding:10px 12px;background:var(--amber-light);border:1px solid #fcd34d;border-radius:var(--radius-sm);font-size:12px;color:#78350f">
+          <i class="ti ti-info-circle"></i> הקובץ נשלח כ-CSV בקידוד Hebrew UTF-8 — תואם Excel
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;background:var(--red-light);border:1px solid #fca5a5;border-radius:var(--radius-sm);font-size:12px;color:#b91c1c">
+          <strong>דרוש:</strong> Edge Function <code>backup-moked</code> מותקנת ב-Supabase + <code>RESEND_API_KEY</code> ב-Secrets
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0"><i class="ti ti-history" style="color:var(--blue)"></i> היסטוריית גיבויים</div>
+        ${_backupHistory.length?`<button class="btn btn-xs btn-danger" onclick="if(confirm('למחוק היסטוריה?')){_backupHistory=[];localStorage.removeItem('moked_backup_history');render();}"><i class="ti ti-trash"></i> נקה</button>`:''}
+      </div>
+      ${!_backupHistory.length
+        ? `<div class="empty" style="padding:20px"><i class="ti ti-inbox" style="font-size:30px"></i><p>אין היסטוריה עדיין</p></div>`
+        : `<div class="table-wrap"><table><thead><tr><th>תאריך</th><th>שעה</th><th>מייל יעד</th><th>רשומות</th><th>סטטוס</th></tr></thead><tbody>
+          ${_backupHistory.map(h=>`<tr>
+            <td style="font-size:12px">${h.date||''}</td>
+            <td style="font-size:12px;color:var(--text3)">${h.ts?new Date(h.ts).toLocaleTimeString('he-IL'):''}</td>
+            <td dir="ltr" style="font-size:12px">${esc(h.to||'')}</td>
+            <td style="text-align:center"><span class="badge badge-info">${h.records||0}</span></td>
+            <td><span class="badge ${h.ok?'badge-success':'badge-warning'}">${h.ok?'✓ נשלח':'⚠ שגיאה'}</span></td>
+          </tr>`).join('')}
+          </tbody></table></div>`
+      }
+    </div>`;
+}
+
+
 const WA_API='https://whatsapp-bot-production-120a.up.railway.app/api/send';
 
 async function sendWA(phone,message){
