@@ -603,6 +603,7 @@ function enterApp(user){
   // מנהל רואה את כל הנציגים כולל מושבתים
   if(user.role==='manager'){
     GET('app_users','?order=name.asc&select=id,name,pin,active,last_login').then(data=>{ allAgents=data||[]; render(); });
+    startWAAutoCheck();
   }
   initApp();
 }
@@ -783,7 +784,11 @@ function renderOrgs(){
         <span style="background:#fed7aa;color:#7c2d12;border-radius:20px;padding:1px 8px;font-weight:800;font-size:11px">${_alertCounts[f.id]}</span>
         ${rule.days?`<span style="font-size:10px;opacity:.7">מעל ${rule.days} ימים</span>`:''}
       </div>`;
-    }).join('')}</div></div>`:'';
+    }).join('')}
+    <button onclick="checkAndSendWAAlerts(false)" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:#25d366;border:none;border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">
+      <i class="ti ti-brand-whatsapp"></i> שלח WA
+    </button>
+    </div></div>`:'';
   // global search bar
   const globalSearchBar = `
     <div style="margin-bottom:18px;position:relative">
@@ -1540,9 +1545,10 @@ function renderAdmin(){
       <button class="nav-tab ${tab==='files'?'active':''}" onclick="S.adminTab='files';render()">קבצים</button>
       <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
       <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
-      <button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>
+      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>`:''}
+      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -2006,8 +2012,12 @@ function renderAdminDashboard(){
     </div>
     <div class="flex-between" style="margin-bottom:12px">
       <span style="font-size:13px;color:var(--text2);font-weight:600">ריכוז חריגות לפי קובץ — <span style="color:var(--blue)">${DASH_PERIODS.find(p=>p.key===_dashPeriod)?.label||'הכל'}</span></span>
-      <button class="btn btn-sm" onclick="loadDashboardTab()"><i class="ti ti-refresh"></i> רענן</button>
-    </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="loadDashboardTab()"><i class="ti ti-refresh"></i> רענן</button>
+        <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="checkAndSendWAAlerts(false)" title="שלח התראות וואטסאפ לאנשי קשר">
+          <i class="ti ti-brand-whatsapp"></i> שלח התראות WA
+        </button>
+      </div>    </div>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -2235,6 +2245,250 @@ function renderAdminPerformance(){
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+}
+
+// ══ WA ALERTS TAB ══
+const WA_POLICY_KEY = 'wa_policy';
+let _waPolicy = null;
+let _waHistory = [];
+
+async function loadWAAlertsTab(){
+  S.adminTab='wa_alerts'; render();
+  // load policy from Supabase app_settings if exists, else use localStorage fallback
+  try{
+    const stored = localStorage.getItem('moked_wa_policy');
+    _waPolicy = stored ? JSON.parse(stored) : defaultWAPolicy();
+  }catch(e){ _waPolicy = defaultWAPolicy(); }
+  // load history
+  try{
+    const stored = localStorage.getItem('moked_wa_history');
+    _waHistory = stored ? JSON.parse(stored) : [];
+  }catch(e){ _waHistory = []; }
+  render();
+}
+
+function defaultWAPolicy(){
+  return {
+    enabled: true,
+    intervalHours: 2,        // כל כמה שעות לבדוק
+    startHour: 8,            // מ-08:00
+    endHour: 20,             // עד 20:00
+    blockedDays: [5,6],      // 5=שישי, 6=שבת
+    onlyNewBreaches: false,  // לשלוח רק על חריגות חדשות
+  };
+}
+
+function saveWAPolicy(){
+  const p = collectWAPolicy();
+  localStorage.setItem('moked_wa_policy', JSON.stringify(p));
+  _waPolicy = p;
+  // restart auto timer with new policy
+  startWAAutoCheckWithPolicy();
+  showAlert('מדיניות ההתראות נשמרה','success');
+}
+
+function collectWAPolicy(){
+  return {
+    enabled: document.getElementById('wap-enabled')?.checked ?? true,
+    intervalHours: parseFloat(document.getElementById('wap-interval')?.value||2),
+    startHour: parseInt(document.getElementById('wap-start')?.value||8),
+    endHour: parseInt(document.getElementById('wap-end')?.value||20),
+    blockedDays: [...document.querySelectorAll('[data-waday]:checked')].map(el=>parseInt(el.dataset.waday)),
+    onlyNewBreaches: document.getElementById('wap-new-only')?.checked ?? false,
+  };
+}
+
+function isWASendAllowed(policy){
+  if(!policy?.enabled) return false;
+  const now = new Date();
+  const day = now.getDay(); // 0=sun,1=mon,...,5=fri,6=sat
+  if((policy.blockedDays||[]).includes(day)) return false;
+  const hour = now.getHours();
+  if(hour < policy.startHour || hour >= policy.endHour) return false;
+  return true;
+}
+
+function addWAHistory(entries){
+  _waHistory = [...entries, ..._waHistory].slice(0,100); // keep last 100
+  localStorage.setItem('moked_wa_history', JSON.stringify(_waHistory));
+}
+
+function renderWAAlerts(){
+  const p = _waPolicy || defaultWAPolicy();
+  const days = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const intervals = [
+    {v:0.5,l:'כל חצי שעה'},{v:1,l:'כל שעה'},{v:2,l:'כל שעתיים'},
+    {v:3,l:'כל 3 שעות'},{v:5,l:'כל 5 שעות'},{v:8,l:'כל 8 שעות'},
+    {v:12,l:'פעמיים ביום'},{v:24,l:'פעם ביום'},
+  ];
+  const hours = Array.from({length:24},(_,i)=>i);
+
+  // files with WA contacts
+  const waFiles = DB.files.filter(f=>(f.wa_contacts||[]).length>0);
+
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+
+      <!-- POLICY CARD -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+        <div class="card-title" style="margin-bottom:16px;color:#25d366"><i class="ti ti-settings" style="color:#25d366"></i> מדיניות שליחה</div>
+
+        <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;padding:10px 12px;background:${p.enabled?'var(--green-light)':'var(--surface2)'};border-radius:var(--radius-sm);border:1px solid ${p.enabled?'#86efac':'var(--border)'}">
+          <input type="checkbox" id="wap-enabled" ${p.enabled?'checked':''} style="width:18px;height:18px;accent-color:#25d366;cursor:pointer">
+          <label for="wap-enabled" style="font-weight:700;font-size:14px;cursor:pointer;color:${p.enabled?'var(--green)':'var(--text2)'}">
+            ${p.enabled?'✅ התראות פעילות':'⏸ התראות מושהות'}
+          </label>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">תדירות שליחה</label>
+          <select class="form-input" id="wap-interval">
+            ${intervals.map(i=>`<option value="${i.v}" ${p.intervalHours===i.v?'selected':''}>${i.l}</option>`).join('')}
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">שעת התחלה</label>
+            <select class="form-input" id="wap-start">
+              ${hours.map(h=>`<option value="${h}" ${p.startHour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">שעת סיום</label>
+            <select class="form-input" id="wap-end">
+              ${hours.map(h=>`<option value="${h}" ${p.endHour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">ימים חסומים (לא שולחים)</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+            ${days.map((d,i)=>`
+              <label style="display:flex;align-items:center;gap:4px;padding:5px 10px;border:1.5px solid ${(p.blockedDays||[]).includes(i)?'#ef4444':'var(--border2)'};border-radius:8px;cursor:pointer;background:${(p.blockedDays||[]).includes(i)?'#fef2f2':'var(--surface2)'};font-size:12px;font-weight:600;transition:all .15s">
+                <input type="checkbox" data-waday="${i}" ${(p.blockedDays||[]).includes(i)?'checked':''} style="width:14px;height:14px;accent-color:#ef4444;cursor:pointer">
+                ${d}
+              </label>`).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)">
+          <input type="checkbox" id="wap-new-only" ${p.onlyNewBreaches?'checked':''} style="width:16px;height:16px;accent-color:var(--blue);cursor:pointer">
+          <label for="wap-new-only" style="font-size:13px;cursor:pointer">שלח רק על חריגות חדשות (לא חוזר על אותה רשומה)</label>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" onclick="saveWAPolicy()"><i class="ti ti-check"></i> שמור מדיניות</button>
+          <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="checkAndSendWAAlerts(false)">
+            <i class="ti ti-brand-whatsapp"></i> שלח עכשיו
+          </button>
+        </div>
+      </div>
+
+      <!-- FILES WITH WA -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+        <div class="card-title" style="margin-bottom:16px"><i class="ti ti-folder" style="color:var(--blue)"></i> קבצים עם התראות WA</div>
+        ${waFiles.length
+          ? waFiles.map(f=>{
+              const o=DB.orgs.find(x=>x.id===f.org_id);
+              const rule=f.alert_rule||{};
+              return `<div style="padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px">
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px"><i class="ti ${f.icon||'ti-file'}" style="color:var(--blue)"></i> ${esc(f.name)} <span style="color:var(--text3);font-weight:400">· ${esc(o?o.name:'')}</span></div>
+                ${(f.wa_contacts||[]).map(c=>`<div style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                  <i class="ti ti-brand-whatsapp" style="color:#25d366"></i> ${esc(c.name)} <span dir="ltr" style="color:var(--text3)">${esc(c.phone)}</span>
+                </div>`).join('')}
+                ${rule.enabled?`<div style="font-size:11px;color:var(--amber);margin-top:4px"><i class="ti ti-clock"></i> SLA: ${rule.days||0} ימים</div>`:'<div style="font-size:11px;color:var(--text3);margin-top:4px">⚠️ אין תנאי SLA מוגדר</div>'}
+                <button class="btn btn-xs" style="margin-top:6px" onclick="openEditFile('${f.id}')"><i class="ti ti-edit"></i> ערוך</button>
+              </div>`;
+            }).join('')
+          : `<div class="empty"><i class="ti ti-brand-whatsapp" style="color:#25d366"></i><p>אין קבצים עם אנשי קשר WA<br><span style="font-size:12px">הוסף בעריכת קובץ → התראות וואטסאפ</span></p></div>`
+        }
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0"><i class="ti ti-history" style="color:#25d366"></i> היסטוריית שליחה</div>
+        ${_waHistory.length?`<button class="btn btn-xs btn-danger" onclick="if(confirm('למחוק היסטוריה?')){_waHistory=[];localStorage.removeItem('moked_wa_history');render();}"><i class="ti ti-trash"></i> נקה</button>`:''}
+      </div>
+      ${!_waHistory.length
+        ? `<div class="empty" style="padding:20px"><i class="ti ti-inbox" style="font-size:30px"></i><p>אין היסטוריה עדיין</p></div>`
+        : `<div class="table-wrap"><table><thead><tr><th>תאריך ושעה</th><th>קובץ</th><th>נמען</th><th>טלפון</th><th>חריגות</th><th>סטטוס</th></tr></thead><tbody>
+          ${_waHistory.map(h=>`<tr>
+            <td style="white-space:nowrap;font-size:12px;color:var(--text3)">${fmtDate(h.ts)}</td>
+            <td style="font-size:13px">${esc(h.fileName||'')}</td>
+            <td style="font-size:13px">${esc(h.contactName||'')}</td>
+            <td dir="ltr" style="font-size:12px;color:var(--text3)">${esc(h.phone||'')}</td>
+            <td style="text-align:center"><span class="badge badge-warning">${h.breached||0}</span></td>
+            <td><span class="badge ${h.success?'badge-success':'badge-warning'}">${h.success?'✓ נשלח':'⚠ שגיאה'}</span></td>
+          </tr>`).join('')}
+          </tbody></table></div>`
+      }
+    </div>`;
+}
+
+// Override checkAndSendWAAlerts to respect policy and log history
+const _origCheckAndSend = checkAndSendWAAlerts;
+async function checkAndSendWAAlerts(silent=false){
+  const policy = _waPolicy || defaultWAPolicy();
+  if(!silent && !isWASendAllowed(policy)){
+    const now=new Date();
+    const day=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'][now.getDay()];
+    showAlert(`לא ניתן לשלוח כעת — ${day} ${now.getHours()}:00 מחוץ לחלון ההתראות`,'error');
+    return;
+  }
+  if(!isWASendAllowed(policy)) return; // silent block
+
+  const filesWithAlerts=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&(f.wa_contacts||[]).length>0);
+  if(!filesWithAlerts.length){if(!silent)showAlert('אין קבצים עם התראות WA מוגדרות','error');return;}
+
+  let totalSent=0,totalBreached=0;const msgs=[];const historyEntries=[];
+
+  await Promise.all(filesWithAlerts.map(async f=>{
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+      const breached=recs.filter(r=>recordMatchesAlert(r,f));
+      if(!breached.length) return;
+      totalBreached+=breached.length;
+      const org=DB.orgs.find(x=>x.id===f.org_id);
+      const rule=f.alert_rule||{};
+      const allFields=[...(f.extra_fields||[]),...(f.admin_fields||[])];
+      const fieldLabel=(allFields.find(x=>x.id===rule.fieldId)||{}).label||rule.fieldId;
+      const msg=`🚨 *התראת SLA — מובמנט*\n\n📁 קובץ: ${f.name}${org?'\n🏢 ארגון: '+org.name:''}\n\n⚠️ ${breached.length} רשומות בחריגה\nתנאי: ${fieldLabel}${rule.days?` · מעל ${rule.days} ימים`:''}\n\n⏰ ${new Date().toLocaleString('he-IL')}`;
+      for(const contact of (f.wa_contacts||[])){
+        const phone=formatWAPhone(contact.phone);
+        let success=true;
+        try{ await sendWA(phone,msg); }catch(e){ success=false; }
+        totalSent++; msgs.push(`${contact.name} (${f.name})`);
+        historyEntries.push({ts:new Date().toISOString(),fileName:f.name,contactName:contact.name,phone,breached:breached.length,success});
+      }
+    }catch(e){}
+  }));
+
+  if(historyEntries.length) addWAHistory(historyEntries);
+  if(!silent){
+    if(totalSent>0) showAlert(`✓ נשלחו ${totalSent} הודעות WA על ${totalBreached} חריגות`,'success');
+    else showAlert('אין חריגות כרגע','success');
+  }
+}
+
+function startWAAutoCheckWithPolicy(){
+  clearInterval(_waAutoTimer);
+  const policy = _waPolicy || defaultWAPolicy();
+  if(!policy.enabled) return;
+  const intervalMs = (policy.intervalHours||2)*60*60*1000;
+  _waAutoTimer=setInterval(()=>{
+    if(S.adminLoggedIn) checkAndSendWAAlerts(true);
+  }, intervalMs);
+}
+
+// Override startWAAutoCheck to use policy
+function startWAAutoCheck(){
+  const stored = localStorage.getItem('moked_wa_policy');
+  _waPolicy = stored ? JSON.parse(stored) : defaultWAPolicy();
+  startWAAutoCheckWithPolicy();
 }
 
 async function loadManagersTab(){
@@ -2763,6 +3017,26 @@ function fileModalHTML(f,mode,id=''){
     <div class="section-divider" style="color:#c2410c"><i class="ti ti-bell-ringing"></i> הגדרת התראה אוטומטית</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px">התראה תופיע למנהל כשרשומה עומדת בתנאי — badge כתום על הקובץ ובמסך הבית</div>
     ${alertRuleHTML}
+    <div class="section-divider" style="color:#25d366"><i class="ti ti-brand-whatsapp"></i> התראות וואטסאפ</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">עד 2 אנשי קשר שיקבלו הודעת וואטסאפ אוטומטית כשיש חריגות SLA בקובץ זה</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label class="form-label">שם איש קשר 1</label>
+        <input class="form-input" id="wa-name-1" placeholder="לדוגמה: אדיר" value="${esc((f.wa_contacts||[])[0]?.name||'')}">
+      </div>
+      <div>
+        <label class="form-label">טלפון 1 (972XXXXXXXXX)</label>
+        <input class="form-input" id="wa-phone-1" placeholder="972501234567" dir="ltr" value="${esc((f.wa_contacts||[])[0]?.phone||'')}">
+      </div>
+      <div>
+        <label class="form-label">שם איש קשר 2</label>
+        <input class="form-input" id="wa-name-2" placeholder="אופציונלי" value="${esc((f.wa_contacts||[])[1]?.name||'')}">
+      </div>
+      <div>
+        <label class="form-label">טלפון 2 (972XXXXXXXXX)</label>
+        <input class="form-input" id="wa-phone-2" placeholder="אופציונלי" dir="ltr" value="${esc((f.wa_contacts||[])[1]?.phone||'')}">
+      </div>
+    </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 function fieldRowHTML(ef,i,p){
@@ -2854,8 +3128,18 @@ function removeField(p,i){
 }
 function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`),b=document.querySelector(`[data-fb="${p}_${i}"]`),ne=document.querySelector(`[data-fne="${p}_${i}"]`),n=document.querySelector(`[data-fn="${p}_${i}"]`);const c2=document.querySelector(`[data-fc="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+function collectWaContacts(){
+  const c=[];
+  const n1=document.getElementById('wa-name-1')?.value.trim();
+  const p1=document.getElementById('wa-phone-1')?.value.trim().replace(/[^0-9]/g,'');
+  if(n1&&p1) c.push({name:n1,phone:p1});
+  const n2=document.getElementById('wa-name-2')?.value.trim();
+  const p2=document.getElementById('wa-phone-2')?.value.trim().replace(/[^0-9]/g,'');
+  if(n2&&p2) c.push({name:n2,phone:p2});
+  return c;
+}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
 // ── EXPORT ──
@@ -3010,6 +3294,55 @@ function initLoginBg(){
   window.addEventListener('resize',resize);
   resize();
   draw();
+}
+
+// ══ WHATSAPP NOTIFICATIONS ══
+const WA_API='https://whatsapp-bot-production-120a.up.railway.app/api/send';
+
+async function sendWA(phone,message){
+  try{
+    await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message})});
+  }catch(e){console.warn('WA send failed:',e);}
+}
+
+function formatWAPhone(phone){
+  const digits=phone.replace(/[^0-9]/g,'');
+  if(digits.startsWith('972')) return digits;
+  if(digits.startsWith('0')) return '972'+digits.slice(1);
+  return '972'+digits;
+}
+
+async function checkAndSendWAAlerts(silent=false){
+  const filesWithAlerts=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&(f.wa_contacts||[]).length>0);
+  if(!filesWithAlerts.length){if(!silent)showAlert('אין קבצים עם התראות וואטסאפ מוגדרות','error');return;}
+  let totalSent=0,totalBreached=0;const msgs=[];
+  await Promise.all(filesWithAlerts.map(async f=>{
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+      const breached=recs.filter(r=>recordMatchesAlert(r,f));
+      if(!breached.length) return;
+      totalBreached+=breached.length;
+      const org=DB.orgs.find(x=>x.id===f.org_id);
+      const rule=f.alert_rule||{};
+      const allFields=[...(f.extra_fields||[]),...(f.admin_fields||[])];
+      const fieldLabel=(allFields.find(x=>x.id===rule.fieldId)||{}).label||rule.fieldId;
+      const msg=`🚨 *התראת SLA — מובמנט*\n\n📁 קובץ: ${f.name}${org?'\n🏢 ארגון: '+org.name:''}\n\n⚠️ ${breached.length} רשומות בחריגה\nתנאי: ${fieldLabel}${rule.days?` · מעל ${rule.days} ימים`:''}\n\n⏰ ${new Date().toLocaleString('he-IL')}`;
+      for(const contact of (f.wa_contacts||[])){
+        await sendWA(formatWAPhone(contact.phone),msg);
+        totalSent++;msgs.push(`${contact.name} (${f.name})`);
+      }
+    }catch(e){}
+  }));
+  if(!silent){
+    if(totalSent>0) showAlert(`✓ נשלחו ${totalSent} הודעות WA על ${totalBreached} חריגות → ${msgs.join(', ')}`,'success');
+    else showAlert('אין חריגות כרגע — לא נשלחו הודעות','success');
+  }
+}
+
+let _waAutoTimer=null;
+function startWAAutoCheck(){
+  clearInterval(_waAutoTimer);
+  _waAutoTimer=setInterval(()=>{if(S.adminLoggedIn)checkAndSendWAAlerts(true);},30*60*1000);
 }
 
 async function initApp(){await loadAll();await loadAllCounts();render();}
