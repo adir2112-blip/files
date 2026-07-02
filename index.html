@@ -173,6 +173,26 @@ select.entry-input{cursor:pointer;padding-left:36px}
 .entry-checkbox-row span{font-size:14px;color:var(--text);font-weight:500}
 .entry-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 
+.field-chat-dot{position:absolute;top:8px;left:8px;width:9px;height:9px;background:var(--blue);border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(37,99,235,.4);animation:chatPulse 2s ease-in-out infinite}
+@keyframes chatPulse{0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,.4)}50%{box-shadow:0 0 0 5px rgba(37,99,235,0)}}
+
+.chat-popup{position:fixed;z-index:500;width:320px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.18);overflow:hidden;animation:chatPopIn .18s ease}
+@keyframes chatPopIn{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.chat-popup-header{background:linear-gradient(135deg,#1e293b,#2563eb);padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+.chat-popup-title{color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+.chat-popup-close{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:18px;line-height:1;padding:0}
+.chat-popup-close:hover{color:#fff}
+.chat-messages{max-height:220px;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--surface2)}
+.chat-msg{padding:8px 11px;border-radius:12px;font-size:12px;max-width:85%;line-height:1.4;word-break:break-word}
+.chat-msg.agent{background:#fff;border:1px solid var(--border);align-self:flex-end;border-bottom-right-radius:4px}
+.chat-msg.manager{background:linear-gradient(135deg,#eff4ff,#f5f3ff);border:1px solid #c4b5fd;align-self:flex-start;border-bottom-left-radius:4px}
+.chat-msg-meta{font-size:10px;color:var(--text3);margin-top:3px}
+.chat-input-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border);background:var(--surface)}
+.chat-input-row input{flex:1;padding:8px 11px;border:1px solid var(--border2);border-radius:10px;font-size:13px;font-family:inherit;outline:none}
+.chat-input-row input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.chat-send-btn{width:34px;height:34px;border-radius:10px;border:none;background:var(--blue);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}
+.chat-send-btn:hover{background:var(--blue-dark)}
+
 .entry-field-note{display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:10px 12px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #fcd34d;border-right:4px solid #d97706;border-radius:8px;animation:noteAppear .2s ease}
 .entry-field-note .ti{color:#b45309;font-size:16px;flex-shrink:0;margin-top:1px}
 .entry-field-note span{font-size:12.5px;color:#78350f;font-weight:600;line-height:1.5}
@@ -882,8 +902,11 @@ function renderForm(){
       inp=`<input class="entry-input" type="text" name="extra_${ef.id}" placeholder="הזן ${esc(ef.label)}" ${req}>`;
     }
 
-    return `<div class="entry-field">
-      <label class="entry-field-label"><i class="ti ${icon}"></i> ${esc(ef.label)} ${reqMark}</label>
+    const chatDot=ef.chatEnabled?`<div class="field-chat-dot" title="לחץ להוספת הערה"></div>`:'';
+    const chatWrap=ef.chatEnabled?` onmouseenter="showFieldChat(event,'${ef.id}','${esc(ef.label)}')" onmouseleave="scheduleHideChat()"`:'' ;
+    return `<div class="entry-field" style="position:relative"${chatWrap}>
+      ${chatDot}
+      <label class="entry-field-label"><i class="ti ${icon}"></i> ${esc(ef.label)} ${reqMark}${ef.chatEnabled?` <span style="font-size:10px;color:var(--blue);font-weight:600">💬</span>`:''}</label>
       <div class="entry-input-wrap">
         ${inp}
         <i class="ti ${icon} field-icon"></i>
@@ -972,9 +995,11 @@ function onPhoneSearch(val){
     _phoneTimer=setTimeout(async()=>{
       try{ S.phoneLookup=await GET('records',`?file_id=eq.${S.fileId}&phone=ilike.*${encodeURIComponent(val.replace(/[-\s]/g,''))}*&order=created_at.desc&limit=1`); }
       catch(e){S.phoneLookup=[];}
+      // set current record for chat
+      _chatCurrentRecord=(S.phoneLookup&&S.phoneLookup.length)?S.phoneLookup[0]:null;
       renderLookupOnly();
     },700);
-  } else { const b=document.getElementById('lookup-box'); if(b) b.innerHTML=''; }
+  } else { const b=document.getElementById('lookup-box'); if(b) b.innerHTML=''; _chatCurrentRecord=null; }
 }
 function renderLookupOnly(){
   const box=document.getElementById('lookup-box'); if(!box) return;
@@ -1353,10 +1378,11 @@ function renderRecordsPage(){
     const adminC=adminFields.map(af=>{
       const val=(r.admin_data||{})[af.id];
       if(!isAdmin){
-        if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center">${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</td>`;
-        if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
-        if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;}
-        return `<td class="admin-col">${esc(val||'')}</td>`;
+        const agentChatBadge=af.chatEnabled?`<span onclick="event.stopPropagation();showFieldChatFromRecord(event,'${af.id}','${esc(af.label)}',_cachedRecords['${S.fileId}']?.find(x=>x.id==='${r.id}')||{id:'${r.id}',field_comments:{}})" style="cursor:pointer;color:var(--blue);margin-right:4px;flex-shrink:0" title="פתח שיחה עם מנהל"><i class="ti ti-message-circle" style="font-size:14px"></i>${((r.field_comments||{})[af.id]||[]).length>0?`<sup style="font-size:9px;font-weight:800">${((r.field_comments||{})[af.id]||[]).length}</sup>`:''}</span>`:'';
+        if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</div></td>`;
+        if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</div></td>`;}
+        if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}<a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></div></td>`;}
+        return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${esc(val||'')}</div></td>`;
       }
       if(_bulkMode){
         // in bulk mode show read-only admin fields
@@ -1365,16 +1391,18 @@ function renderRecordsPage(){
         if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;}
         return `<td class="admin-col" style="color:var(--text3)">${esc(val||'—')}</td>`;
       }
-      if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></td>`;
-      if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><select class="admin-input" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></td>`;}
-      if(af.type==='link') return `<td class="admin-col" style="display:flex;gap:4px;align-items:center">
-        <input class="admin-input" type="text" value="${esc(val||'')}" placeholder="https://..." dir="ltr" style="font-size:11px" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">
+      // chat trigger — wrap cell with click handler if chatEnabled
+      const chatBadge=af.chatEnabled?`<span onclick="event.stopPropagation();showFieldChatFromRecord(event,'${af.id}','${esc(af.label)}',_cachedRecords['${S.fileId}']?.find(x=>x.id==='${r.id}')||{id:'${r.id}',field_comments:{}})" style="cursor:pointer;color:var(--blue);margin-right:4px;flex-shrink:0" title="פתח שיחה"><i class="ti ti-message-circle" style="font-size:14px"></i>${((r.field_comments||{})[af.id]||[]).length>0?`<sup style="font-size:9px;font-weight:800">${((r.field_comments||{})[af.id]||[]).length}</sup>`:''}</span>`:'';
+      if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${chatBadge}<input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></div></td>`;
+      if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<select class="admin-input" style="flex:1" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></div></td>`;}
+      if(af.type==='link') return `<td class="admin-col"><div style="display:flex;gap:4px;align-items:center">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="https://..." dir="ltr" style="font-size:11px;flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">
         ${val?`<a href="${(val.match(/^https?:\/\//)?val:'https://'+val).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue);flex-shrink:0" title="פתח קישור"><i class="ti ti-external-link"></i></a>`:''}
-      </td>`;
-      return `<td class="admin-col"><input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></td>`;
+      </div></td>`;
+      return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></div></td>`;
     }).join('');
     const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
     const treatedC=(isAdmin&&adminFields.length)?`<td class="admin-col" id="treated-at-${r.id}" style="font-size:11px;color:var(--text3);white-space:nowrap">${r.treated_at?fmtDate(r.treated_at):'—'}</td>`:'';
+
     const noteC=isAdmin&&!_bulkMode?`<td class="admin-col" style="max-width:180px">
       <div style="display:flex;align-items:center;gap:5px">
         <textarea class="admin-input" rows="1"
@@ -1602,7 +1630,166 @@ function renderAdminAllRecords(){
 // ── NAV ──
 function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.globalSearch='';S.globalSearchResults=null;loadAll().then(()=>loadAllCounts().then(render));}
 
-// ── GLOBAL SEARCH ──
+// ══ FIELD CHAT SYSTEM ══
+let _chatPopup=null;
+let _chatFieldId=null;
+let _chatRecordId=null;
+let _chatHideTimer=null;
+
+function showFieldChat(event, fieldId, fieldLabel){
+  clearTimeout(_chatHideTimer);
+  // need current record — get from URL/form or from cache
+  // We need recordId — find from phone lookup or current record in view
+  const record = _chatCurrentRecord;
+  if(!record) return; // no record selected yet
+
+  _chatFieldId=fieldId;
+  _chatRecordId=record.id;
+
+  // remove existing popup
+  if(_chatPopup) _chatPopup.remove();
+
+  const comments=(record.field_comments||{})[fieldId]||[];
+  const messagesHTML=comments.length
+    ? comments.map(m=>`
+        <div class="chat-msg ${m.role}">
+          <div>${esc(m.text)}</div>
+          <div class="chat-msg-meta">${esc(m.name)} · ${fmtDate(m.ts)}</div>
+        </div>`).join('')
+    : `<div style="text-align:center;color:var(--text3);font-size:12px;padding:16px">אין הערות עדיין</div>`;
+
+  const popup=document.createElement('div');
+  popup.className='chat-popup';
+  popup.id='field-chat-popup';
+  popup.innerHTML=`
+    <div class="chat-popup-header">
+      <div class="chat-popup-title"><i class="ti ti-message-2"></i> ${esc(fieldLabel)}</div>
+      <button class="chat-popup-close" onclick="hideFieldChat()">✕</button>
+    </div>
+    <div class="chat-messages" id="chat-messages-list">${messagesHTML}</div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="כתוב הערה..." onkeydown="if(event.key==='Enter')sendChatMsg()">
+      <button class="chat-send-btn" onclick="sendChatMsg()" title="שלח"><i class="ti ti-send"></i></button>
+    </div>`;
+
+  // position near cursor
+  const rect=event.currentTarget.getBoundingClientRect();
+  popup.style.top=(rect.bottom+window.scrollY+8)+'px';
+  popup.style.left=Math.max(10,Math.min(rect.left+window.scrollX, window.innerWidth-340))+'px';
+
+  document.body.appendChild(popup);
+  _chatPopup=popup;
+
+  // scroll to bottom
+  setTimeout(()=>{
+    const list=document.getElementById('chat-messages-list');
+    if(list) list.scrollTop=list.scrollHeight;
+    document.getElementById('chat-input')?.focus();
+  },50);
+
+  // keep popup alive when mouse enters it
+  popup.addEventListener('mouseenter',()=>clearTimeout(_chatHideTimer));
+  popup.addEventListener('mouseleave',()=>scheduleHideChat());
+}
+
+function scheduleHideChat(){
+  _chatHideTimer=setTimeout(hideFieldChat,400);
+}
+function hideFieldChat(){
+  if(_chatPopup){_chatPopup.remove();_chatPopup=null;}
+  _chatFieldId=null; _chatRecordId=null;
+}
+
+async function sendChatMsg(){
+  const input=document.getElementById('chat-input');
+  const text=(input?.value||'').trim();
+  if(!text||!_chatRecordId||!_chatFieldId) return;
+  input.value='';
+  input.disabled=true;
+
+  const fileId=S.fileId;
+  const recs=_cachedRecords[fileId]||[];
+  const record=recs.find(r=>r.id===_chatRecordId);
+  if(!record) return;
+
+  if(!record.field_comments) record.field_comments={};
+  if(!record.field_comments[_chatFieldId]) record.field_comments[_chatFieldId]=[];
+
+  const msg={
+    role: S.adminLoggedIn?'manager':'agent',
+    name: currentUser?.name||_agentName||'—',
+    text,
+    ts: new Date().toISOString()
+  };
+  record.field_comments[_chatFieldId].push(msg);
+
+  try{
+    await PATCH('records',{field_comments:record.field_comments},`?id=eq.${_chatRecordId}`);
+    // update popup messages
+    const list=document.getElementById('chat-messages-list');
+    if(list){
+      const msgEl=document.createElement('div');
+      msgEl.className=`chat-msg ${msg.role}`;
+      msgEl.innerHTML=`<div>${esc(msg.text)}</div><div class="chat-msg-meta">${esc(msg.name)} · ${fmtDate(msg.ts)}</div>`;
+      list.appendChild(msgEl);
+      list.scrollTop=list.scrollHeight;
+    }
+  }catch(e){ showAlert('שגיאה בשמירת הערה','error'); }
+  input.disabled=false;
+  input.focus();
+}
+
+// track current record for chat (set when form loads with phone lookup)
+let _chatCurrentRecord=null;
+
+
+function openRecordChat(event, recordId, fileId){
+  event.stopPropagation();
+  const recs=_cachedRecords[fileId]||[];
+  const record=recs.find(r=>r.id===recordId); if(!record) return;
+  _chatCurrentRecord=record;
+  const f=DB.files.find(x=>x.id===fileId);
+  const chatFields=[...(f?.extra_fields||[]),...(f?.admin_fields||[])].filter(ef=>ef.chatEnabled);
+  if(!chatFields.length) return;
+  if(chatFields.length===1){
+    showFieldChatFromRecord(event, chatFields[0].id, chatFields[0].label, record);
+  } else {
+    if(_chatPopup) _chatPopup.remove();
+    const popup=document.createElement('div');
+    popup.className='chat-popup'; popup.style.width='220px';
+    popup.innerHTML=`<div class="chat-popup-header"><div class="chat-popup-title"><i class="ti ti-message-2"></i> בחר שדה</div><button class="chat-popup-close" onclick="hideFieldChat()">✕</button></div>
+      <div style="padding:8px">${chatFields.map(ef=>{
+        const count=((record.field_comments||{})[ef.id]||[]).length;
+        return `<button onclick="showFieldChatFromRecord(null,'${ef.id}','${esc(ef.label)}',_chatCurrentRecord)" style="width:100%;text-align:right;padding:8px 10px;margin-bottom:4px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-family:inherit;font-size:13px;display:flex;align-items:center;justify-content:space-between"><span>${esc(ef.label)}</span>${count>0?`<span style="background:var(--blue);color:#fff;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700">${count}</span>`:''}</button>`;
+      }).join('')}</div>`;
+    const rect=event.target.getBoundingClientRect();
+    popup.style.top=(rect.bottom+window.scrollY+6)+'px';
+    popup.style.left=Math.max(10,rect.left+window.scrollX-100)+'px';
+    document.body.appendChild(popup); _chatPopup=popup;
+  }
+}
+function showFieldChatFromRecord(event, fieldId, fieldLabel, record){
+  _chatFieldId=fieldId; _chatRecordId=record.id; _chatCurrentRecord=record;
+  if(_chatPopup) _chatPopup.remove();
+  const comments=(record.field_comments||{})[fieldId]||[];
+  const messagesHTML=comments.length
+    ?comments.map(m=>`<div class="chat-msg ${m.role}"><div>${esc(m.text)}</div><div class="chat-msg-meta">${esc(m.name)} · ${fmtDate(m.ts)}</div></div>`).join('')
+    :`<div style="text-align:center;color:var(--text3);font-size:12px;padding:16px">אין הערות עדיין</div>`;
+  const popup=document.createElement('div');
+  popup.className='chat-popup'; popup.id='field-chat-popup';
+  popup.innerHTML=`<div class="chat-popup-header"><div class="chat-popup-title"><i class="ti ti-message-2"></i> ${esc(fieldLabel)}</div><button class="chat-popup-close" onclick="hideFieldChat()">✕</button></div>
+    <div class="chat-messages" id="chat-messages-list">${messagesHTML}</div>
+    <div class="chat-input-row"><input type="text" id="chat-input" placeholder="כתוב הערה..." onkeydown="if(event.key==='Enter')sendChatMsg()"><button class="chat-send-btn" onclick="sendChatMsg()"><i class="ti ti-send"></i></button></div>`;
+  if(event){const rect=event.target?.getBoundingClientRect()||{bottom:200,left:200};popup.style.top=(rect.bottom+window.scrollY+6)+'px';popup.style.left=Math.max(10,Math.min(rect.left+window.scrollX-100,window.innerWidth-340))+'px';}
+  else{popup.style.top='200px';popup.style.left='50%';popup.style.transform='translateX(-50%)';}
+  document.body.appendChild(popup); _chatPopup=popup;
+  popup.addEventListener('mouseenter',()=>clearTimeout(_chatHideTimer));
+  popup.addEventListener('mouseleave',()=>scheduleHideChat());
+  setTimeout(()=>{const list=document.getElementById('chat-messages-list');if(list)list.scrollTop=list.scrollHeight;document.getElementById('chat-input')?.focus();},50);
+}
+document.addEventListener('keydown',(e)=>{if(e.key==='Escape')hideFieldChat();});
+
+
 let _globalSearchTimer=null;
 function debounceGlobalSearch(val){
   S.globalSearch=val;
@@ -2582,7 +2769,7 @@ function fieldRowHTML(ef,i,p){
   const typeOpts=['text','number','select','checkbox','link'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':t==='link'?'קישור (URL)':'תיבת סימון'}</option>`).join('');
   const hasNote=!!ef.noteEnabled;
   return `<div class="field-row" style="grid-template-columns:1fr;padding:12px">
-    <div style="display:grid;grid-template-columns:1fr 1fr auto auto auto;gap:8px">
+    <div style="display:grid;grid-template-columns:1fr 1fr auto auto auto auto;gap:8px">
       <div><label class="form-label" style="font-size:10px">שם השדה</label><input class="form-input" data-fl="${p}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
       <div><label class="form-label" style="font-size:10px">סוג</label>
         <select class="form-input" data-ft="${p}_${i}" onchange="onTypeChange('${p}',${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
@@ -2595,6 +2782,10 @@ function fieldRowHTML(ef,i,p){
       <div style="padding-top:20px;text-align:center">
         <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--green)">עדכון גורף</label>
         <input type="checkbox" data-fb="${p}_${i}" ${ef.bulkEnabled!==false?'checked':''} style="width:17px;height:17px;accent-color:var(--green);cursor:pointer" title="לאפשר עדכון גורף לשדה זה">
+      </div>
+      <div style="padding-top:20px;text-align:center">
+        <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--blue)">💬 צ'אט</label>
+        <input type="checkbox" data-fc="${p}_${i}" ${ef.chatEnabled?'checked':''} style="width:17px;height:17px;accent-color:var(--blue);cursor:pointer" title="אפשר הערות שיחה על שדה זה">
       </div>
       <div style="padding-top:38px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField('${p}',${i})"><i class="ti ti-trash"></i></button></div>
     </div>
@@ -2631,6 +2822,8 @@ function saveFieldsFromDOM(p){
     if(b) ef.bulkEnabled=b.checked;
     if(ne) ef.noteEnabled=ne.checked;
     if(n) ef.note=n.value;
+    const c=document.querySelector('[data-fc="'+p+'_'+i+'"]');
+    if(c) ef.chatEnabled=c.checked;
   });
 }
 function onTypeChange(p,i,val){
@@ -2659,7 +2852,7 @@ function removeField(p,i){
   arr.splice(i,1);
   refreshFields(p);
 }
-function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`),b=document.querySelector(`[data-fb="${p}_${i}"]`),ne=document.querySelector(`[data-fne="${p}_${i}"]`),n=document.querySelector(`[data-fn="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||'')};}).filter(ef=>ef.label);}
+function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`),b=document.querySelector(`[data-fb="${p}_${i}"]`),ne=document.querySelector(`[data-fne="${p}_${i}"]`),n=document.querySelector(`[data-fn="${p}_${i}"]`);const c2=document.querySelector(`[data-fc="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
 async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
 async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
