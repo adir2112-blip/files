@@ -504,19 +504,6 @@ async function initLogin(){
   showLogin('mode');
 }
 
-function populateAgents(list){
-  const el=document.getElementById('agent-list'); if(!el) return;
-  if(!list.length){el.innerHTML=`<div class="agent-list-empty"><i class="ti ti-search"></i><br>לא נמצאו נציגים</div>`;return;}
-  el.innerHTML=list.map(u=>{
-    const initials=u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-    return `<div class="agent-list-item" onclick="selectAgent(${u.id})">
-      <div class="ali-avatar">${initials}</div>
-      <span>${esc(u.name)}</span>
-      <i class="ti ti-chevron-left" style="margin-right:auto;color:var(--text3);font-size:13px"></i>
-    </div>`;
-  }).join('');
-}
-
 function filterAgents(){
   const q=document.getElementById('agent-search').value.trim();
   const activeAgents=allAgents.filter(u=>u.active!==false);
@@ -600,12 +587,15 @@ function enterApp(user){
   document.getElementById('admin-btn').style.display=user.role==='manager'?'':'none';
   S.adminLoggedIn=user.role==='manager';
   _agentName=user.name;
-  // מנהל רואה את כל הנציגים כולל מושבתים
   if(user.role==='manager'){
-    GET('app_users','?order=name.asc&select=id,name,pin,active,last_login').then(data=>{ allAgents=data||[]; render(); });
     startWAAutoCheck();
+    // load agents after loadAll so render has all data
+    initApp().then(()=>{
+      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login').then(data=>{ allAgents=data||[]; render(); });
+    });
+  } else {
+    initApp();
   }
-  initApp();
 }
 
 async function doLogout(){
@@ -623,7 +613,7 @@ async function doLogout(){
 }
 
 // ══ APP STATE ══
-function S_DEFAULT(){return{view:'orgs',orgId:null,fileId:null,adminLoggedIn:false,adminTab:'orgs',searchQ:'',alert:null,filters:{},phoneSearch:'',phoneLookup:null,sortCol:null,sortDir:1,showBulkAll:false,globalSearch:'',globalSearchResults:null};}
+function S_DEFAULT(){return{view:'orgs',orgId:null,fileId:null,adminLoggedIn:false,adminTab:'orgs',searchQ:'',alert:null,filters:{},phoneSearch:'',phoneLookup:null,sortCol:null,sortDir:1,showBulkAll:false,globalSearch:'',globalSearchResults:null,archiveMode:false};}
 let S=S_DEFAULT();
 let DB={orgs:[],files:[]};
 let _agentName='';
@@ -632,9 +622,22 @@ let _cachedRecords={},_allRecords=[];
 let _saveTimers={};
 let _modalLocked=false;
 let _pendingCounts={};
+let _waAutoTimer=null;
+let _backupTimer=null;
+let _waPolicy=null;
+let _waHistory=[];
 
 async function loadAll(){[DB.orgs,DB.files]=await Promise.all([GET('organizations','?order=created_at.asc'),GET('files','?order=created_at.asc')]);}
-async function getRecords(fileId){const r=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);_cachedRecords[fileId]=r;return r;}
+async function getRecords(fileId, archiveMode=false){
+  const filter=archiveMode
+    ? `?file_id=eq.${fileId}&archived=eq.true&order=archived_at.desc`
+    : `?file_id=eq.${fileId}&archived=eq.false&order=created_at.desc`;
+  const r=await GET('records', filter);
+  if(archiveMode) _cachedArchive[fileId]=r;
+  else _cachedRecords[fileId]=r;
+  return r;
+}
+let _cachedArchive={};
 
 // pending
 // ══ ALERT RULES ══
@@ -764,6 +767,7 @@ function renderBreadcrumb(){
 
 // ORGS
 function renderOrgs(){
+  if(!DB.orgs.length && !DB.files.length) return `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`;
   if(!DB.orgs.length) return `<div class="empty"><i class="ti ti-building-off"></i><p>אין ארגונים.</p></div>`;
   const totalP=totalPending();
   const alertBar=S.adminLoggedIn&&totalP>0?`<div class="admin-alert-bar">
@@ -1312,8 +1316,13 @@ async function bulkSetField(fieldId, value){
 function renderRecordsPage(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
   const isAdmin=S.adminLoggedIn;
-  const records=_cachedRecords[S.fileId]||[];
+  const records=S.archiveMode
+    ? (_cachedArchive[S.fileId]||[])
+    : (_cachedRecords[S.fileId]||[]);
   const extraFields=f.extra_fields||[],adminFields=f.admin_fields||[];
+  // count pending archive (approved but not yet 30 days)
+  const pendingArchiveCount=(_cachedRecords[S.fileId]||[]).filter(r=>r.approved_at&&!r.archived).length;
+  const archiveCount=(_cachedArchive[S.fileId]||[]).length;
   const q=(S.searchQ||'').toLowerCase();
   let filtered=q?records.filter(r=>(r.first_name+' '+r.last_name+' '+r.phone+' '+r.id_num+' '+(r.agent_name||'')).toLowerCase().includes(q)):records;
   Object.entries(S.filters||{}).forEach(([afId,val])=>{
@@ -1362,6 +1371,7 @@ function renderRecordsPage(){
   const adminH=adminFields.map(af=>sortable('admin_'+af.id,'<i class="ti ti-shield-check" style="font-size:10px"></i> '+esc(af.label),'admin-col')).join('');
   const treatedH=(isAdmin&&adminFields.length)?sortable('treated_at','<i class="ti ti-clock-check" style="font-size:10px"></i> תאריך טיפול','admin-col'):'';
   const noteH=isAdmin?'<th class="admin-col" style="white-space:nowrap"><i class="ti ti-message-2" style="font-size:10px"></i> הערת מנהל</th>':'';
+  const approveH='';
   const histH=isAdmin?'<th></th>':'';
   const delH=isAdmin?'<th></th>':'';
 
@@ -1418,6 +1428,13 @@ function renderRecordsPage(){
         ${r.manager_note?`<i class="ti ti-message-2-check" style="color:var(--purple);font-size:14px;flex-shrink:0" title="יש הערה"></i>`:''}
       </div>
     </td>`:''+(isAdmin?'<td class="admin-col"></td>':'');
+    // archive mode: show restore button in del column area
+    const approveC=isAdmin&&S.archiveMode
+      ?`<td style="text-align:center"><div style="display:flex;flex-direction:column;gap:3px;align-items:center">
+          <span style="font-size:10px;color:var(--text3)">${r.archived_at?fmtDate(r.archived_at):''}</span>
+          <button class="btn btn-xs" onclick="restoreFromArchive('${r.id}','${S.fileId}')"><i class="ti ti-archive-off"></i> שחזר</button>
+        </div></td>`
+      :'';
     const histC=(isAdmin&&!_bulkMode&&(r.change_log||[]).length)?`<td><button class="btn btn-xs" onclick='showChangeLog(${JSON.stringify(r.change_log).replace(/'/g,"&#39;")},"${esc(r.first_name)} ${esc(r.last_name)}")' title="היסטוריית שינויים"><i class="ti ti-history"></i></button></td>`:(isAdmin&&!_bulkMode?'<td></td>':'');
     const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
     const trStyle=`${isSelected?'background:var(--blue-light);':rowStyle}${_bulkMode?';cursor:pointer':''}`;
@@ -1492,8 +1509,19 @@ function renderRecordsPage(){
     </button>`:'';
 
   return `<div class="card">
+    <!-- Archive / Active tabs -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
+      <button class="nav-tab ${!S.archiveMode?'active':''}" onclick="goRecords('${S.fileId}',false)" style="display:flex;align-items:center;gap:6px">
+        <i class="ti ti-list"></i> פעילות
+        ${pendingArchiveCount>0?`<span style="background:#f97316;color:#fff;border-radius:20px;padding:0 7px;font-size:11px;font-weight:800">${pendingArchiveCount} ממתינות</span>`:''}
+      </button>
+      <button class="nav-tab ${S.archiveMode?'active':''}" onclick="goRecords('${S.fileId}',true)" style="display:flex;align-items:center;gap:6px">
+        <i class="ti ti-archive"></i> ארכיון
+        ${archiveCount>0?`<span style="background:var(--text3);color:#fff;border-radius:20px;padding:0 7px;font-size:11px">${archiveCount}</span>`:''}
+      </button>
+    </div>
     <div class="flex-between" style="margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)} — רשומות</div>
+      <div class="card-title" style="margin-bottom:0;border:none;padding:0"><i class="ti ${f.icon||'ti-file'}"></i>${esc(f.name)} — ${S.archiveMode?'ארכיון':'רשומות פעילות'}</div>
       <div class="flex-gap">
         ${isAdmin?`<button class="btn btn-sm ${_bulkMode?'btn-primary':''}" onclick="toggleBulkMode()" title="עריכה מרובה">
           <i class="ti ti-${_bulkMode?'x':'checkbox'}"></i> ${_bulkMode?'בטל בחירה':'בחירה מרובה'}
@@ -1517,7 +1545,7 @@ function renderRecordsPage(){
     <input type="hidden" id="filtered-ids" value='${JSON.stringify(filteredIds)}'>
     ${!filtered.length
       ?`<div class="empty"><i class="ti ti-database-off"></i><p>${q?'לא נמצאו תוצאות':'אין רשומות עדיין'}</p></div>`
-      :`<div class="table-wrap"><table><thead><tr>${bulkCheckH}${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${treatedH}${noteH}${histH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
+      :`<div class="table-wrap"><table><thead><tr>${bulkCheckH}${sortable('date','תאריך')}${sortable('first_name','שם פרטי')}${sortable('last_name','שם משפחה')}${sortable('phone','טלפון')}${sortable('id_num','ת"ז')}${extraH}${sortable('agent','נציג')}${adminH}${treatedH}${approveH}${noteH}${histH}${delH}</tr></thead><tbody>${rows}</tbody></table></div>`
     }
     <div style="margin-top:10px;font-size:12px;color:var(--text3)">${filtered.length} רשומות${_selectedRows.size>0?' · <strong style="color:var(--blue)">'+_selectedRows.size+' נבחרו</strong>':''}</div>
   </div>`;
@@ -1809,13 +1837,11 @@ function clearGlobalSearch(){ S.globalSearch=''; S.globalSearchResults=null; ren
 async function runGlobalSearch(q){
   if(!q.trim()) return;
   const term=q.trim();
-  // search by phone OR name OR id across all files
-  const orParams=`?or=(phone.ilike.*${encodeURIComponent(term)}*,first_name.ilike.*${encodeURIComponent(term)}*,last_name.ilike.*${encodeURIComponent(term)}*,id_num.ilike.*${encodeURIComponent(term)}*)&limit=30&select=id,file_id,first_name,last_name,phone,id_num,created_at,agent_name`;
+  const orParams=`?or=(phone.ilike.*${encodeURIComponent(term)}*,first_name.ilike.*${encodeURIComponent(term)}*,last_name.ilike.*${encodeURIComponent(term)}*,id_num.ilike.*${encodeURIComponent(term)}*)&limit=40&select=id,file_id,first_name,last_name,phone,id_num,created_at,agent_name,archived,approved_at`;
   try{
     const results = await GET('records', orParams);
     S.globalSearchResults = results||[];
   }catch(e){ S.globalSearchResults=[]; }
-  // preserve input focus after render
   const pos = document.getElementById('global-search-input')?.selectionStart;
   render();
   const el=document.getElementById('global-search-input');
@@ -1825,39 +1851,79 @@ async function runGlobalSearch(q){
 function renderGlobalResults(){
   const results = S.globalSearchResults||[];
   if(!results.length) return `<div style="margin-top:8px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;text-align:center;color:var(--text3);font-size:13px"><i class="ti ti-search-off"></i> לא נמצאו תוצאות</div>`;
+  const active=results.filter(r=>!r.archived);
+  const archived=results.filter(r=>r.archived);
+  const renderRow=(r,isArchived)=>{
+    const f=DB.files.find(x=>x.id===r.file_id);
+    const o=DB.orgs.find(x=>x.id===(f&&f.org_id));
+    const bg=isArchived?'#f8f8f8':'';
+    return `<div onclick="openGlobalResult('${r.file_id}',${isArchived})"
+      style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;background:${bg};transition:background .12s"
+      onmouseover="this.style.background=var('--blue-light','#eff6ff')" onmouseout="this.style.background='${bg}'">
+      <div class="ali-avatar" style="flex-shrink:0;${isArchived?'opacity:.6':''}">${(r.first_name[0]||'?')+(r.last_name[0]||'')}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px">
+          ${esc(r.first_name)} ${esc(r.last_name)}
+          ${isArchived?`<span style="background:var(--surface2);border:1px solid var(--border);color:var(--text3);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:600"><i class="ti ti-archive" style="font-size:9px"></i> ארכיון</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--text3);display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">
+          <span dir="ltr">${esc(r.phone)}</span>
+          <span>ת״ז: ${esc(r.id_num)}</span>
+          ${r.agent_name?`<span>נציג: ${esc(r.agent_name)}</span>`:''}
+        </div>
+      </div>
+      <div style="text-align:left;flex-shrink:0">
+        <div style="font-size:12px;font-weight:600;color:${isArchived?'var(--text3)':'var(--blue)'}">${esc(f?f.name:'')}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(o?o.name:'')}</div>
+      </div>
+      <i class="ti ti-arrow-left" style="color:var(--text3);font-size:16px"></i>
+    </div>`;
+  };
   return `<div style="margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-md)">
-    <div style="padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2)">${results.length} תוצאות</div>
-    ${results.map(r=>{
-      const f=DB.files.find(x=>x.id===r.file_id);
-      const o=DB.orgs.find(x=>x.id===(f&&f.org_id));
-      return `<div onclick="openGlobalResult('${r.file_id}')" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background=''">
-        <div class="ali-avatar" style="flex-shrink:0">${(r.first_name[0]||'?')+(r.last_name[0]||'')}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;color:var(--text)">${esc(r.first_name)} ${esc(r.last_name)}</div>
-          <div style="font-size:12px;color:var(--text3);display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">
-            <span dir="ltr">${esc(r.phone)}</span>
-            <span>ת״ז: ${esc(r.id_num)}</span>
-            ${r.agent_name?`<span>נציג: ${esc(r.agent_name)}</span>`:''}
-          </div>
-        </div>
-        <div style="text-align:left;flex-shrink:0">
-          <div style="font-size:12px;font-weight:600;color:var(--blue)">${esc(f?f.name:'')}</div>
-          <div style="font-size:11px;color:var(--text3)">${esc(o?o.name:'')}</div>
-        </div>
-        <i class="ti ti-arrow-left" style="color:var(--text3);font-size:16px"></i>
-      </div>`;
-    }).join('')}
+    <div style="padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2)">
+      ${results.length} תוצאות
+      ${archived.length?`<span style="color:var(--text3);font-weight:400;margin-right:6px">· ${archived.length} בארכיון</span>`:''}
+    </div>
+    ${active.map(r=>renderRow(r,false)).join('')}
+    ${archived.length?`
+      <div style="padding:6px 16px;background:#f5f5f5;font-size:11px;font-weight:700;color:var(--text3);display:flex;align-items:center;gap:5px">
+        <i class="ti ti-archive" style="font-size:11px"></i> בארכיון
+      </div>
+      ${archived.map(r=>renderRow(r,true)).join('')}`:''}
   </div>`;
 }
 
-async function openGlobalResult(fileId){
+async function openGlobalResult(fileId, isArchived=false){
   S.globalSearch=''; S.globalSearchResults=null;
-  await adminViewFileRecords(fileId);
+  await adminViewFileRecords(fileId, isArchived);
 }
 function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;_bulkMode=false;_selectedRows.clear();render();}
 function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();}
-async function goRecords(fileId){S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();await getRecords(fileId);render();}
-async function adminViewFileRecords(fileId){S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();await getRecords(fileId);render();}
+async function goRecords(fileId, archiveMode=false){
+  S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};
+  _bulkMode=false;_selectedRows.clear();S.showBulkAll=false;
+  S.archiveMode=archiveMode;
+  render();
+  await getRecords(fileId, archiveMode);
+  if(!archiveMode){
+    await autoArchiveExpired(fileId);
+    // also load archive count for badge
+    GET('records',`?file_id=eq.${fileId}&archived=eq.true&select=id`).then(r=>{
+      if(!_cachedArchive[fileId]||!_cachedArchive[fileId].length) _cachedArchive[fileId]=r||[];
+      render();
+    });
+  }
+  render();
+}
+async function adminViewFileRecords(fileId, archiveMode=false){
+  S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;
+  S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();
+  S.showBulkAll=false;S.archiveMode=archiveMode;
+  render();
+  await getRecords(fileId, archiveMode);
+  if(!archiveMode) await autoArchiveExpired(fileId);
+  render();
+}
 // ══ DASHBOARD ══
 // ── Dashboard period helpers ──
 const DASH_PERIODS = [
@@ -2250,8 +2316,6 @@ function renderAdminPerformance(){
 
 // ══ WA ALERTS TAB ══
 const WA_POLICY_KEY = 'wa_policy';
-let _waPolicy = null;
-let _waHistory = [];
 
 async function loadWAAlertsTab(){
   S.adminTab='wa_alerts'; render();
@@ -2697,22 +2761,50 @@ function showChangeLog(log,customerName){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">סגור</button></div>`);
 }
 
+// ══ ARCHIVE SYSTEM ══
+
+async function archiveNow(recordId, fileId){
+  if(!confirm('להעביר לארכיון עכשיו?')) return;
+  const now=new Date().toISOString();
+  try{
+    await PATCH('records',{archived:true,archived_at:now},`?id=eq.${recordId}`);
+    if(_cachedRecords[fileId]) _cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>r.id!==recordId);
+    await loadAllCounts();
+    render();
+    showAlert('הרשומה הועברה לארכיון','success');
+  }catch(e){showAlert('שגיאה','error');}
+}
+
+async function autoArchiveExpired(fileId){
+  // Auto-archive records where manager filled an admin field (treated_at set) more than 30 days ago
+  const recs=_cachedRecords[fileId]||[];
+  const thirtyDaysAgo=new Date(Date.now()-30*24*3600000).toISOString();
+  const toArchive=recs.filter(r=>r.treated_at&&r.treated_at<thirtyDaysAgo&&!r.archived);
+  if(!toArchive.length) return;
+  const now=new Date().toISOString();
+  await Promise.all(toArchive.map(r=>PATCH('records',{archived:true,archived_at:now},`?id=eq.${r.id}`)));
+  _cachedRecords[fileId]=recs.filter(r=>!toArchive.find(a=>a.id===r.id));
+  if(toArchive.length) render(); // refresh to show updated count
+}
+
+function daysUntilArchive(approvedAt){
+  if(!approvedAt) return null;
+  const diff=30-Math.floor((Date.now()-new Date(approvedAt).getTime())/86400000);
+  return Math.max(0,diff);
+}
+
 function confirmDelRecord(id,fileId){
   showModal(`<div class="modal-title" style="color:var(--red)"><i class="ti ti-alert-triangle"></i> מחיקת רשומה</div>
     <p style="color:var(--text2);margin-bottom:8px">האם אתה בטוח? פעולה זו אינה ניתנת לביטול.</p>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-danger" onclick="doDelRecord('${id}','${fileId||''}')"><i class="ti ti-trash"></i> מחק לצמיתות</button></div>`);
 }
 async function doDelRecord(id,fileId){
-  closeModal();
-  await DEL('records',`?id=eq.${id}`);
-  if(fileId&&fileId!=='null'){await getRecords(fileId);}else{_allRecords=_allRecords.filter(r=>r.id!==id);}
-  await loadAllCounts();render();showAlert('הרשומה נמחקה','success');
+  try{await DELETE('records',`?id=eq.${id}`);if(_cachedRecords[fileId])_cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>r.id!==id);await loadAllCounts();closeModal();render();showAlert('הרשומה נמחקה','success');}
+  catch(e){showAlert('שגיאה במחיקה','error');}
 }
-
-// ── AGENTS CRUD ──
-function openNewAgent(){showModal(`<div class="modal-title"><i class="ti ti-user-plus" style="color:var(--blue)"></i> נציג חדש</div>
-  <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" placeholder="שם פרטי ושם משפחה"></div>
-  <div class="form-row"><label class="form-label">PIN — 4 ספרות אחרונות ת"ז *</label><input class="form-input" id="ag-pin" maxlength="4" placeholder="0000" dir="ltr"></div>
+function openNewAgent(){showModal(`<div class="modal-title"><i class="ti ti-user-plus" style="color:var(--blue)"></i> הוספת נציג חדש</div>
+  <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" placeholder="שם מלא"></div>
+  <div class="form-row"><label class="form-label">PIN (4 ספרות) *</label><input class="form-input" id="ag-pin" maxlength="4" placeholder="0000" dir="ltr"></div>
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-black" onclick="saveNewAgent()"><i class="ti ti-check"></i> הוסף</button></div>`);}
 function openEditAgent(id,name,pin,active){showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת נציג</div>
   <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" value="${esc(name)}"></div>
@@ -3321,7 +3413,7 @@ function saveBackupConfig(){
   showAlert('הגדרות גיבוי נשמרו','success');
 }
 
-let _backupTimer=null;
+
 function startBackupAutoTimer(){
   clearInterval(_backupTimer);
   const cfg=loadBackupDefaults();
@@ -3471,39 +3563,6 @@ function formatWAPhone(phone){
   if(digits.startsWith('972')) return digits;
   if(digits.startsWith('0')) return '972'+digits.slice(1);
   return '972'+digits;
-}
-
-async function checkAndSendWAAlerts(silent=false){
-  const filesWithAlerts=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&(f.wa_contacts||[]).length>0);
-  if(!filesWithAlerts.length){if(!silent)showAlert('אין קבצים עם התראות וואטסאפ מוגדרות','error');return;}
-  let totalSent=0,totalBreached=0;const msgs=[];
-  await Promise.all(filesWithAlerts.map(async f=>{
-    try{
-      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
-      const breached=recs.filter(r=>recordMatchesAlert(r,f));
-      if(!breached.length) return;
-      totalBreached+=breached.length;
-      const org=DB.orgs.find(x=>x.id===f.org_id);
-      const rule=f.alert_rule||{};
-      const allFields=[...(f.extra_fields||[]),...(f.admin_fields||[])];
-      const fieldLabel=(allFields.find(x=>x.id===rule.fieldId)||{}).label||rule.fieldId;
-      const msg=`🚨 *התראת SLA — מובמנט*\n\n📁 קובץ: ${f.name}${org?'\n🏢 ארגון: '+org.name:''}\n\n⚠️ ${breached.length} רשומות בחריגה\nתנאי: ${fieldLabel}${rule.days?` · מעל ${rule.days} ימים`:''}\n\n⏰ ${new Date().toLocaleString('he-IL')}`;
-      for(const contact of (f.wa_contacts||[])){
-        await sendWA(formatWAPhone(contact.phone),msg);
-        totalSent++;msgs.push(`${contact.name} (${f.name})`);
-      }
-    }catch(e){}
-  }));
-  if(!silent){
-    if(totalSent>0) showAlert(`✓ נשלחו ${totalSent} הודעות WA על ${totalBreached} חריגות → ${msgs.join(', ')}`,'success');
-    else showAlert('אין חריגות כרגע — לא נשלחו הודעות','success');
-  }
-}
-
-let _waAutoTimer=null;
-function startWAAutoCheck(){
-  clearInterval(_waAutoTimer);
-  _waAutoTimer=setInterval(()=>{if(S.adminLoggedIn)checkAndSendWAAlerts(true);},30*60*1000);
 }
 
 async function initApp(){await loadAll();await loadAllCounts();render();}
