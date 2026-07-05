@@ -647,13 +647,28 @@ let _cachedArchive={};
 //   - it was created more than `days` days ago
 //   - AND the specified field matches the condition
 
+function businessDaysBetween(fromDate, toDate){
+  // ימי עסקים: ראשון-חמישי בלבד (שישי=5, שבת=6 מוחרגים)
+  let count=0;
+  const cur=new Date(fromDate);
+  cur.setHours(0,0,0,0);
+  const end=new Date(toDate);
+  end.setHours(0,0,0,0);
+  while(cur<end){
+    const day=cur.getDay();
+    if(day!==5&&day!==6) count++;
+    cur.setDate(cur.getDate()+1);
+  }
+  return count;
+}
+
 function recordMatchesAlert(record, file){
   const rule = file.alert_rule||{};
   if(!rule.enabled || !rule.fieldId) return false;
 
-  // check days
+  // check days — ימי עסקים בלבד (ראשון-חמישי)
   if(rule.days){
-    const age = (Date.now() - new Date(record.created_at).getTime()) / 86400000;
+    const age = businessDaysBetween(new Date(record.created_at), new Date());
     if(age < parseFloat(rule.days)) return false;
   }
 
