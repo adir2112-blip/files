@@ -2075,6 +2075,12 @@ function renderAdminDashboard(){
           : '—'
         }
       </td>
+      <td style="text-align:center" onclick="event.stopPropagation()">
+        <button class="btn btn-xs" style="background:var(--purple-light);border-color:#c4b5fd;color:var(--purple)" 
+          onclick="openPieChart('${d.file.id}')" title="פילוח שדה ניהולי">
+          <i class="ti ti-chart-pie"></i>
+        </button>
+      </td>
       <td style="text-align:left"><i class="ti ti-chevron-left" style="color:var(--text3)"></i></td>
     </tr>`;
   }).join('');
@@ -2118,6 +2124,7 @@ function renderAdminDashboard(){
           <th style="text-align:center">חריגות SLA</th>
           <th style="text-align:center">סה"כ רשומות</th>
           <th>תנאי SLA</th>
+          <th style="text-align:center"><i class="ti ti-chart-pie" style="color:var(--purple)"></i></th>
           <th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -2340,7 +2347,155 @@ function renderAdminPerformance(){
     </div>`;
 }
 
-// ══ DAILY REPORT ══
+// ══ PIE CHART POPUP ══
+let _pieFileId=null, _pieFieldId=null, _piePeriod='all';
+
+async function openPieChart(fileId){
+  _pieFileId=fileId;
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  const adminFields=(f.admin_fields||[]).filter(af=>af.type==='select'||af.type==='checkbox');
+  if(!adminFields.length){showAlert('אין שדות ניהוליים מסוג תפריט/תיבה לפילוח','error');return;}
+  _pieFieldId=_pieFieldId&&adminFields.find(af=>af.id===_pieFieldId)?_pieFieldId:adminFields[0].id;
+  await renderPiePopup(f, adminFields);
+}
+
+async function renderPiePopup(f, adminFields){
+  const fieldOpts=adminFields.map(af=>`<option value="${af.id}" ${_pieFieldId===af.id?'selected':''}>${esc(af.label)}</option>`).join('');
+  const periodOpts=DASH_PERIODS.map(p=>`<option value="${p.key}" ${_piePeriod===p.key?'selected':''}>${p.label}</option>`).join('');
+
+  showModal(`
+    <div class="modal-title"><i class="ti ti-chart-pie" style="color:var(--purple)"></i> פילוח — ${esc(f.name)}</div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <label class="form-label">שדה לפילוח</label>
+        <select class="form-input" id="pie-field" onchange="onPieChange('${f.id}')">
+          ${fieldOpts}
+        </select>
+      </div>
+      <div style="flex:1;min-width:140px">
+        <label class="form-label">תקופה</label>
+        <select class="form-input" id="pie-period" onchange="onPieChange('${f.id}')">
+          ${periodOpts}
+        </select>
+      </div>
+    </div>
+    <div id="pie-chart-area" style="min-height:260px;display:flex;align-items:center;justify-content:center">
+      <div class="spinner"></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">סגור</button></div>
+  `);
+  await loadPieData(f.id);
+}
+
+async function onPieChange(fileId){
+  _pieFieldId=document.getElementById('pie-field')?.value||_pieFieldId;
+  _piePeriod=document.getElementById('pie-period')?.value||_piePeriod;
+  const area=document.getElementById('pie-chart-area');
+  if(area) area.innerHTML='<div class="spinner"></div>';
+  await loadPieData(fileId);
+}
+
+async function loadPieData(fileId){
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  const af=[...(f.extra_fields||[]),...(f.admin_fields||[])].find(x=>x.id===_pieFieldId);
+  if(!af) return;
+
+  const isAdminField=!!(f.admin_fields||[]).find(x=>x.id===_pieFieldId);
+
+  // for admin fields — filter by treated_at (when manager updated)
+  // for form fields — filter by created_at (when record was created)
+  const dateField = isAdminField ? 'treated_at' : 'created_at';
+
+  const {from,to}=dashPeriodRange(_piePeriod);
+  let params=`?file_id=eq.${fileId}&select=admin_data,extra,treated_at,created_at`;
+  if(from) params+=`&${dateField}=gte.${encodeURIComponent(from)}`;
+  if(to)   params+=`&${dateField}=lt.${encodeURIComponent(to)}`;
+
+  // for admin fields also exclude records where manager hasn't acted yet
+  if(isAdminField && _piePeriod!=='all') params+=`&treated_at=not.is.null`;
+
+  let recs=[];
+  try{ recs=await GET('records',params); }catch(e){}
+
+  // count values
+  const counts={};
+  const isAdmin=(f.admin_fields||[]).find(x=>x.id===_pieFieldId);
+  recs.forEach(r=>{
+    const raw=isAdmin?((r.admin_data||{})[_pieFieldId]):((r.extra||{})[_pieFieldId]);
+    let val;
+    if(af.type==='checkbox') val=raw?'מסומן':'לא מסומן';
+    else val=raw||'ריק';
+    counts[val]=(counts[val]||0)+1;
+  });
+
+  const total=Object.values(counts).reduce((s,v)=>s+v,0);
+  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+
+  const COLORS=['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#db2777','#65a30d','#9333ea','#0284c7'];
+
+  // draw SVG pie
+  const area=document.getElementById('pie-chart-area');
+  if(!area) return;
+
+  if(!entries.length){
+    area.innerHTML='<div class="empty" style="padding:20px"><i class="ti ti-database-off"></i><p>אין נתונים לתקופה זו</p></div>';
+    return;
+  }
+
+  // calculate pie slices
+  const cx=120,cy=120,r=100;
+  let angle=-Math.PI/2;
+  const slices=entries.map(([label,count],i)=>{
+    const pct=count/total;
+    const startA=angle;
+    angle+=pct*2*Math.PI;
+    const endA=angle;
+    const x1=cx+r*Math.cos(startA),y1=cy+r*Math.sin(startA);
+    const x2=cx+r*Math.cos(endA),y2=cy+r*Math.sin(endA);
+    const large=pct>0.5?1:0;
+    const midA=(startA+endA)/2;
+    const tx=cx+(r*0.65)*Math.cos(midA),ty=cy+(r*0.65)*Math.sin(midA);
+    return {label,count,pct,x1,y1,x2,y2,large,tx,ty,color:COLORS[i%COLORS.length]};
+  });
+
+  const paths=slices.map(s=>
+    total===1||s.pct===1
+      ?`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${s.color}"/>`
+      :`<path d="M${cx},${cy} L${s.x1},${s.y1} A${r},${r} 0 ${s.large},1 ${s.x2},${s.y2} Z" fill="${s.color}" opacity=".9"/>`
+  ).join('');
+
+  const pctLabels=slices.filter(s=>s.pct>0.06).map(s=>
+    `<text x="${s.tx}" y="${s.ty}" text-anchor="middle" font-size="12" fill="#fff" font-weight="700">${Math.round(s.pct*100)}%</text>`
+  ).join('');
+
+  const legend=slices.map(s=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="width:14px;height:14px;border-radius:4px;background:${s.color};flex-shrink:0"></div>
+      <div style="font-size:13px;flex:1">${esc(s.label)}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text)">${s.count}</div>
+      <div style="font-size:11px;color:var(--text3);min-width:36px;text-align:left">${Math.round(s.pct*100)}%</div>
+    </div>`).join('');
+
+  area.innerHTML=`
+    <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;justify-content:center;width:100%">
+      <svg viewBox="0 0 240 240" width="200" height="200" style="flex-shrink:0">
+        ${paths}
+        ${pctLabels}
+        <text x="${cx}" y="${cy+5}" text-anchor="middle" font-size="13" fill="var(--text2)" font-weight="600">${total}</text>
+        <text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="10" fill="var(--text3)">רשומות</text>
+      </svg>
+      <div style="flex:1;min-width:160px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">פילוח לפי ${esc(af.label)}</div>
+        ${legend}
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--text3)">
+          סה"כ: <strong>${total}</strong> רשומות
+          <span style="margin-right:8px;font-size:11px">${isAdminField?'· לפי תאריך עדכון מנהל':'· לפי תאריך יצירה'}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+
 function loadDailyReportConfig(){
   try{ return JSON.parse(localStorage.getItem('moked_daily_report')||'{}'); }
   catch(e){ return {}; }
