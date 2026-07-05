@@ -589,6 +589,7 @@ function enterApp(user){
   _agentName=user.name;
   if(user.role==='manager'){
     startWAAutoCheck();
+    startDailyReportTimer();
     // load agents after loadAll so render has all data
     initApp().then(()=>{
       GET('app_users','?order=name.asc&select=id,name,pin,active,last_login').then(data=>{ allAgents=data||[]; render(); });
@@ -936,7 +937,7 @@ function renderForm(){
         </div>
         <div class="entry-hero-actions">
           <button class="entry-hero-btn" onclick="goRecords('${f.id}')"><i class="ti ti-list"></i> רשומות</button>
-          ${S.adminLoggedIn?`<button class="entry-hero-btn" onclick="openEditFile('${f.id}')"><i class="ti ti-settings"></i> ערוך טופס</button>`:''}
+          ${S.adminLoggedIn&&canManagerAccessFile(f)?`<button class="entry-hero-btn" onclick="openEditFile('${f.id}')"><i class="ti ti-settings"></i> ערוך טופס</button>`:''}
           <button class="entry-hero-btn green" onclick="exportFile('${f.id}')"><i class="ti ti-download"></i> Excel</button>
         </div>
       </div>
@@ -1315,7 +1316,7 @@ async function bulkSetField(fieldId, value){
 
 function renderRecordsPage(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
-  const isAdmin=S.adminLoggedIn;
+  const isAdmin=S.adminLoggedIn && canManagerAccessFile(f);
   const records=S.archiveMode
     ? (_cachedArchive[S.fileId]||[])
     : (_cachedRecords[S.fileId]||[]);
@@ -2324,6 +2325,168 @@ function renderAdminPerformance(){
     </div>`;
 }
 
+// ══ DAILY REPORT ══
+function loadDailyReportConfig(){
+  try{ return JSON.parse(localStorage.getItem('moked_daily_report')||'{}'); }
+  catch(e){ return {}; }
+}
+function saveDailyReport(){
+  const phone=document.getElementById('dr-phone')?.value.trim()||'';
+  const hour=parseInt(document.getElementById('dr-hour')?.value||8);
+  const enabled=document.getElementById('dr-enabled')?.checked||false;
+  const selectedFiles=[...document.querySelectorAll('[data-dr-file]:checked')].map(el=>el.dataset.drFile);
+  const cfg={phone,hour,enabled,files:selectedFiles};
+  localStorage.setItem('moked_daily_report',JSON.stringify(cfg));
+  startDailyReportTimer();
+  showAlert('דוח יומי נשמר','success');
+}
+
+function renderDailyReportSection(){
+  const cfg=loadDailyReportConfig();
+  const hours=Array.from({length:24},(_,i)=>i);
+  const fileRows=DB.files.map(f=>{
+    const o=DB.orgs.find(x=>x.id===f.org_id);
+    const checked=(cfg.files||[]).includes(f.id);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid ${checked?'#25d366':'var(--border)'};border-radius:8px;cursor:pointer;background:${checked?'#f0fdf4':'var(--surface2)'};margin-bottom:5px;font-size:13px">
+      <input type="checkbox" data-dr-file="${f.id}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:#25d366;cursor:pointer">
+      <span style="font-weight:600">${esc(f.name)}</span>
+      <span style="color:var(--text3);font-size:11px">· ${esc(o?o.name:'')}</span>
+    </label>`;
+  }).join('');
+
+  return `
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:16px;color:#25d366"><i class="ti ti-brand-whatsapp"></i> דוח יומי אישי — לאדיר</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:${cfg.enabled?'#f0fdf4':'var(--surface2)'};border:1px solid ${cfg.enabled?'#86efac':'var(--border)'};border-radius:var(--radius-sm)">
+          <input type="checkbox" id="dr-enabled" ${cfg.enabled?'checked':''} style="width:18px;height:18px;accent-color:#25d366;cursor:pointer">
+          <label for="dr-enabled" style="font-weight:700;font-size:14px;cursor:pointer">שלח דוח יומי</label>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">טלפון לשליחה (972XXXXXXXXX)</label>
+          <input class="form-input" id="dr-phone" type="text" dir="ltr" placeholder="972501234567" value="${esc(cfg.phone||'')}">
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">שעת שליחה</label>
+          <select class="form-input" id="dr-hour">
+            ${hours.map(h=>`<option value="${h}" ${cfg.hour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+          </select>
+        </div>
+
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.8;white-space:pre-line;font-family:inherit">
+<strong>דוגמה להודעה:</strong>
+
+👋 היי אדיר!
+
+📊 <strong>דוח חריגות יומי</strong>
+━━━━━━━━━━━━━━
+
+📂 <strong>שיחות מנהל</strong> (כללית)
+   ⚠️ 20 חריגות
+   👤 אחראים: ירין, אנאל
+
+📂 <strong>דוח ביטולים</strong> (לאומית)
+   ⚠️ 15 חריגות
+   👤 אחראים: ירין
+
+━━━━━━━━━━━━━━
+🔴 סה"כ: <strong>35 חריגות</strong> ב-2 קבצים
+⏰ 05/07/2026 08:00
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" onclick="saveDailyReport()"><i class="ti ti-check"></i> שמור</button>
+          <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="sendDailyReportNow()">
+            <i class="ti ti-send"></i> שלח עכשיו
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label" style="margin-bottom:8px;display:block">בחר קבצים לדוח</label>
+        <div style="max-height:280px;overflow-y:auto;padding-left:2px">
+          ${fileRows||'<div class="empty" style="padding:10px"><p>אין קבצים</p></div>'}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+let _dailyReportTimer=null;
+function startDailyReportTimer(){
+  clearInterval(_dailyReportTimer);
+  const cfg=loadDailyReportConfig();
+  if(!cfg.enabled||!cfg.phone) return;
+  _dailyReportTimer=setInterval(async()=>{
+    const now=new Date();
+    if(now.getHours()===cfg.hour && now.getMinutes()<30){
+      const today=now.toISOString().slice(0,10);
+      const lastSent=localStorage.getItem('moked_daily_report_last');
+      if(lastSent===today) return; // already sent today
+      await sendDailyReportNow(true);
+      localStorage.setItem('moked_daily_report_last', today);
+    }
+  }, 20*60*1000); // check every 20 min
+}
+
+async function sendDailyReportNow(silent=false){
+  const cfg=loadDailyReportConfig();
+  const phone=cfg.phone?.trim();
+  if(!phone){ if(!silent) showAlert('יש להזין טלפון','error'); return; }
+
+  const fileIds=cfg.files||[];
+  const filesToCheck=fileIds.length>0
+    ? DB.files.filter(f=>fileIds.includes(f.id))
+    : DB.files;
+
+  if(!filesToCheck.length){ if(!silent) showAlert('אין קבצים נבחרים','error'); return; }
+
+  const lines=[];
+  await Promise.all(filesToCheck.map(async f=>{
+    if(!f.alert_rule?.enabled||!f.alert_rule?.fieldId) return;
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+      const breached=recs.filter(r=>recordMatchesAlert(r,f)).length;
+      if(breached>0){
+        const contacts=(f.wa_contacts||[]).map(c=>c.name).filter(Boolean);
+        const org=DB.orgs.find(x=>x.id===f.org_id);
+        lines.push({name:f.name, org:org?.name||'', breached, contacts});
+      }
+    }catch(e){}
+  }));
+
+  if(!lines.length){
+    if(!silent) showAlert('אין חריגות כרגע — לא נשלח דוח','success');
+    return;
+  }
+
+  lines.sort((a,b)=>b.breached-a.breached);
+  const now=new Date();
+  const timeStr=now.toLocaleDateString('he-IL')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const totalBreached=lines.reduce((s,l)=>s+l.breached,0);
+
+  const fileLines=lines.map(l=>{
+    let line=`📂 *${l.name}*`;
+    if(l.org) line+=` (${l.org})`;
+    line+=`\n   ⚠️ ${l.breached} חריגות`;
+    if(l.contacts.length) line+=`\n   👤 אחראים: ${l.contacts.join(', ')}`;
+    return line;
+  }).join('\n\n');
+
+  const msg=`👋 היי אדיר!\n\n📊 *דוח חריגות יומי*\n━━━━━━━━━━━━━━\n\n${fileLines}\n\n━━━━━━━━━━━━━━\n🔴 סה"כ: *${totalBreached} חריגות* ב-${lines.length} קבצים\n⏰ ${timeStr}`;
+
+  try{
+    await sendWA(formatWAPhone(phone), msg);
+    if(!silent) showAlert(`✓ דוח יומי נשלח`,'success');
+  }catch(e){
+    if(!silent) showAlert('שגיאה בשליחה: '+e.message,'error');
+  }
+}
+
 // ══ WA ALERTS TAB ══
 const WA_POLICY_KEY = 'wa_policy';
 
@@ -2481,6 +2644,9 @@ function renderWAAlerts(){
         }
       </div>
     </div>
+
+    <!-- DAILY REPORT -->
+    ${renderDailyReportSection()}
 
     <!-- HISTORY -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
@@ -2809,8 +2975,12 @@ function confirmDelRecord(id,fileId){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-danger" onclick="doDelRecord('${id}','${fileId||''}')"><i class="ti ti-trash"></i> מחק לצמיתות</button></div>`);
 }
 async function doDelRecord(id,fileId){
-  try{await DELETE('records',`?id=eq.${id}`);if(_cachedRecords[fileId])_cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>r.id!==id);await loadAllCounts();closeModal();render();showAlert('הרשומה נמחקה','success');}
-  catch(e){showAlert('שגיאה במחיקה','error');}
+  try{
+    await DEL('records',`?id=eq.${id}`);
+    if(_cachedRecords[fileId]) _cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>r.id!==id);
+    await loadAllCounts();closeModal();render();showAlert('הרשומה נמחקה','success');
+  }
+  catch(e){showAlert('שגיאה במחיקה: '+e.message,'error');}
 }
 function openNewAgent(){showModal(`<div class="modal-title"><i class="ti ti-user-plus" style="color:var(--blue)"></i> הוספת נציג חדש</div>
   <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" placeholder="שם מלא"></div>
