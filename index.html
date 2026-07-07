@@ -1432,7 +1432,11 @@ function renderRecordsPage(){
       return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></div></td>`;
     }).join('');
     const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
-    const treatedC=(isAdmin&&adminFields.length)?`<td class="admin-col" id="treated-at-${r.id}" style="font-size:11px;color:var(--text3);white-space:nowrap">${r.treated_at?fmtDate(r.treated_at):'—'}</td>`:'';
+    const lastChange=(r.change_log||[]).slice(-1)[0];
+    const treatedBy=lastChange?.by||'';
+    const treatedC=(isAdmin&&adminFields.length)?`<td class="admin-col" id="treated-at-${r.id}" style="font-size:11px;color:var(--text3);white-space:nowrap">
+      ${r.treated_at?`<div>${fmtDate(r.treated_at)}</div><div style="color:var(--purple);font-weight:600;font-size:10px">${esc(treatedBy)}</div>`:'—'}
+    </td>`:'';
 
     const noteC=isAdmin&&!_bulkMode?`<td class="admin-col" style="max-width:180px">
       <div style="display:flex;align-items:center;gap:5px">
@@ -3060,7 +3064,7 @@ async function saveAdminField(recordId,fieldId,value,fileId){
     await PATCH('records',{admin_data:record.admin_data,treated_at:treatedAt,change_log:record.change_log},`?id=eq.${recordId}`);
     await loadAllCounts();
     const cell=document.getElementById('treated-at-'+recordId);
-    if(cell) cell.textContent=fmtDate(treatedAt);
+    if(cell) cell.innerHTML=`<div>${fmtDate(treatedAt)}</div><div style="color:var(--purple);font-weight:600;font-size:10px">${esc(currentUser?.name||_agentName||'')}</div>`;
   }
   catch(e){showAlert('שגיאה בשמירה','error');}
 }
