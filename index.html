@@ -2690,13 +2690,19 @@ function defaultWAPolicy(){
   };
 }
 
-function saveWAPolicy(){
+async function saveWAPolicy(){
   const p = collectWAPolicy();
   localStorage.setItem('moked_wa_policy', JSON.stringify(p));
   _waPolicy = p;
-  // restart auto timer with new policy
+  // sync to Supabase so Edge Function respects it
+  try{
+    await PATCH('app_settings', {value: JSON.stringify(p.enabled)}, `?key=eq.wa_enabled`);
+  }catch(e){
+    // if row doesn't exist yet, insert it
+    try{ await POST('app_settings', {key:'wa_enabled', value: JSON.stringify(p.enabled)}); }catch(e2){}
+  }
   startWAAutoCheckWithPolicy();
-  showAlert('מדיניות ההתראות נשמרה','success');
+  showAlert(p.enabled ? '✅ התראות WA פעילות' : '⏸ התראות WA מושהות', 'success');
 }
 
 function collectWAPolicy(){
