@@ -2707,7 +2707,7 @@ async function saveWAPolicy(){
 
 function collectWAPolicy(){
   return {
-    enabled: document.getElementById('wap-enabled')?.checked ?? true,
+    enabled: document.getElementById('wap-enabled')?.value === 'true',
     intervalHours: parseFloat(document.getElementById('wap-interval')?.value||2),
     startHour: parseInt(document.getElementById('wap-start')?.value||8),
     endHour: parseInt(document.getElementById('wap-end')?.value||20),
@@ -2751,15 +2751,15 @@ function renderWAAlerts(){
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
         <div class="card-title" style="margin-bottom:16px;color:#25d366"><i class="ti ti-settings" style="color:#25d366"></i> מדיניות שליחה</div>
 
-        <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;padding:10px 12px;background:${p.enabled?'var(--green-light)':'var(--surface2)'};border-radius:var(--radius-sm);border:1px solid ${p.enabled?'#86efac':'var(--border)'}">
-          <input type="checkbox" id="wap-enabled" ${p.enabled?'checked':''} style="width:18px;height:18px;accent-color:#25d366;cursor:pointer">
-          <label for="wap-enabled" style="font-weight:700;font-size:14px;cursor:pointer;color:${p.enabled?'var(--green)':'var(--text2)'}">
-            ${p.enabled?'✅ התראות פעילות':'⏸ התראות מושהות'}
-          </label>
+        <div class="form-row">
+          <label class="form-label">שליחת התראות</label>
+          <select class="form-input" id="wap-enabled" style="font-weight:700;font-size:14px;border:2px solid ${p.enabled?'#22c55e':'#ef4444'};color:${p.enabled?'var(--green)':'var(--red)'}">
+            <option value="true"  ${p.enabled?'selected':''}>✅ מאושר — שולח התראות</option>
+            <option value="false" ${!p.enabled?'selected':''}>🚫 חסום — לא שולח</option>
+          </select>
         </div>
 
         <div class="form-row">
-          <label class="form-label">תדירות שליחה</label>
           <select class="form-input" id="wap-interval">
             ${intervals.map(i=>`<option value="${i.v}" ${p.intervalHours===i.v?'selected':''}>${i.l}</option>`).join('')}
           </select>
