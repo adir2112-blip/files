@@ -1410,6 +1410,12 @@ function renderRecordsPage(){
       const val=(r.admin_data||{})[af.id];
       if(!isAdmin){
         const agentChatBadge=af.chatEnabled?`<span onclick="event.stopPropagation();showFieldChatFromRecord(event,'${af.id}','${esc(af.label)}',_cachedRecords['${S.fileId}']?.find(x=>x.id==='${r.id}')||{id:'${r.id}',field_comments:{}})" style="cursor:pointer;color:var(--blue);margin-right:4px;flex-shrink:0" title="פתח שיחה עם מנהל"><i class="ti ti-message-circle" style="font-size:14px"></i>${((r.field_comments||{})[af.id]||[]).length>0?`<sup style="font-size:9px;font-weight:800">${((r.field_comments||{})[af.id]||[]).length}</sup>`:''}</span>`:'';
+        // if agentEditable — show editable input for agent
+        if(af.agentEditable){
+          if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}<input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></div></td>`;
+          if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${agentChatBadge}<select class="admin-input" style="flex:1;border-color:#ea580c" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></div></td>`;}
+          return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${agentChatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1;border-color:#ea580c" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></div></td>`;
+        }
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</div></td>`;
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</div></td>`;}
         if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}<a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></div></td>`;}
@@ -3571,6 +3577,10 @@ function fieldRowHTML(ef,i,p){
         <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--blue)">💬 צ'אט</label>
         <input type="checkbox" data-fc="${p}_${i}" ${ef.chatEnabled?'checked':''} style="width:17px;height:17px;accent-color:var(--blue);cursor:pointer" title="אפשר הערות שיחה על שדה זה">
       </div>
+      ${p==='a'?`<div style="padding-top:20px;text-align:center">
+        <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--orange,#ea580c)">נציג עורך</label>
+        <input type="checkbox" data-fa="${p}_${i}" ${ef.agentEditable?'checked':''} style="width:17px;height:17px;accent-color:#ea580c;cursor:pointer" title="נציג יכול לערוך שדה זה">
+      </div>`:''}
       <div style="padding-top:38px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField('${p}',${i})"><i class="ti ti-trash"></i></button></div>
     </div>
     <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
@@ -3608,6 +3618,8 @@ function saveFieldsFromDOM(p){
     if(n) ef.note=n.value;
     const c=document.querySelector('[data-fc="'+p+'_'+i+'"]');
     if(c) ef.chatEnabled=c.checked;
+    const a=document.querySelector('[data-fa="'+p+'_'+i+'"]');
+    if(a) ef.agentEditable=a.checked;
   });
 }
 function onTypeChange(p,i,val){
@@ -3636,7 +3648,9 @@ function removeField(p,i){
   arr.splice(i,1);
   refreshFields(p);
 }
-function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`),b=document.querySelector(`[data-fb="${p}_${i}"]`),ne=document.querySelector(`[data-fne="${p}_${i}"]`),n=document.querySelector(`[data-fn="${p}_${i}"]`);const c2=document.querySelector(`[data-fc="${p}_${i}"]`);return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled};}).filter(ef=>ef.label);}
+function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`),b=document.querySelector(`[data-fb="${p}_${i}"]`),ne=document.querySelector(`[data-fne="${p}_${i}"]`),n=document.querySelector(`[data-fn="${p}_${i}"]`);const c2=document.querySelector(`[data-fc="${p}_${i}"]`);
+const a2=document.querySelector(`[data-fa="${p}_${i}"]`);
+return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled,agentEditable:a2?a2.checked:!!ef.agentEditable};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
 function collectWaContacts(){
   const c=[];
