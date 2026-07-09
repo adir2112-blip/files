@@ -406,6 +406,7 @@ tr:hover td.admin-col{background:var(--purple-light)}
     </div>
     <div class="topbar-actions">
       <span class="agent-chip" id="agent-chip"></span>
+      <button class="btn btn-ghost btn-sm" id="home-btn" style="display:none" onclick="goOrgs()"><i class="ti ti-home"></i> ראשי</button>
       <button class="btn btn-ghost btn-sm" id="admin-btn" style="display:none" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()"><i class="ti ti-logout"></i> יציאה</button>
     </div>
@@ -736,6 +737,9 @@ function totalPending(){return Object.values(_pendingCounts).reduce((s,v)=>s+v,0
 function render(){
   const app=document.getElementById('app');
   app.className = S.view==='records' ? 'container full-width' : 'container';
+  // show/hide home button
+  const homeBtn=document.getElementById('home-btn');
+  if(homeBtn) homeBtn.style.display=S.view==='admin'?'':'none';
   let html=S.alert?`<div class="alert alert-${S.alert.type}"><i class="ti ${S.alert.type==='success'?'ti-check':'ti-alert-circle'}"></i>${S.alert.msg}</div>`:'';
   html+=renderBreadcrumb();
   if(S.view==='orgs')         html+=renderOrgs();
