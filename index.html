@@ -3980,20 +3980,9 @@ function renderAdminBackup(){
 }
 
 
-const WA_API='https://whatsapp-bot-production-120a.up.railway.app/api/send';
-
-async function sendWA(phone,message){
-  try{
-    await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message})});
-  }catch(e){console.warn('WA send failed:',e);}
-}
-
-function formatWAPhone(phone){
-  const digits=phone.replace(/[^0-9]/g,'');
-  if(digits.startsWith('972')) return digits;
-  if(digits.startsWith('0')) return '972'+digits.slice(1);
-  return '972'+digits;
-}
+// WA DISABLED
+async function sendWA(phone,message){ console.log('WA disabled'); }
+function formatWAPhone(phone){ return phone; }
 
 async function initApp(){await loadAll();await loadAllCounts();render();}
 window.addEventListener('DOMContentLoaded',()=>{initLoginBg();initLogin();});
