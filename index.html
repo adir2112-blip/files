@@ -591,6 +591,7 @@ function enterApp(user){
   if(user.role==='manager'){
     startWAAutoCheck();
     startDailyReportTimer();
+    startInactivityTimer();
     // load agents after loadAll so render has all data
     initApp().then(()=>{
       GET('app_users','?order=name.asc&select=id,name,pin,active,last_login').then(data=>{ allAgents=data||[]; render(); });
@@ -1606,8 +1607,9 @@ function renderAdmin(){
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="S.adminTab='backup';render()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
+      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='email_log'?'active':''}" onclick="loadEmailLogTab()"><i class="ti ti-mail" style="font-size:12px;color:#2563eb"></i> מיילים</button>`:''}
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():tab==='email_log'?renderEmailLog():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -3534,6 +3536,21 @@ function fileModalHTML(f,mode,id=''){
     <div class="section-divider" style="color:#c2410c"><i class="ti ti-bell-ringing"></i> הגדרת התראה אוטומטית</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px">התראה תופיע למנהל כשרשומה עומדת בתנאי — badge כתום על הקובץ ובמסך הבית</div>
     ${alertRuleHTML}
+    <div class="section-divider" style="color:#7c3aed"><i class="ti ti-clock-exclamation"></i> התראת חוסר פעילות</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">התראה אם לא נוצרו רשומות חדשות בקובץ זה מעל זמן מוגדר</div>
+    <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:10px;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600">
+        <input type="checkbox" id="inactivity-enabled" ${f.inactivity_alert?.enabled?'checked':''} 
+          style="width:17px;height:17px;accent-color:#7c3aed;cursor:pointer">
+        הפעל
+      </label>
+      <div>
+        <label class="form-label">מעל כמה שעות</label>
+        <input class="form-input" id="inactivity-hours" type="number" min="1" max="72" 
+          value="${f.inactivity_alert?.hours||3}" placeholder="3">
+      </div>
+    </div>
+
     <div class="section-divider" style="color:#25d366"><i class="ti ti-brand-whatsapp"></i> התראות וואטסאפ</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">עד 2 אנשי קשר שיקבלו הודעת וואטסאפ אוטומטית כשיש חריגות SLA בקובץ זה</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -3665,6 +3682,13 @@ function collectAlertEmails(){
   return [0,1,2,3].map(i=>document.getElementById(`email-alert-${i}`)?.value.trim()||'').filter(Boolean);
 }
 
+function collectInactivityAlert(){
+  return {
+    enabled: document.getElementById('inactivity-enabled')?.checked||false,
+    hours: parseFloat(document.getElementById('inactivity-hours')?.value||3)
+  };
+}
+
 function collectWaContacts(){
   const c=[];
   const n1=document.getElementById('wa-name-1')?.value.trim();
@@ -3675,8 +3699,8 @@ function collectWaContacts(){
   if(n2&&p2) c.push({name:n2,phone:p2});
   return c;
 }
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
 // ── EXPORT ──
@@ -3998,6 +4022,176 @@ function renderAdminBackup(){
 async function sendWA(phone,message){ console.log('WA disabled'); }
 function formatWAPhone(phone){ return phone; }
 
+const EMAIL_FUNC_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/functions/v1/send-alert-email';
+let _emailLog=[];
+function loadEmailLog(){try{_emailLog=JSON.parse(localStorage.getItem('moked_email_log')||'[]');}catch(e){_emailLog=[];}}
+function addEmailLog(to,subject,ok){
+  _emailLog=[{ts:new Date().toISOString(),to,subject,ok},..._emailLog].slice(0,200);
+  localStorage.setItem('moked_email_log',JSON.stringify(_emailLog));
+}
+
+function loadEmailLogTab(){
+  S.adminTab='email_log';
+  loadEmailLog();
+  render();
+}
+
+function renderEmailLog(){
+  loadEmailLog();
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0"><i class="ti ti-mail" style="color:#2563eb"></i> היסטוריית מיילים</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="loadEmailLogTab()"><i class="ti ti-refresh"></i> רענן</button>
+        ${_emailLog.length?`<button class="btn btn-xs btn-danger" onclick="if(confirm('למחוק היסטוריה?')){_emailLog=[];localStorage.removeItem('moked_email_log');render();}"><i class="ti ti-trash"></i> נקה</button>`:''}
+      </div>
+    </div>
+    ${!_emailLog.length
+      ?`<div class="empty"><i class="ti ti-mail-off" style="font-size:40px"></i><p>אין היסטוריית מיילים</p></div>`
+      :`<div class="table-wrap"><table>
+        <thead><tr>
+          <th>תאריך ושעה</th>
+          <th>נמענים</th>
+          <th>נושא</th>
+          <th style="text-align:center">סטטוס</th>
+        </tr></thead>
+        <tbody>
+          ${_emailLog.map(e=>`<tr>
+            <td style="white-space:nowrap;font-size:12px;color:var(--text3)">${fmtDate(e.ts)}</td>
+            <td style="font-size:12px" dir="ltr">${esc(e.to||'')}</td>
+            <td style="font-size:13px">${esc(e.subject||'')}</td>
+            <td style="text-align:center"><span class="badge ${e.ok?'badge-success':'badge-warning'}">${e.ok?'✓ נשלח':'⚠ שגיאה'}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`
+    }`;
+}
+
+// ══ INACTIVITY ALERT ══
+let _inactivityTimer=null;
+let _inactivityShown={};
+
+function isInactivityAllowed(){
+  const now=new Date();
+  const day=now.getDay(); // 0=sun,1=mon,...,4=thu,5=fri,6=sat
+  if(day===5||day===6) return false; // שישי שבת
+  const hour=now.getHours();
+  return hour>=8 && hour<18; // 08:00-18:00
+}
+
+function startInactivityTimer(){
+  clearInterval(_inactivityTimer);
+  _inactivityTimer=setInterval(()=>{
+    if(S.adminLoggedIn && isInactivityAllowed()) checkInactivity();
+  }, 10*60*1000); // check every 10 minutes
+}
+
+async function checkInactivity(){
+  const filesWithInactivity = DB.files.filter(f=>f.inactivity_alert?.enabled&&f.inactivity_alert?.hours);
+  if(!filesWithInactivity.length) return;
+
+  const now = new Date();
+  const alerts = [];
+
+  await Promise.all(filesWithInactivity.map(async f=>{
+    try{
+      const hours = f.inactivity_alert.hours;
+      const since = new Date(now.getTime() - hours*3600000).toISOString();
+      // check last record created
+      const recs = await GET('records',`?file_id=eq.${f.id}&created_at=gte.${encodeURIComponent(since)}&select=id&limit=1`);
+      if(!recs.length){
+        // no records in last X hours — check we haven't already alerted
+        const key = f.id+'_'+Math.floor(now.getTime()/(hours*3600000));
+        if(!_inactivityShown[key]){
+          _inactivityShown[key]=true;
+          const org=DB.orgs.find(x=>x.id===f.org_id);
+          alerts.push({file:f, org, hours});
+        }
+      }
+    }catch(e){}
+  }));
+
+  if(alerts.length) showInactivityPopup(alerts);
+}
+
+function showInactivityPopup(alerts){
+  // play alert sound
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [523,659,784].forEach((freq,i)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.frequency.value=freq;
+      osc.type='sine';
+      gain.gain.setValueAtTime(0.3,ctx.currentTime+i*0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+i*0.15+0.3);
+      osc.start(ctx.currentTime+i*0.15);
+      osc.stop(ctx.currentTime+i*0.15+0.3);
+    });
+  }catch(e){}
+
+  // remove existing popup
+  document.getElementById('inactivity-popup')?.remove();
+
+  const popup=document.createElement('div');
+  popup.id='inactivity-popup';
+  popup.style.cssText='position:fixed;top:20px;right:20px;z-index:9999;max-width:360px;background:#fff;border:2px solid #7c3aed;border-radius:16px;box-shadow:0 8px 40px rgba(124,58,237,.3);overflow:hidden;animation:chatPopIn .25s ease';
+
+  const rows=alerts.map(a=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f3f4f6">
+      <i class="ti ti-clock-exclamation" style="color:#7c3aed;font-size:20px;flex-shrink:0"></i>
+      <div>
+        <div style="font-weight:700;font-size:13px">${esc(a.file.name)}</div>
+        <div style="font-size:12px;color:#6b7280">אין פעילות מעל ${a.hours} שעות · ${esc(a.org?.name||'')}</div>
+      </div>
+      ${(a.file.alert_emails||[]).length?`<button onclick="sendInactivityEmail('${a.file.id}')" style="margin-right:auto;background:#7c3aed;border:none;color:#fff;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;flex-shrink:0"><i class="ti ti-mail"></i> שלח</button>`:''}
+    </div>`).join('');
+
+  popup.innerHTML=`
+    <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
+      <span style="color:#fff;font-weight:700;font-size:14px">⚠️ התראת חוסר פעילות</span>
+      <button onclick="document.getElementById('inactivity-popup').remove()" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:20px;line-height:1">✕</button>
+    </div>
+    ${rows}
+    <div style="padding:10px 14px;text-align:center">
+      <button onclick="document.getElementById('inactivity-popup').remove()" style="background:#f3f4f6;border:none;border-radius:8px;padding:7px 20px;cursor:pointer;font-size:13px;font-weight:600">סגור</button>
+    </div>`;
+
+  document.body.appendChild(popup);
+
+  // auto-close after 30 seconds
+  setTimeout(()=>document.getElementById('inactivity-popup')?.remove(), 30000);
+
+  // send emails
+  alerts.forEach(a=>{
+    if((a.file.alert_emails||[]).length) sendInactivityEmail(a.file.id);
+  });
+}
+
+async function sendInactivityEmail(fileId){
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  const emails=f.alert_emails||[]; if(!emails.length) return;
+  const org=DB.orgs.find(x=>x.id===f.org_id);
+  const hours=f.inactivity_alert?.hours||3;
+  try{
+    await fetch(EMAIL_FUNC_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({
+        to:emails,
+        fileName:f.name,
+        orgName:org?.name||'',
+        breached:0,
+        fieldLabel:`אין פעילות מעל ${hours} שעות`,
+        days:0,
+        subject:`⚠️ חוסר פעילות — ${f.name}`,
+        customHtml:true
+      })
+    });
+  }catch(e){}
+}
+
 // ══ EMAIL ALERT MANAGERS ══
 let _emailManagers = [];
 
@@ -4067,13 +4261,12 @@ async function testAlertEmail(email, name){
       })
     });
     const data = await res.json();
+    addEmailLog(email,`בדיקה — ${name}`,data.ok);
     showAlert(data.ok?`✓ מייל בדיקה נשלח ל-${name}`:`שגיאה: ${JSON.stringify(data)}`,'success');
   }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
   if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i> בדיקה'; }
 }
 
-
-const EMAIL_FUNC_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/functions/v1/send-alert-email';
 
 async function sendAlertEmail(file, breachedCount){
   const emails = file.alert_emails||[];
@@ -4082,20 +4275,16 @@ async function sendAlertEmail(file, breachedCount){
   const rule = file.alert_rule||{};
   const allFields = [...(file.extra_fields||[]),...(file.admin_fields||[])];
   const fieldLabel = (allFields.find(x=>x.id===rule.fieldId)||{}).label||'';
+  const subject=`עדכון מובמנט — ${file.name}: ${breachedCount} ממתינות`;
   try{
-    await fetch(EMAIL_FUNC_URL,{
+    const res=await fetch(EMAIL_FUNC_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
-      body:JSON.stringify({
-        to: emails,
-        fileName: file.name,
-        orgName: org?.name||'',
-        breached: breachedCount,
-        fieldLabel,
-        days: rule.days||0
-      })
+      body:JSON.stringify({to:emails,fileName:file.name,orgName:org?.name||'',breached:breachedCount,fieldLabel,days:rule.days||0})
     });
-  }catch(e){ console.warn('Email send failed:',e); }
+    const data=await res.json();
+    addEmailLog(emails.join(', '),subject,data.ok);
+  }catch(e){ console.warn('Email send failed:',e); addEmailLog(emails.join(', '),subject,false); }
 }
 
 async function initApp(){await loadAll();await loadAllCounts();render();}
