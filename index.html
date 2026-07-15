@@ -2656,8 +2656,8 @@ async function sendDailyReportNow(silent=false){
   const totalBreached=lines.reduce((s,l)=>s+l.breached,0);
 
   const dateStr=now.toLocaleDateString('he-IL');
-  const fileLines=lines.map(l=>`${l.name}: ${l.breached} ממתינות`).join('\n');
-  const msg=`עדכון מובמנט - ${dateStr}\n\n${fileLines}\n\nלכניסה למערכת: https://movement-moked.github.io`;
+  const fileLines=lines.map(l=>`${l.name}: ${l.breached} פניות ממתינות לטיפול`).join('\n');
+  const msg=`מובמנט | ${dateStr}\n\n${fileLines}\n\nלכניסה: https://movement-moked.github.io`;
 
   try{
     await sendWA(formatWAPhone(phone), msg);
@@ -2886,7 +2886,7 @@ async function checkAndSendWAAlerts(silent=false){
       const allFields=[...(f.extra_fields||[]),...(f.admin_fields||[])];
       const fieldLabel=(allFields.find(x=>x.id===rule.fieldId)||{}).label||rule.fieldId;
       const dateStr=new Date().toLocaleDateString('he-IL');
-      const msg=`עדכון מובמנט - ${dateStr}\n\n${f.name}: ${breached.length} ממתינות\n\nלכניסה למערכת: https://movement-moked.github.io`;
+      const msg=`מובמנט | ${dateStr}\n\n${f.name}: ${breached.length} פניות ממתינות לטיפול\n\nלכניסה: https://movement-moked.github.io`;
       for(const contact of (f.wa_contacts||[])){
         const phone=formatWAPhone(contact.phone);
         let success=true;
