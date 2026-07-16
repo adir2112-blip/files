@@ -2519,9 +2519,14 @@ function loadDailyReportConfig(){
 function saveDailyReport(){
   const phone=document.getElementById('dr-phone')?.value.trim()||'';
   const hour=parseInt(document.getElementById('dr-hour')?.value||8);
+  const intervalHours=parseFloat(document.getElementById('dr-interval')?.value||24);
   const enabled=document.getElementById('dr-enabled')?.checked||false;
   const selectedFiles=[...document.querySelectorAll('[data-dr-file]:checked')].map(el=>el.dataset.drFile);
-  const cfg={phone,hour,enabled,files:selectedFiles};
+  const blockedDays=[0,1,2,3,4,5,6].filter(i=>{
+    const cb=document.querySelector(`[data-dr-day="${i}"]`);
+    return cb && !cb.checked;
+  });
+  const cfg={phone,hour,intervalHours,enabled,files:selectedFiles,blockedDays};
   localStorage.setItem('moked_daily_report',JSON.stringify(cfg));
   startDailyReportTimer();
   showAlert('דוח יומי נשמר','success');
@@ -2529,6 +2534,7 @@ function saveDailyReport(){
 
 function renderDailyReportSection(){
   const cfg=loadDailyReportConfig();
+  const days=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const hours=Array.from({length:24},(_,i)=>i);
   const fileRows=DB.files.map(f=>{
     const o=DB.orgs.find(x=>x.id===f.org_id);
@@ -2556,11 +2562,31 @@ function renderDailyReportSection(){
           <input class="form-input" id="dr-phone" type="text" dir="ltr" placeholder="972501234567" value="${esc(cfg.phone||'')}">
         </div>
 
-        <div class="form-row">
-          <label class="form-label">שעת שליחה</label>
-          <select class="form-input" id="dr-hour">
-            ${hours.map(h=>`<option value="${h}" ${cfg.hour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
-          </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">שעת שליחה</label>
+            <select class="form-input" id="dr-hour">
+              ${hours.map(h=>`<option value="${h}" ${cfg.hour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">תדירות</label>
+            <select class="form-input" id="dr-interval">
+              ${[{v:1,l:'כל שעה'},{v:2,l:'כל שעתיים'},{v:3,l:'כל 3 שעות'},{v:4,l:'כל 4 שעות'},{v:6,l:'כל 6 שעות'},{v:12,l:'פעמיים ביום'},{v:24,l:'פעם ביום'}].map(i=>`<option value="${i.v}" ${(cfg.intervalHours||24)===i.v?'selected':''}>${i.l}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">ימי שליחה</label>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">
+              ${days.map((d,i)=>{
+                const isActive=!(cfg.blockedDays||[5,6]).includes(i);
+                return `<label style="display:flex;align-items:center;gap:3px;padding:4px 8px;border:1.5px solid ${isActive?'#25d366':'var(--border2)'};border-radius:7px;cursor:pointer;background:${isActive?'#f0fdf4':'var(--surface2)'};font-size:12px;font-weight:600">
+                  <input type="checkbox" data-dr-day="${i}" ${isActive?'checked':''} style="width:13px;height:13px;accent-color:#25d366;cursor:pointer">
+                  ${d}
+                </label>`;
+              }).join('')}
+            </div>
+          </div>
         </div>
 
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.8;white-space:pre-line;font-family:inherit">
@@ -2607,16 +2633,17 @@ function startDailyReportTimer(){
   clearInterval(_dailyReportTimer);
   const cfg=loadDailyReportConfig();
   if(!cfg.enabled||!cfg.phone) return;
+  const intervalMs=(cfg.intervalHours||24)*60*60*1000;
   _dailyReportTimer=setInterval(async()=>{
     const now=new Date();
-    if(now.getHours()===cfg.hour && now.getMinutes()<30){
-      const today=now.toISOString().slice(0,10);
-      const lastSent=localStorage.getItem('moked_daily_report_last');
-      if(lastSent===today) return; // already sent today
-      await sendDailyReportNow(true);
-      localStorage.setItem('moked_daily_report_last', today);
-    }
-  }, 20*60*1000); // check every 20 min
+    const day=now.getDay();
+    if((cfg.blockedDays||[5,6]).includes(day)) return;
+    const key=now.toISOString().slice(0,13); // unique per hour
+    const lastSent=localStorage.getItem('moked_daily_report_last');
+    if(lastSent===key) return;
+    await sendDailyReportNow(true);
+    localStorage.setItem('moked_daily_report_last', key);
+  }, intervalMs);
 }
 
 async function sendDailyReportNow(silent=false){
@@ -2717,7 +2744,11 @@ function collectWAPolicy(){
     intervalHours: parseFloat(document.getElementById('wap-interval')?.value||2),
     startHour: parseInt(document.getElementById('wap-start')?.value||8),
     endHour: parseInt(document.getElementById('wap-end')?.value||20),
-    blockedDays: [...document.querySelectorAll('[data-waday]:checked')].map(el=>parseInt(el.dataset.waday)),
+    // convert active days to blocked days
+    blockedDays: [0,1,2,3,4,5,6].filter(i=>{
+      const cb=document.querySelector(`[data-waday="${i}"]`);
+      return cb && !cb.checked; // not checked = blocked
+    }),
     onlyNewBreaches: document.getElementById('wap-new-only')?.checked ?? false,
   };
 }
@@ -2783,17 +2814,6 @@ function renderWAAlerts(){
             <select class="form-input" id="wap-end">
               ${hours.map(h=>`<option value="${h}" ${p.endHour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
             </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <label class="form-label">ימים חסומים (לא שולחים)</label>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
-            ${days.map((d,i)=>`
-              <label style="display:flex;align-items:center;gap:4px;padding:5px 10px;border:1.5px solid ${(p.blockedDays||[]).includes(i)?'#ef4444':'var(--border2)'};border-radius:8px;cursor:pointer;background:${(p.blockedDays||[]).includes(i)?'#fef2f2':'var(--surface2)'};font-size:12px;font-weight:600;transition:all .15s">
-                <input type="checkbox" data-waday="${i}" ${(p.blockedDays||[]).includes(i)?'checked':''} style="width:14px;height:14px;accent-color:#ef4444;cursor:pointer">
-                ${d}
-              </label>`).join('')}
           </div>
         </div>
 
