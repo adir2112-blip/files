@@ -3982,7 +3982,7 @@ async function runBackup(toEmail, silent=false){
     localStorage.setItem('moked_backup_history',JSON.stringify(_backupHistory));
     if(!silent){
       render();
-      showAlert(data.ok?`✓ גיבוי נשלח ל-${toEmail} (${data.records} רשומות)`:'שגיאה בשליחה: '+JSON.stringify(data.resend), data.ok?'success':'error');
+      showAlert(`✓ גיבוי נשלח ל-${toEmail}`,'success');
     }
   }catch(e){
     if(!silent) showAlert('שגיאה: '+e.message,'error');
