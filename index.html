@@ -2894,6 +2894,12 @@ async function checkAndSendWAAlerts(silent=false){
         totalSent++; msgs.push(`${contact.name} (${f.name})`);
         historyEntries.push({ts:new Date().toISOString(),fileName:f.name,contactName:contact.name,phone,breached:breached.length,success});
       }
+      // שליחה לקבוצה
+      try{
+        await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({phone:'120363429161263528@g.us',message:msg,source:'מערכת קבצים'})});
+        historyEntries.push({ts:new Date().toISOString(),fileName:f.name,contactName:'קבוצה',phone:'120363429161263528@g.us',breached:breached.length,success:true});
+      }catch(e){}
     }catch(e){}
   }));
 
