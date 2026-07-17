@@ -4341,10 +4341,12 @@ let _inactivityShown={};
 
 function isInactivityAllowed(){
   const now=new Date();
-  const day=now.getDay(); // 0=sun,1=mon,...,4=thu,5=fri,6=sat
-  if(day===5||day===6) return false; // שישי שבת
+  const day=now.getDay();
   const hour=now.getHours();
-  return hour>=8 && hour<18; // 08:00-18:00
+  // use WA policy if available, otherwise default
+  const policy=_waPolicy||defaultWAPolicy();
+  if((policy.blockedDays||[5,6]).includes(day)) return false;
+  return hour>=8 && hour<18;
 }
 
 function startInactivityTimer(){
