@@ -1605,11 +1605,12 @@ function renderAdmin(){
       <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
       <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>`:''}
+      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='weekly'?'active':''}" onclick="loadWeeklyReportTab()"><i class="ti ti-calendar-week" style="font-size:12px"></i> דוח שבועי</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="S.adminTab='backup';render()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
 
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='weekly'?renderWeeklyReport():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -2706,6 +2707,174 @@ async function sendDailyReportNow(silent=false){
   }
 }
 
+// ══ WEEKLY REPORT ══
+let _weeklyData = null;
+
+async function loadWeeklyReportTab(){
+  S.adminTab='weekly'; S._weeklyLoading=true; render();
+  try{
+    await loadAll();
+    // ensure managers loaded
+    if(!S._managers) await loadManagersTab();
+    await buildWeeklyData();
+  }catch(e){ showAlert('שגיאה בטעינת דוח','error'); }
+  S._weeklyLoading=false; render();
+}
+
+async function buildWeeklyData(){
+  // get last 5 working days (Sun-Thu)
+  const days=[];
+  const dayNames=['ראשון','שני','שלישי','רביעי','חמישי'];
+  let d=new Date();
+  while(days.length<5){
+    const day=d.getDay();
+    if(day>=0&&day<=4) days.unshift({date:new Date(d),name:dayNames[day],key:d.toISOString().slice(0,10)});
+    d.setDate(d.getDate()-1);
+  }
+
+  // files with SLA + responsible manager
+  const filesWithSLA=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId);
+
+  // load breaches per file per day
+  const breachData={}; // fileId -> dayKey -> count
+  await Promise.all(filesWithSLA.map(async f=>{
+    breachData[f.id]={};
+    await Promise.all(days.map(async day=>{
+      try{
+        const from=day.key+'T00:00:00.000Z';
+        const to=day.key+'T23:59:59.999Z';
+        // count records created that day
+        const recs=await GET('records',`?file_id=eq.${f.id}&created_at=gte.${encodeURIComponent(from)}&created_at=lte.${encodeURIComponent(to)}&select=id,created_at,extra,admin_data`);
+        const breached=recs.filter(r=>recordMatchesAlert(r,f)).length;
+        breachData[f.id][day.key]=breached;
+      }catch(e){ breachData[f.id][day.key]=0; }
+    }));
+  }));
+
+  // group by responsible manager
+  const managers={};
+  for(const f of filesWithSLA){
+    const mgrEmail=f.responsible_manager||'__none__';
+    if(!managers[mgrEmail]) managers[mgrEmail]={files:[]};
+    // only include file if had ANY breach this week
+    const hadBreaches=days.some(day=>(breachData[f.id]||{})[day.key]>0);
+    if(hadBreaches) managers[mgrEmail].files.push(f);
+  }
+
+  _weeklyData={days, managers, breachData, filesWithSLA};
+}
+
+function renderWeeklyReport(){
+  if(S._weeklyLoading) return `<div class="loading"><div class="spinner"></div><p>מחשב דוח שבועי...</p></div>`;
+  if(!_weeklyData) return `<div class="empty"><i class="ti ti-calendar-week"></i><p>לחץ רענן לטעינת הדוח</p></div>`;
+
+  const {days, managers, breachData}=_weeklyData;
+  const mgrList=S._managers||[];
+
+  // check if any breaches at all
+  const hasAny=Object.values(managers).some(m=>m.files.length>0);
+
+  return `
+    <div class="flex-between" style="margin-bottom:16px">
+      <span style="font-size:13px;color:var(--text2);font-weight:600">
+        <i class="ti ti-calendar-week"></i> דוח חריגות שבועי — ${days[0]?.key} עד ${days[4]?.key}
+      </span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="loadWeeklyReportTab()"><i class="ti ti-refresh"></i> רענן</button>
+        <button class="btn btn-sm btn-primary" onclick="sendWeeklyEmail()"><i class="ti ti-mail"></i> שלח לאדיר</button>
+      </div>
+    </div>
+
+    ${!hasAny
+      ? `<div class="empty"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>אין חריגות השבוע 🎉</p></div>`
+      : `<div class="table-wrap"><table>
+        <thead>
+          <tr>
+            <th style="min-width:140px">מנהל אחראי</th>
+            ${days.map(d=>`<th style="text-align:center;min-width:120px">${d.name}<br><span style="font-size:10px;color:var(--text3);font-weight:400">${d.key.slice(5)}</span></th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${Object.entries(managers).map(([mgrEmail,{files}])=>{
+            if(!files.length) return '';
+            const mgr=mgrList.find(m=>m.email===mgrEmail);
+            const mgrName=mgr?mgr.name:(mgrEmail==='__none__'?'ללא מנהל':'—');
+            return `<tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="ali-avatar" style="width:30px;height:30px;font-size:11px;background:linear-gradient(135deg,#0891b2,#06b6d4)">
+                    ${mgrName.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+                  </div>
+                  <strong style="font-size:13px">${esc(mgrName)}</strong>
+                </div>
+              </td>
+              ${days.map(day=>{
+                const dayBreaches=files.map(f=>({name:f.name,count:(breachData[f.id]||{})[day.key]||0})).filter(x=>x.count>0);
+                return `<td style="vertical-align:top;padding:8px">
+                  ${dayBreaches.length
+                    ? dayBreaches.map(b=>`<div style="background:var(--red-light);border:1px solid #fca5a5;border-radius:6px;padding:4px 8px;margin-bottom:4px;font-size:11px">
+                        <div style="font-weight:700;color:#b91c1c">${esc(b.name)}</div>
+                        <div style="color:#dc2626;font-weight:800">${b.count} חריגות</div>
+                      </div>`).join('')
+                    : '<span style="color:var(--text3);font-size:12px">—</span>'
+                  }
+                </td>`;
+              }).join('')}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`
+    }`;
+}
+
+async function sendWeeklyEmail(){
+  if(!_weeklyData){showAlert('טען את הדוח קודם','error');return;}
+  const {days,managers,breachData}=_weeklyData;
+  const mgrList=S._managers||[];
+
+  // build HTML email
+  const rows=Object.entries(managers).map(([mgrEmail,{files}])=>{
+    if(!files.length) return '';
+    const mgr=mgrList.find(m=>m.email===mgrEmail);
+    const mgrName=mgr?mgr.name:(mgrEmail==='__none__'?'ללא מנהל':'—');
+    const cells=days.map(day=>{
+      const dayBreaches=files.map(f=>({name:f.name,count:(breachData[f.id]||{})[day.key]||0})).filter(x=>x.count>0);
+      return `<td style="padding:8px;border:1px solid #e2e6ef;vertical-align:top;min-width:100px">${
+        dayBreaches.length
+          ? dayBreaches.map(b=>`<div style="font-size:12px"><strong>${b.name}</strong><br><span style="color:#dc2626">${b.count} חריגות</span></div>`).join('<hr style="margin:4px 0;border:none;border-top:1px solid #eee">')
+          : '<span style="color:#9ca3af">—</span>'
+      }</td>`;
+    }).join('');
+    return `<tr><td style="padding:8px;border:1px solid #e2e6ef;font-weight:700">${esc(mgrName)}</td>${cells}</tr>`;
+  }).join('');
+
+  const html=`<div dir="rtl" style="font-family:Arial,sans-serif;padding:20px;max-width:900px">
+    <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:20px;border-radius:12px;margin-bottom:20px">
+      <h2 style="color:#fff;margin:0">דוח חריגות שבועי — מובמנט</h2>
+      <p style="color:rgba(255,255,255,.6);margin:4px 0 0">${days[0]?.key} עד ${days[4]?.key}</p>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#1e3a8a;color:#fff">
+        <th style="padding:10px;text-align:right">מנהל אחראי</th>
+        ${days.map(d=>`<th style="padding:10px;text-align:center">${d.name}<br><small>${d.key.slice(5)}</small></th>`).join('')}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="font-size:11px;color:#9ca3af;margin-top:20px;text-align:center">נשלח אוטומטית ממערכת מוקד מובמנט</p>
+  </div>`;
+
+  const subject=`דוח חריגות שבועי מובמנט — ${days[0]?.key} עד ${days[4]?.key}`;
+  try{
+    const res=await fetch(EMAIL_FUNC_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({to:['adir2112@gmail.com'],fileName:'דוח שבועי',orgName:'מובמנט',breached:0,fieldLabel:'',days:0,subject,htmlOverride:html})
+    });
+    const data=await res.json();
+    showAlert(data.ok?'✓ דוח שבועי נשלח למייל':'שגיאה בשליחה','success');
+  }catch(e){showAlert('שגיאה: '+e.message,'error');}
+}
+
 // ══ WA ALERTS TAB ══
 const WA_POLICY_KEY = 'wa_policy';
 
@@ -3386,8 +3555,19 @@ async function saveEditOrg(id){const n=document.getElementById('org-name').value
 async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכל קבציו?'))return;await DEL('organizations',`?id=eq.${id}`);await loadAll();render();showAlert('הארגון נמחק','success');}
 
 // ── FILE MODAL ──
-function openNewFile(){_tmpIcon='ti-file';_tmpFields=[];_tmpAdminFields=[];showModal(fileModalHTML({name:'',icon:'ti-file',org_id:'',extra_fields:[],admin_fields:[],pending_rules:{}},'new'));setTimeout(()=>{loadEmailManagersIntoModal();loadWAManagersIntoModal();},50);}
-function openEditFile(id){const f=DB.files.find(x=>x.id===id);_tmpIcon=f.icon||'ti-file';_tmpFields=JSON.parse(JSON.stringify(f.extra_fields||[]));_tmpAdminFields=JSON.parse(JSON.stringify(f.admin_fields||[]));showModal(fileModalHTML(f,'edit',id));setTimeout(()=>{loadEmailManagersIntoModal();loadWAManagersIntoModal();},50);}
+async function openNewFile(){
+  _tmpIcon='ti-file';_tmpFields=[];_tmpAdminFields=[];
+  if(!S._managers) await loadManagersTab();
+  showModal(fileModalHTML({name:'',icon:'ti-file',org_id:'',extra_fields:[],admin_fields:[],pending_rules:{}},'new'));
+  setTimeout(()=>{loadEmailManagersIntoModal();loadWAManagersIntoModal();},50);
+}
+async function openEditFile(id){
+  const f=DB.files.find(x=>x.id===id);
+  _tmpIcon=f.icon||'ti-file';_tmpFields=JSON.parse(JSON.stringify(f.extra_fields||[]));_tmpAdminFields=JSON.parse(JSON.stringify(f.admin_fields||[]));
+  if(!S._managers) await loadManagersTab();
+  showModal(fileModalHTML(f,'edit',id));
+  setTimeout(()=>{loadEmailManagersIntoModal();loadWAManagersIntoModal();},50);
+}
 
 // ── FILE PERMISSIONS ──
 async function openFilePermissions(fileId){
@@ -3604,6 +3784,16 @@ function fileModalHTML(f,mode,id=''){
       <div style="font-size:11px;color:var(--text3);margin-top:4px"><i class="ti ti-info-circle"></i> משתנים: <code>{תאריך}</code> <code>{קובץ}</code> <code>{שעות}</code></div>
     </div>
 
+    <div class="section-divider" style="color:#0891b2"><i class="ti ti-user-check"></i> מנהל אחראי על הקובץ</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">המנהל שאחראי על הקובץ ויופיע בדוח השבועי</div>
+    <div class="form-row">
+      <label class="form-label">בחר מנהל אחראי</label>
+      <select class="form-input" id="mf-responsible">
+        <option value="">— ללא מנהל אחראי —</option>
+        ${(S._managers||[]).filter(m=>m.active).map(m=>`<option value="${esc(m.email)}" ${f.responsible_manager===m.email?'selected':''}>${esc(m.name||m.email)}</option>`).join('')}
+      </select>
+    </div>
+
     <div class="section-divider" style="color:#25d366"><i class="ti ti-brand-whatsapp"></i> התראות וואטסאפ</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">בחר מנהלים שיקבלו התראות וואטסאפ — הטלפון לוקח מפרופיל המנהל</div>
     <div id="wa-managers-list" data-selected='${JSON.stringify(f.wa_contacts||[])}'
@@ -3757,8 +3947,8 @@ function collectWaContacts(){
   }));
 }
 
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert()});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert()},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||''});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||''},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
 // ── EXPORT ──
