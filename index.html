@@ -3061,13 +3061,15 @@ function renderWAAlerts(){
 const _origCheckAndSend = checkAndSendWAAlerts;
 async function checkAndSendWAAlerts(silent=false){
   const policy = _waPolicy || defaultWAPolicy();
-  if(!silent && !isWASendAllowed(policy)){
-    const now=new Date();
-    const day=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'][now.getDay()];
-    showAlert(`לא ניתן לשלוח כעת — ${day} ${now.getHours()}:00 מחוץ לחלון ההתראות`,'error');
-    return;
+  // ALWAYS check day/time — even in silent mode
+  if(!isWASendAllowed(policy)){
+    if(!silent){
+      const now=new Date();
+      const day=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'][now.getDay()];
+      showAlert(`לא ניתן לשלוח כעת — ${day} ${now.getHours()}:00 מחוץ לחלון ההתראות`,'error');
+    }
+    return; // block both silent and non-silent
   }
-  if(!isWASendAllowed(policy)) return; // silent block
 
   const filesWithAlerts=DB.files.filter(f=>canManagerAccessFile(f)&&f.alert_rule?.enabled&&f.alert_rule?.fieldId&&(f.wa_contacts||[]).length>0);
   if(!filesWithAlerts.length){if(!silent)showAlert('אין קבצים עם התראות WA מוגדרות','error');return;}
@@ -3117,7 +3119,12 @@ function startWAAutoCheckWithPolicy(){
   if(!policy.enabled) return;
   const intervalMs = (policy.intervalHours||2)*60*60*1000;
   _waAutoTimer=setInterval(()=>{
-    if(S.adminLoggedIn) checkAndSendWAAlerts(true);
+    if(!S.adminLoggedIn) return;
+    // הגנה כפולה — לעולם לא שולח בשישי/שבת
+    const now=new Date();
+    const day=now.getDay();
+    if(day===5||day===6) return; // שישי/שבת — עצירה מוחלטת
+    checkAndSendWAAlerts(true);
   }, intervalMs);
 }
 
