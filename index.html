@@ -2640,8 +2640,10 @@ function startDailyReportTimer(){
     const day=now.getDay();
     const hour=now.getHours();
 
-    // only Sun-Thu (0-4), not blocked days
-    if((cfg.blockedDays||[5,6]).includes(day)) return;
+    // תמיד חוסם שישי/שבת
+    if(day===5||day===6) return;
+    // only blocked days from config
+    if((cfg.blockedDays||[]).includes(day)) return;
 
     // only between startHour and 18:00
     const startHour=cfg.hour||8;
@@ -2937,7 +2939,9 @@ function collectWAPolicy(){
 function isWASendAllowed(policy){
   if(!policy?.enabled) return false;
   const now = new Date();
-  const day = now.getDay(); // 0=sun,1=mon,...,5=fri,6=sat
+  const day = now.getDay();
+  // תמיד חוסם שישי/שבת — ללא קשר להגדרות
+  if(day===5||day===6) return false;
   if((policy.blockedDays||[]).includes(day)) return false;
   const hour = now.getHours();
   if(hour < policy.startHour || hour >= policy.endHour) return false;
@@ -4343,9 +4347,10 @@ function isInactivityAllowed(){
   const now=new Date();
   const day=now.getDay();
   const hour=now.getHours();
-  // use WA policy if available, otherwise default
+  // תמיד חוסם שישי/שבת
+  if(day===5||day===6) return false;
   const policy=_waPolicy||defaultWAPolicy();
-  if((policy.blockedDays||[5,6]).includes(day)) return false;
+  if((policy.blockedDays||[]).includes(day)) return false;
   return hour>=8 && hour<18;
 }
 
