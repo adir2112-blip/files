@@ -522,7 +522,7 @@ async function initLogin(){
     if(mgr){
       // load all agents for admin management
       allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
-      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email});
+      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[]});
       PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
       return;
     }
@@ -602,7 +602,7 @@ async function loginManager(){
   if(error){showLoginErr('mgr-err','mgr-err-msg','מייל או סיסמה שגויים');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
   const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',email).eq('active',true).single();
   if(!mgr){await sbClient.auth.signOut();showLoginErr('mgr-err','mgr-err-msg','אין הרשאת מנהל');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
-  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email});
+  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[]});
   // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
   PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
 }
@@ -816,7 +816,8 @@ function renderBreadcrumb(){
 
 // ORGS
 function renderOrgs(){
-  if(!DB.orgs.length && !DB.files.length) return `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`;
+  const visibleOrgs = DB.orgs.filter(o=>canManagerAccessOrg(o.id));
+  if(!visibleOrgs.length && !DB.files.length) return `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`;
   if(!DB.orgs.length) return `<div class="empty"><i class="ti ti-building-off"></i><p>אין ארגונים.</p></div>`;
   const totalP=totalPending();
   const alertBar=S.adminLoggedIn&&totalP>0?`<div class="admin-alert-bar">
@@ -1657,7 +1658,7 @@ function renderAdminOrgs(){
 function renderAdminFiles(){
   return `<div style="text-align:left;margin-bottom:14px"><button class="btn btn-black" onclick="openNewFile()"><i class="ti ti-plus"></i> קובץ חדש</button></div>
   ${DB.orgs.map(o=>{
-    const orgFiles=DB.files.filter(f=>f.org_id===o.id&&canManagerAccessFile(f)); if(!orgFiles.length) return '';
+    const orgFiles=DB.files.filter(f=>f.org_id===o.id&&canManagerAccessFile(f)&&canManagerAccessOrg(o.id)); if(!orgFiles.length) return '';
     return `<div style="margin-bottom:22px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">${esc(o.name)}</div>
       ${orgFiles.map(f=>{
@@ -2051,7 +2052,7 @@ async function setDashPeriod(key){
 
 async function loadDashDataForPeriod(){
   const {from, to} = dashPeriodRange(_dashPeriod);
-  await Promise.all(DB.files.filter(f=>canManagerAccessFile(f)).map(async f=>{
+  await Promise.all(DB.files.filter(f=>canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)).map(async f=>{
     try{
       let params=`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`;
       if(from) params+=`&created_at=gte.${encodeURIComponent(from)}`;
@@ -3186,7 +3187,7 @@ function renderAdminManagers(){
     </div>
     ${!managers.length
       ?`<div class="empty"><i class="ti ti-shield-off"></i><p>אין מנהלים מוגדרים</p></div>`
-      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>סופר מנהל</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
+      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>ארגונים</th><th>סופר מנהל</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
       ${managers.map(m=>`<tr>
         <td dir="ltr" style="font-size:13px">${esc(m.email)}</td>
         <td><div style="display:flex;align-items:center;gap:8px">
@@ -3195,10 +3196,11 @@ function renderAdminManagers(){
         </div></td>
         <td dir="ltr" style="font-size:12px;color:var(--text2)">${m.phone?`<i class="ti ti-brand-whatsapp" style="color:#25d366;font-size:11px"></i> ${esc(m.phone)}`:'<span style="color:var(--text3)">—</span>'}</td>
         <td><span class="badge ${m.active?'badge-success':'badge-warning'}">${m.active?'פעיל':'מושבת'}</span></td>
+        <td style="font-size:12px">${(m.allowed_orgs||[]).length?`<span class="badge badge-info"><i class="ti ti-building"></i> ${(m.allowed_orgs||[]).length} ארגונים</span>`:'<span style="color:var(--text3)">הכל</span>'}</td>
         <td>${m.is_super_admin?'<span class="badge badge-purple"><i class="ti ti-star"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
         <td style="font-size:12px;color:var(--text2);white-space:nowrap">${m.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(m.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
         <td><div class="flex-gap">
-          <button class="btn btn-xs" onclick="openEditManager('${esc(m.email)}','${esc(m.name||'')}','${esc(m.phone||'')}',${m.active},${!!m.is_super_admin})"><i class="ti ti-edit"></i></button>
+          <button class="btn btn-xs" onclick="openEditManagerById('${esc(m.email)}')"><i class="ti ti-edit"></i></button>
           <button class="btn btn-xs btn-danger" onclick="confirmDeleteManager('${esc(m.email)}')"><i class="ti ti-trash"></i></button>
         </div></td>
       </tr>`).join('')}
@@ -3206,22 +3208,45 @@ function renderAdminManagers(){
 }
 
 function openNewManager(){
+  const orgOpts=DB.orgs.map(o=>`<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;background:var(--surface2)">
+    <input type="checkbox" data-org="${o.id}" style="accent-color:var(--blue);cursor:pointer"> ${esc(o.name)}
+  </label>`).join('');
   showModal(`<div class="modal-title"><i class="ti ti-shield-plus" style="color:var(--purple)"></i> הוסף מנהל</div>
     <div class="alert alert-info" style="margin-bottom:16px;font-size:13px"><i class="ti ti-info-circle"></i> ודא שיצרת את המשתמש תחילה ב-Supabase Auth עם אותו מייל</div>
     <div class="form-row"><label class="form-label">מייל *</label><input class="form-input" id="mgr-new-email" type="email" placeholder="manager@example.com" dir="ltr"></div>
     <div class="form-row"><label class="form-label">שם *</label><input class="form-input" id="mgr-new-name" placeholder="שם מלא"></div>
     <div class="form-row"><label class="form-label">טלפון וואטסאפ (972XXXXXXXXX)</label><input class="form-input" id="mgr-new-phone" type="text" dir="ltr" placeholder="972501234567"></div>
     <div class="form-row"><label class="form-label">סוג</label><select class="form-input" id="mgr-new-super"><option value="false">מנהל רגיל</option><option value="true">סופר מנהל</option></select></div>
+    <div class="form-row">
+      <label class="form-label">גישה לארגונים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכולם)</span></label>
+      <div id="mgr-new-orgs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">${orgOpts}</div>
+    </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-purple" onclick="saveNewManager()"><i class="ti ti-check"></i> הוסף</button></div>`);
 }
 
-function openEditManager(email,name,phone,active,isSuper){
+function openEditManagerById(email){
+  const m=(S._managers||[]).find(x=>x.email===email);
+  if(!m) return;
+  openEditManager(m.email,m.name||'',m.phone||'',m.active,!!m.is_super_admin,m.allowed_orgs||[]);
+}
+
+function openEditManager(email,name,phone,active,isSuper,allowedOrgs=[]){
+  const orgOpts=DB.orgs.map(o=>{
+    const isSel=(allowedOrgs||[]).includes(o.id);
+    return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid ${isSel?'var(--blue)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;background:${isSel?'var(--blue-light)':'var(--surface2)'}">
+      <input type="checkbox" data-org="${o.id}" ${isSel?'checked':''} style="accent-color:var(--blue);cursor:pointer"> ${esc(o.name)}
+    </label>`;
+  }).join('');
   showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--purple)"></i> עריכת מנהל</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm)" dir="ltr">${esc(email)}</div>
     <div class="form-row"><label class="form-label">שם *</label><input class="form-input" id="mgr-edit-name" value="${esc(name)}"></div>
     <div class="form-row"><label class="form-label">טלפון וואטסאפ (972XXXXXXXXX)</label><input class="form-input" id="mgr-edit-phone" type="text" dir="ltr" placeholder="972501234567" value="${esc(phone||'')}"></div>
     <div class="form-row"><label class="form-label">סטטוס</label><select class="form-input" id="mgr-edit-active"><option value="true" ${active?'selected':''}>פעיל</option><option value="false" ${!active?'selected':''}>מושבת</option></select></div>
     <div class="form-row"><label class="form-label">סוג</label><select class="form-input" id="mgr-edit-super"><option value="false" ${!isSuper?'selected':''}>מנהל רגיל</option><option value="true" ${isSuper?'selected':''}>סופר מנהל</option></select></div>
+    <div class="form-row">
+      <label class="form-label">גישה לארגונים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכולם)</span></label>
+      <div id="mgr-edit-orgs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">${orgOpts}</div>
+    </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-purple" onclick="saveEditManager('${esc(email)}')"><i class="ti ti-check"></i> שמור</button></div>`);
 }
 
@@ -3230,9 +3255,10 @@ async function saveNewManager(){
   const name=document.getElementById('mgr-new-name').value.trim();
   const phone=document.getElementById('mgr-new-phone').value.trim();
   const isSuper=document.getElementById('mgr-new-super').value==='true';
+  const allowedOrgs=[...document.querySelectorAll('#mgr-new-orgs input[type=checkbox]:checked')].map(el=>el.dataset.org);
   if(!email||!name){showAlert('יש למלא מייל ושם','error');return;}
   try{
-    await POST('app_managers',{email,name,phone,active:true,is_super_admin:isSuper});
+    await POST('app_managers',{email,name,phone,active:true,is_super_admin:isSuper,allowed_orgs:allowedOrgs});
     await loadManagersTab(); closeModal(); showAlert('המנהל נוסף בהצלחה','success');
   }catch(e){
     showAlert(e.message.includes('duplicate')||e.message.includes('unique')?'מייל זה כבר קיים':'שגיאה: '+e.message,'error');
@@ -3244,9 +3270,10 @@ async function saveEditManager(email){
   const phone=document.getElementById('mgr-edit-phone').value.trim();
   const active=document.getElementById('mgr-edit-active').value==='true';
   const isSuper=document.getElementById('mgr-edit-super').value==='true';
+  const allowedOrgs=[...document.querySelectorAll('#mgr-edit-orgs input[type=checkbox]:checked')].map(el=>el.dataset.org);
   if(!name){showAlert('יש להזין שם','error');return;}
   try{
-    await PATCH('app_managers',{name,phone,active,is_super_admin:isSuper},`?email=eq.${encodeURIComponent(email)}`);
+    await PATCH('app_managers',{name,phone,active,is_super_admin:isSuper,allowed_orgs:allowedOrgs},`?email=eq.${encodeURIComponent(email)}`);
     await loadManagersTab(); closeModal(); showAlert('המנהל עודכן','success');
   }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
 }
@@ -3652,6 +3679,14 @@ async function saveFilePermissions(fileId){
     render();
     showAlert(checked.length?`✓ גישה הוגבלת ל-${checked.length} מנהלים`:'✓ כל המנהלים יכולים לגשת','success');
   }catch(e){ showAlert('שגיאה בשמירה','error'); }
+}
+
+// Filter orgs by manager permissions
+function canManagerAccessOrg(orgId){
+  if(currentUser?.is_super_admin) return true;
+  const allowedOrgs=currentUser?.allowed_orgs||[];
+  if(!allowedOrgs.length) return true; // no restriction
+  return allowedOrgs.includes(orgId);
 }
 
 // Filter files by manager permissions
