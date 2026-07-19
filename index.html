@@ -3176,18 +3176,8 @@ async function checkAndSendWAAlerts(silent=false){
 }
 
 function startWAAutoCheckWithPolicy(){
+  // השליחה עברה לשרת (moked-scheduler) — הטיימר בדפדפן מבוטל
   clearInterval(_waAutoTimer);
-  const policy = _waPolicy || defaultWAPolicy();
-  if(!policy.enabled) return;
-  const intervalMs = (policy.intervalHours||2)*60*60*1000;
-  _waAutoTimer=setInterval(()=>{
-    if(!S.adminLoggedIn) return;
-    // הגנה כפולה — לעולם לא שולח בשישי/שבת
-    const now=new Date();
-    const day=now.getDay();
-    if(day===5||day===6) return; // שישי/שבת — עצירה מוחלטת
-    checkAndSendWAAlerts(true);
-  }, intervalMs);
 }
 
 // Override startWAAutoCheck to use policy
@@ -4471,63 +4461,43 @@ function isInactivityAllowed(){
 }
 
 function startInactivityTimer(){
+  // השליחת WA עברה לשרת — נשמר רק הpopup המקומי
   clearInterval(_inactivityTimer);
-  _inactivityTimer=setInterval(()=>{
-    if(S.adminLoggedIn && isInactivityAllowed()) checkInactivity();
-  }, 10*60*1000); // check every 10 minutes
+  _inactivityTimer=setInterval(async()=>{
+    if(S.adminLoggedIn && isInactivityAllowed()){
+      // show popup only — no WA sending from browser
+      await checkInactivityPopupOnly();
+    }
+  }, 10*60*1000);
 }
 
-async function checkInactivity(){
+async function checkInactivityPopupOnly(){
+  // same as checkInactivity but without WA sending (server handles that)
   const filesWithInactivity = DB.files.filter(f=>f.inactivity_alert?.enabled&&f.inactivity_alert?.hours);
   if(!filesWithInactivity.length) return;
-
   const now = new Date();
   const alerts = [];
-
   await Promise.all(filesWithInactivity.map(async f=>{
     try{
       const hours = f.inactivity_alert.hours;
       const since = new Date(now.getTime() - hours*3600000).toISOString();
-      // check last record created
       const recs = await GET('records',`?file_id=eq.${f.id}&created_at=gte.${encodeURIComponent(since)}&select=id&limit=1`);
       if(!recs.length){
-        // no records in last X hours — check we haven't already alerted this window
         const windowNum=Math.floor(now.getTime()/(hours*3600000));
-        const key = f.id+'_'+windowNum;
+        const key=f.id+'_'+windowNum;
         const lastSentKey='moked_inactivity_'+key;
         if(!localStorage.getItem(lastSentKey)){
           localStorage.setItem(lastSentKey,'1');
-          // expire old keys
           Object.keys(localStorage).filter(k=>k.startsWith('moked_inactivity_'+f.id+'_')&&k!==lastSentKey).forEach(k=>localStorage.removeItem(k));
-          _inactivityShown[key]=true;
           const org=DB.orgs.find(x=>x.id===f.org_id);
           alerts.push({file:f, org, hours});
         }
       }
     }catch(e){}
   }));
-
   if(alerts.length) showInactivityPopup(alerts);
-
-  // send WA for each alert
-  for(const a of alerts){
-    const dateStr=new Date().toLocaleDateString('he-IL');
-    const defaultMsg=`מובמנט | ${dateStr}\nמנהל יקר הנציגים לא מבצעים את המשימה שהם קיבלו ממך.\nבקובץ "${a.file.name}" אין פעילות מעל ${a.hours} שעות\nתעצור כעת את המשמרת ותוודא שגם נציגים מהבית וגם נציגים במוקד מבצעים כל אחד 5 תיעודים כאלה ביום.\n\nאדיר סומך עלייך שזה יבוצע!`;
-    const customMsg=a.file.inactivity_alert?.message||'';
-    const msg=customMsg
-      ? customMsg.replace('{תאריך}',dateStr).replace('{קובץ}',a.file.name).replace('{שעות}',String(a.hours))
-      : defaultMsg;
-    // send to wa_contacts of the file
-    for(const contact of (a.file.wa_contacts||[])){
-      try{ await sendWA(formatWAPhone(contact.phone), msg); }catch(e){}
-    }
-    // send to group
-    try{
-      await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({phone:'120363429161263528@g.us',message:msg,source:'מערכת קבצים'})});
-    }catch(e){}
-  }
 }
+
 
 function showInactivityPopup(alerts){
   // play alert sound
