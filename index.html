@@ -2918,17 +2918,23 @@ async function syncAllSettingsToServer(){
       blockedDays: waPolicy.blockedDays||[5,6]
     };
 
-    // upsert all settings to Supabase
-    await Promise.all([
-      PATCH('app_settings',{value:JSON.stringify(waPolicy)},'?key=eq.wa_policy').catch(()=>
-        POST('app_settings',{key:'wa_policy',value:JSON.stringify(waPolicy)})),
-      PATCH('app_settings',{value:JSON.stringify(dailyReport)},'?key=eq.daily_report').catch(()=>
-        POST('app_settings',{key:'daily_report',value:JSON.stringify(dailyReport)})),
-      PATCH('app_settings',{value:JSON.stringify(inactivityConfig)},'?key=eq.inactivity_config').catch(()=>
-        POST('app_settings',{key:'inactivity_config',value:JSON.stringify(inactivityConfig)})),
-    ]);
+    const upsertRows=[
+      {key:'wa_policy', value:waPolicy},
+      {key:'daily_report', value:dailyReport},
+      {key:'inactivity_config', value:inactivityConfig},
+      {key:'wa_enabled', value:waPolicy.enabled},
+    ];
 
-    showAlert('✓ כל ההגדרות נשמרו לשרת — ה-Scheduler יפעל לפיהן','success');
+    for(const row of upsertRows){
+      const exists=await GET('app_settings',`?key=eq.${row.key}&select=key`);
+      if(exists?.length){
+        await PATCH('app_settings',{value:JSON.stringify(row.value)},`?key=eq.${row.key}`);
+      } else {
+        await POST('app_settings',{key:row.key,value:JSON.stringify(row.value)});
+      }
+    }
+
+    showAlert('✓ כל ההגדרות נשמרו לשרת','success');
   }catch(e){
     showAlert('שגיאה בשמירה לשרת: '+e.message,'error');
   }
