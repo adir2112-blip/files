@@ -3819,7 +3819,13 @@ function fileModalHTML(f,mode,id=''){
       <div class="form-row" style="margin-bottom:0">
         <label class="form-label">תדירות שליחת מייל</label>
         <select class="form-input" id="email-interval">
-          ${[{v:1,l:'כל שעה'},{v:2,l:'כל שעתיים'},{v:4,l:'כל 4 שעות'},{v:6,l:'כל 6 שעות'},{v:12,l:'פעמיים ביום'},{v:24,l:'פעם ביום'},{v:0,l:'לא לשלוח מייל'}].map(i=>`<option value="${i.v}" ${(f.email_schedule?.intervalHours||24)===i.v?'selected':''}>${i.l}</option>`).join('')}
+          ${[{v:1,l:'כל שעה'},{v:2,l:'כל שעתיים'},{v:4,l:'כל 4 שעות'},{v:6,l:'כל 6 שעות'},{v:12,l:'פעמיים ביום'},{v:24,l:'פעם ביום'},{v:0,l:'לא לשלוח מייל'}].map(i=>`<option value="${i.v}" ${(f.email_schedule?.intervalHours||0)===i.v?'selected':''}>${i.l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row" style="margin-bottom:0">
+        <label class="form-label">שעת שליחה ראשונה</label>
+        <select class="form-input" id="email-start-hour">
+          ${Array.from({length:11},(_,i)=>i+8).map(h=>`<option value="${h}" ${(f.email_schedule?.startHour||8)===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
         </select>
       </div>
     </div>
@@ -3974,8 +3980,8 @@ function collectWaContacts(){
   }));
 }
 
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||24)}});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||24)}},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)}});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)}},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
 // ── EXPORT ──
@@ -4391,9 +4397,14 @@ async function checkInactivity(){
       // check last record created
       const recs = await GET('records',`?file_id=eq.${f.id}&created_at=gte.${encodeURIComponent(since)}&select=id&limit=1`);
       if(!recs.length){
-        // no records in last X hours — check we haven't already alerted
-        const key = f.id+'_'+Math.floor(now.getTime()/(hours*3600000));
-        if(!_inactivityShown[key]){
+        // no records in last X hours — check we haven't already alerted this window
+        const windowNum=Math.floor(now.getTime()/(hours*3600000));
+        const key = f.id+'_'+windowNum;
+        const lastSentKey='moked_inactivity_'+key;
+        if(!localStorage.getItem(lastSentKey)){
+          localStorage.setItem(lastSentKey,'1');
+          // expire old keys
+          Object.keys(localStorage).filter(k=>k.startsWith('moked_inactivity_'+f.id+'_')&&k!==lastSentKey).forEach(k=>localStorage.removeItem(k));
           _inactivityShown[key]=true;
           const org=DB.orgs.find(x=>x.id===f.org_id);
           alerts.push({file:f, org, hours});
@@ -4529,10 +4540,11 @@ function startEmailAlertTimers(){
       const hour=now.getHours();
       if(day===5||day===6) return; // שישי/שבת
       if((policy.blockedDays||[]).includes(day)) return;
-      if(hour<(policy.startHour||8)||hour>=(policy.endHour||18)) return;
+      const startH=f.email_schedule?.startHour||8;
+      if(hour<startH||hour>=(policy.endHour||18)) return;
 
       // check if already sent in this interval window
-      const windowKey=`${f.id}_${Math.floor(now.getTime()/(interval*3600000))}`;
+      const windowKey=`${f.id}_${Math.floor((now.getTime()-startH*3600000)/(interval*3600000))}`;
       if(_emailLastSent[windowKey]) return;
 
       // check breaches
