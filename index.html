@@ -2906,7 +2906,35 @@ async function sendWeeklyEmail(){
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
 
-// ══ WA ALERTS TAB ══
+// ══ SYNC SETTINGS TO SERVER ══
+async function syncAllSettingsToServer(){
+  try{
+    const waPolicy=_waPolicy||defaultWAPolicy();
+    const dailyReport=loadDailyReportConfig();
+    const inactivityConfig={
+      enabled: true,
+      startHour: waPolicy.startHour||8,
+      endHour: waPolicy.endHour||18,
+      blockedDays: waPolicy.blockedDays||[5,6]
+    };
+
+    // upsert all settings to Supabase
+    await Promise.all([
+      PATCH('app_settings',{value:JSON.stringify(waPolicy)},'?key=eq.wa_policy').catch(()=>
+        POST('app_settings',{key:'wa_policy',value:JSON.stringify(waPolicy)})),
+      PATCH('app_settings',{value:JSON.stringify(dailyReport)},'?key=eq.daily_report').catch(()=>
+        POST('app_settings',{key:'daily_report',value:JSON.stringify(dailyReport)})),
+      PATCH('app_settings',{value:JSON.stringify(inactivityConfig)},'?key=eq.inactivity_config').catch(()=>
+        POST('app_settings',{key:'inactivity_config',value:JSON.stringify(inactivityConfig)})),
+    ]);
+
+    showAlert('✓ כל ההגדרות נשמרו לשרת — ה-Scheduler יפעל לפיהן','success');
+  }catch(e){
+    showAlert('שגיאה בשמירה לשרת: '+e.message,'error');
+  }
+}
+
+
 const WA_POLICY_KEY = 'wa_policy';
 
 async function loadWAAlertsTab(){
@@ -3038,6 +3066,9 @@ function renderWAAlerts(){
 
         <div style="display:flex;gap:8px">
           <button class="btn btn-success" onclick="saveWAPolicy()"><i class="ti ti-check"></i> שמור מדיניות</button>
+          <button class="btn" style="background:#0891b2;border-color:#0891b2;color:#fff" onclick="syncAllSettingsToServer()">
+            <i class="ti ti-cloud-upload"></i> שמור לשרת
+          </button>
           <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="checkAndSendWAAlerts(false)">
             <i class="ti ti-brand-whatsapp"></i> שלח עכשיו
           </button>
