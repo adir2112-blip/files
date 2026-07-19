@@ -3086,8 +3086,6 @@ async function checkAndSendWAAlerts(silent=false){
       const breached=recs.filter(r=>recordMatchesAlert(r,f));
       if(!breached.length) return;
       totalBreached+=breached.length;
-      // send email alert if configured
-      sendAlertEmail(f, breached.length);
       const org=DB.orgs.find(x=>x.id===f.org_id);
       const rule=f.alert_rule||{};
       const allFields=[...(f.extra_fields||[]),...(f.admin_fields||[])];
@@ -3814,6 +3812,24 @@ function fileModalHTML(f,mode,id=''){
 
 
 
+    <div class="section-divider" style="color:#2563eb"><i class="ti ti-mail"></i> התראות מייל — SLA</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">בחר מנהלים וקבע תדירות שליחת מייל על חריגות SLA</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="form-row" style="margin-bottom:0">
+        <label class="form-label">תדירות שליחת מייל</label>
+        <select class="form-input" id="email-interval">
+          ${[{v:1,l:'כל שעה'},{v:2,l:'כל שעתיים'},{v:4,l:'כל 4 שעות'},{v:6,l:'כל 6 שעות'},{v:12,l:'פעמיים ביום'},{v:24,l:'פעם ביום'},{v:0,l:'לא לשלוח מייל'}].map(i=>`<option value="${i.v}" ${(f.email_schedule?.intervalHours||24)===i.v?'selected':''}>${i.l}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">מנהלים שיקבלו את המייל:</div>
+    <div id="email-managers-list" data-selected='${JSON.stringify(f.alert_emails||[])}'
+      style="display:grid;grid-template-columns:1fr 1fr;gap:8px;min-height:60px">
+      <div style="color:var(--text3);font-size:13px;padding:10px">טוען מנהלים...</div>
+    </div>
+
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 function fieldRowHTML(ef,i,p){
@@ -3958,8 +3974,8 @@ function collectWaContacts(){
   }));
 }
 
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||''});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||''},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||24)}});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||24)}},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 
 // ── EXPORT ──
@@ -4486,7 +4502,53 @@ async function sendInactivityEmail(fileId){
   }catch(e){}
 }
 
-// ══ EMAIL ALERT MANAGERS ══
+// ══ EMAIL ALERT TIMER ══
+let _emailTimers={};
+let _emailLastSent={};
+
+function startEmailAlertTimers(){
+  // clear existing
+  Object.values(_emailTimers).forEach(t=>clearInterval(t));
+  _emailTimers={};
+  // load last sent from localStorage
+  try{ _emailLastSent=JSON.parse(localStorage.getItem('moked_email_last_sent')||'{}'); }catch(e){ _emailLastSent={}; }
+
+  const policy=_waPolicy||defaultWAPolicy();
+
+  DB.files.forEach(f=>{
+    const interval=f.email_schedule?.intervalHours;
+    if(!interval||interval===0) return;
+    const emails=f.alert_emails||[];
+    if(!emails.length) return;
+    if(!f.alert_rule?.enabled||!f.alert_rule?.fieldId) return;
+
+    _emailTimers[f.id]=setInterval(async()=>{
+      // check working hours/days
+      const now=new Date();
+      const day=now.getDay();
+      const hour=now.getHours();
+      if(day===5||day===6) return; // שישי/שבת
+      if((policy.blockedDays||[]).includes(day)) return;
+      if(hour<(policy.startHour||8)||hour>=(policy.endHour||18)) return;
+
+      // check if already sent in this interval window
+      const windowKey=`${f.id}_${Math.floor(now.getTime()/(interval*3600000))}`;
+      if(_emailLastSent[windowKey]) return;
+
+      // check breaches
+      try{
+        const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+        const breached=recs.filter(r=>recordMatchesAlert(r,f)).length;
+        if(!breached) return;
+        await sendAlertEmail(f, breached);
+        _emailLastSent[windowKey]=true;
+        localStorage.setItem('moked_email_last_sent',JSON.stringify(_emailLastSent));
+      }catch(e){}
+    }, interval*3600000);
+  });
+}
+
+
 let _emailManagers = [];
 
 async function loadEmailManagersIntoModal(){
@@ -4581,7 +4643,7 @@ async function sendAlertEmail(file, breachedCount){
   }catch(e){ console.warn('Email send failed:',e); addEmailLog(emails.join(', '),subject,false); }
 }
 
-async function initApp(){await loadAll();await loadAllCounts();render();}
+async function initApp(){await loadAll();await loadAllCounts();startEmailAlertTimers();render();}
 window.addEventListener('DOMContentLoaded',()=>{initLoginBg();initLogin();});
 </script>
 </body>
