@@ -2727,7 +2727,7 @@ async function sendDailyReportNow(silent=false){
 
   const dateStr=now.toLocaleDateString('he-IL');
   const fileLines=lines.map(l=>`${l.name}: ${l.breached} פניות ממתינות לטיפול`).join('\n');
-  const msg=`מובמנט | ${dateStr}\n\n${fileLines}\n\nלכניסה: https://movement-moked.github.io`;
+  const msg=`מובמנט | ${dateStr}\n\n${fileLines}\n\nלכניסה: https://adir2112-blip.github.io/files/`;
 
   try{
     await sendWA(formatWAPhone(phone), msg);
@@ -3119,7 +3119,7 @@ async function checkAndSendWAAlerts(silent=false){
       const allFields=[...(f.extra_fields||[]),...(f.admin_fields||[])];
       const fieldLabel=(allFields.find(x=>x.id===rule.fieldId)||{}).label||rule.fieldId;
       const dateStr=new Date().toLocaleDateString('he-IL');
-      const msg=`מובמנט | ${dateStr}\n\n${f.name}: ${breached.length} פניות ממתינות לטיפול\n\nלכניסה: https://movement-moked.github.io`;
+      const msg=`מובמנט | ${dateStr}\n\n${f.name}: ${breached.length} פניות ממתינות לטיפול\n\nלכניסה: https://adir2112-blip.github.io/files/`;
       for(const contact of (f.wa_contacts||[])){
         const phone=formatWAPhone(contact.phone);
         let success=true;
