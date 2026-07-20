@@ -1124,7 +1124,7 @@ function selectUnselectedFromFiltered(){
       if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
       else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      if(field.type==='select') return val==='__empty__' ? !v : v===val;
+      if(field.type==='select') return val==='__empty__' ? !v : v===val.toLowerCase();
       return v.toLowerCase().includes(val.toLowerCase());
     });
   });
@@ -1282,7 +1282,7 @@ async function bulkUpdateAll(fieldId, value, isAdminField){
     filtered=filtered.filter(r=>{
       const v=af?((r.admin_data||{})[afId]||'').toString():((r.extra||{})[afId]||'').toString();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      if(field.type==='select') return val==='__empty__' ? !v : v===val; // exact match for select
+      if(field.type==='select') return val==='__empty__' ? !v : v===val.toLowerCase(); // exact match for select
       return v.toLowerCase().includes(val.toLowerCase()); // partial for text
     });
   });
@@ -1385,7 +1385,7 @@ function renderRecordsPage(){
       if(af) v=((r.admin_data||{})[afId]||'').toString().toLowerCase();
       else    v=((r.extra||{})[afId]||'').toString().toLowerCase();
       if(field.type==='checkbox') return val==='yes'?(v==='true'):(v!=='true');
-      if(field.type==='select') return val==='__empty__' ? !v : v===val;
+      if(field.type==='select') return val==='__empty__' ? !v : v===val.toLowerCase();
       return v.toLowerCase().includes(val.toLowerCase());
     });
   });
