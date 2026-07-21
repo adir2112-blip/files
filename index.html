@@ -1462,8 +1462,9 @@ function renderRecordsPage(){
         if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;}
         return `<td class="admin-col" style="color:var(--text3)">${esc(val||'—')}</td>`;
       }
-      // chat trigger — wrap cell with click handler if chatEnabled
-      const chatBadge=af.chatEnabled?`<span onclick="event.stopPropagation();showFieldChatFromRecord(event,'${af.id}','${esc(af.label)}',_cachedRecords['${S.fileId}']?.find(x=>x.id==='${r.id}')||{id:'${r.id}',field_comments:{}})" style="cursor:pointer;color:var(--blue);margin-right:4px;flex-shrink:0" title="פתח שיחה"><i class="ti ti-message-circle" style="font-size:14px"></i>${((r.field_comments||{})[af.id]||[]).length>0?`<sup style="font-size:9px;font-weight:800">${((r.field_comments||{})[af.id]||[]).length}</sup>`:''}</span>`:'';
+      // chat trigger — admin always sees chat, agent only if chatEnabled
+      const canChat = isAdmin || af.chatEnabled;
+      const chatBadge=canChat?`<span onclick="event.stopPropagation();showFieldChatFromRecord(event,'${af.id}','${esc(af.label)}',_cachedRecords['${S.fileId}']?.find(x=>x.id==='${r.id}')||{id:'${r.id}',field_comments:{}})" style="cursor:pointer;color:var(--blue);margin-right:4px;flex-shrink:0" title="פתח שיחה"><i class="ti ti-message-circle" style="font-size:14px"></i>${((r.field_comments||{})[af.id]||[]).length>0?`<sup style="font-size:9px;font-weight:800">${((r.field_comments||{})[af.id]||[]).length}</sup>`:''}</span>`:'';
       if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${chatBadge}<input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></div></td>`;
       if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<select class="admin-input" style="flex:1" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></div></td>`;}
       if(af.type==='link') return `<td class="admin-col"><div style="display:flex;gap:4px;align-items:center">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="https://..." dir="ltr" style="font-size:11px;flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">
@@ -1854,7 +1855,11 @@ function openRecordChat(event, recordId, fileId){
   const record=recs.find(r=>r.id===recordId); if(!record) return;
   _chatCurrentRecord=record;
   const f=DB.files.find(x=>x.id===fileId);
-  const chatFields=[...(f?.extra_fields||[]),...(f?.admin_fields||[])].filter(ef=>ef.chatEnabled);
+  // admin sees all admin fields, agent sees only chatEnabled fields
+  const allFields=[...(f?.extra_fields||[]),...(f?.admin_fields||[])];
+  const chatFields=S.adminLoggedIn && canManagerAccessFile(f)
+    ? allFields.filter(ef=>ef.chatEnabled || (f?.admin_fields||[]).find(af=>af.id===ef.id))
+    : allFields.filter(ef=>ef.chatEnabled);
   if(!chatFields.length) return;
   if(chatFields.length===1){
     showFieldChatFromRecord(event, chatFields[0].id, chatFields[0].label, record);
@@ -1874,6 +1879,10 @@ function openRecordChat(event, recordId, fileId){
   }
 }
 function showFieldChatFromRecord(event, fieldId, fieldLabel, record){
+  // toggle — if same field popup open, close it
+  if(_chatPopup && _chatFieldId===fieldId && _chatRecordId===record?.id){
+    hideFieldChat(); return;
+  }
   _chatFieldId=fieldId; _chatRecordId=record.id; _chatCurrentRecord=record;
   if(_chatPopup) _chatPopup.remove();
   const comments=(record.field_comments||{})[fieldId]||[];
