@@ -1778,10 +1778,12 @@ function showFieldChat(event, fieldId, fieldLabel){
       <button class="chat-send-btn" onclick="sendChatMsg()" title="שלח"><i class="ti ti-send"></i></button>
     </div>`;
 
-  // position near cursor
-  const rect=event.currentTarget.getBoundingClientRect();
-  popup.style.top=(rect.bottom+window.scrollY+8)+'px';
-  popup.style.left=Math.max(10,Math.min(rect.left+window.scrollX, window.innerWidth-340))+'px';
+  // position near the clicked element
+  const rect = event.target ? event.target.getBoundingClientRect() : null;
+  const top = rect ? rect.bottom + window.scrollY + 8 : event.pageY + 8;
+  const left = rect ? Math.max(10, Math.min(rect.left + window.scrollX, window.innerWidth - 340)) : Math.max(10, event.pageX - 160);
+  popup.style.top = top + 'px';
+  popup.style.left = left + 'px';
 
   document.body.appendChild(popup);
   _chatPopup=popup;
@@ -1879,11 +1881,17 @@ function openRecordChat(event, recordId, fileId){
   }
 }
 function showFieldChatFromRecord(event, fieldId, fieldLabel, record){
-  // toggle — if same field popup open, close it
-  if(_chatPopup && _chatFieldId===fieldId && _chatRecordId===record?.id){
+  // record can be an object or null — extract id safely
+  const recId = record?.id || record;
+  const recObj = typeof record === 'object' ? record : _cachedRecords[S.fileId]?.find(x=>x.id===recId) || {id:recId, field_comments:{}};
+
+  // toggle — close only if SAME field AND same record
+  if(_chatPopup && _chatFieldId===fieldId && _chatRecordId===recObj.id){
     hideFieldChat(); return;
   }
-  _chatFieldId=fieldId; _chatRecordId=record.id; _chatCurrentRecord=record;
+  // close any existing popup first
+  if(_chatPopup) hideFieldChat();
+  _chatFieldId=fieldId; _chatRecordId=recObj.id; _chatCurrentRecord=recObj;
   if(_chatPopup) _chatPopup.remove();
   const comments=(record.field_comments||{})[fieldId]||[];
   const messagesHTML=comments.length
