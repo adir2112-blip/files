@@ -1778,14 +1778,11 @@ function showFieldChat(event, fieldId, fieldLabel){
       <button class="chat-send-btn" onclick="sendChatMsg()" title="שלח"><i class="ti ti-send"></i></button>
     </div>`;
 
-  // position near click using fixed positioning
-  const clientY = event.clientY || (event.target?.getBoundingClientRect()?.bottom) || 100;
-  const clientX = event.clientX || (event.target?.getBoundingClientRect()?.left) || 100;
-  const top = Math.min(clientY + 8, window.innerHeight - 420);
-  const left = Math.max(10, Math.min(clientX - 160, window.innerWidth - 340));
+  // position centered on screen
   popup.style.position = 'fixed';
-  popup.style.top = top + 'px';
-  popup.style.left = left + 'px';
+  popup.style.top = '50%';
+  popup.style.left = '50%';
+  popup.style.transform = 'translate(-50%, -50%)';
   popup.style.zIndex = '9999';
 
   document.body.appendChild(popup);
