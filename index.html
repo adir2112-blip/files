@@ -1778,13 +1778,15 @@ function showFieldChat(event, fieldId, fieldLabel){
       <button class="chat-send-btn" onclick="sendChatMsg()" title="שלח"><i class="ti ti-send"></i></button>
     </div>`;
 
-  // position near the clicked element using fixed positioning
-  const rect = event.target ? event.target.getBoundingClientRect() : null;
-  const top = rect ? Math.min(rect.bottom + 8, window.innerHeight - 400) : event.clientY + 8;
-  const left = rect ? Math.max(10, Math.min(rect.left, window.innerWidth - 340)) : Math.max(10, event.clientX - 160);
+  // position near click using fixed positioning
+  const clientY = event.clientY || (event.target?.getBoundingClientRect()?.bottom) || 100;
+  const clientX = event.clientX || (event.target?.getBoundingClientRect()?.left) || 100;
+  const top = Math.min(clientY + 8, window.innerHeight - 420);
+  const left = Math.max(10, Math.min(clientX - 160, window.innerWidth - 340));
   popup.style.position = 'fixed';
   popup.style.top = top + 'px';
   popup.style.left = left + 'px';
+  popup.style.zIndex = '9999';
 
   document.body.appendChild(popup);
   _chatPopup=popup;
