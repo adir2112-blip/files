@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.20'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.21'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1875,8 +1875,8 @@ function openRecordChat(event, recordId, fileId){
         return `<button onclick="showFieldChatFromRecord(null,'${ef.id}','${esc(ef.label)}',_chatCurrentRecord)" style="width:100%;text-align:right;padding:8px 10px;margin-bottom:4px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-family:inherit;font-size:13px;display:flex;align-items:center;justify-content:space-between"><span>${esc(ef.label)}</span>${count>0?`<span style="background:var(--blue);color:#fff;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700">${count}</span>`:''}</button>`;
       }).join('')}</div>`;
     const rect=event.target.getBoundingClientRect();
-    popup.style.top=(rect.bottom+window.scrollY+6)+'px';
-    popup.style.left=Math.max(10,rect.left+window.scrollX-100)+'px';
+    popup.style.top=Math.min(rect.bottom+6, window.innerHeight-420)+'px';
+    popup.style.left=Math.max(10,Math.min(rect.left-100, window.innerWidth-340))+'px';
     document.body.appendChild(popup); _chatPopup=popup;
   }
 }
@@ -1902,7 +1902,7 @@ function showFieldChatFromRecord(event, fieldId, fieldLabel, record){
   popup.innerHTML=`<div class="chat-popup-header"><div class="chat-popup-title"><i class="ti ti-message-2"></i> ${esc(fieldLabel)}</div><button class="chat-popup-close" onclick="hideFieldChat()">✕</button></div>
     <div class="chat-messages" id="chat-messages-list">${messagesHTML}</div>
     <div class="chat-input-row"><input type="text" id="chat-input" placeholder="כתוב הערה..." onkeydown="if(event.key==='Enter')sendChatMsg()"><button class="chat-send-btn" onclick="sendChatMsg()"><i class="ti ti-send"></i></button></div>`;
-  if(event){const rect=event.target?.getBoundingClientRect()||{bottom:200,left:200};popup.style.top=(rect.bottom+window.scrollY+6)+'px';popup.style.left=Math.max(10,Math.min(rect.left+window.scrollX-100,window.innerWidth-340))+'px';}
+  if(event){const rect=event.target?.getBoundingClientRect()||{bottom:200,left:200};popup.style.top=Math.min(rect.bottom+6,window.innerHeight-420)+'px';popup.style.left=Math.max(10,Math.min(rect.left-100,window.innerWidth-340))+'px';}
   else{popup.style.top='200px';popup.style.left='50%';popup.style.transform='translateX(-50%)';}
   document.body.appendChild(popup); _chatPopup=popup;
   popup.addEventListener('mouseenter',()=>clearTimeout(_chatHideTimer));
