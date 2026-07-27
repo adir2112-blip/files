@@ -1,0 +1,4 @@
+.supabase_token
+*.token
+.env
+open-claude.bat

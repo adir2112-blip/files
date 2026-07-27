@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.21'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.22'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -679,9 +679,11 @@ let _cachedArchive={};
 
 function businessDaysBetween(fromDate, toDate){
   // ימי עסקים: ראשון-חמישי בלבד (שישי=5, שבת=6 מוחרגים)
+  // יום היצירה עצמו לא נספר — ה-SLA מתחיל להיספר מהיום שאחריו
   let count=0;
   const cur=new Date(fromDate);
   cur.setHours(0,0,0,0);
+  cur.setDate(cur.getDate()+1);
   const end=new Date(toDate);
   end.setHours(0,0,0,0);
   while(cur<end){
