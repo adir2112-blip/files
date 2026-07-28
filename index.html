@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.22'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.23'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1501,7 +1501,17 @@ function renderRecordsPage(){
     const histC=(isAdmin&&!_bulkMode&&(r.change_log||[]).length)?`<td><button class="btn btn-xs" onclick='showChangeLog(${JSON.stringify(r.change_log).replace(/'/g,"&#39;")},"${esc(r.first_name)} ${esc(r.last_name)}")' title="היסטוריית שינויים"><i class="ti ti-history"></i></button></td>`:(isAdmin&&!_bulkMode?'<td></td>':'');
     const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
     const trStyle=`${isSelected?'background:var(--blue-light);':rowStyle}${_bulkMode?';cursor:pointer':''}`;
-    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${treatedC}${noteC}${histC}${delC}</tr>`;
+    const custEditable=isAdmin&&!_bulkMode;
+    const firstNameC=custEditable
+      ?`<td><input class="admin-input" type="text" value="${esc(r.first_name)}" style="min-width:80px;font-weight:700" oninput="debounceCustomerField('${r.id}','first_name',this.value,'${S.fileId}')"></td>`
+      :`<td><strong>${esc(r.first_name)}</strong></td>`;
+    const lastNameC=custEditable
+      ?`<td><input class="admin-input" type="text" value="${esc(r.last_name)}" style="min-width:80px" oninput="debounceCustomerField('${r.id}','last_name',this.value,'${S.fileId}')"></td>`
+      :`<td>${esc(r.last_name)}</td>`;
+    const phoneC=custEditable
+      ?`<td><input class="admin-input" type="text" dir="ltr" value="${esc(r.phone)}" style="min-width:100px" oninput="debounceCustomerField('${r.id}','phone',this.value,'${S.fileId}')"></td>`
+      :`<td dir="ltr">${esc(r.phone)}</td>`;
+    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td>${firstNameC}${lastNameC}${phoneC}<td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${treatedC}${noteC}${histC}${delC}</tr>`;
   }).join('');
 
   // ALL fields available for filtering (extra + admin)
@@ -3404,6 +3414,28 @@ async function saveAdminField(recordId,fieldId,value,fileId){
     if(cell) cell.innerHTML=`<div>${fmtDate(treatedAt)}</div><div style="color:var(--purple);font-weight:600;font-size:10px">${esc(currentUser?.name||_agentName||'')}</div>`;
   }
   catch(e){showAlert('שגיאה בשמירה','error');}
+}
+const CUSTOMER_FIELD_LABELS={first_name:'שם פרטי',last_name:'שם משפחה',phone:'טלפון'};
+async function saveCustomerField(recordId,fieldName,value,fileId){
+  const recs=_cachedRecords[fileId]||[];
+  const record=recs.find(r=>r.id===recordId);if(!record)return;
+  const oldVal=record[fieldName];
+  record[fieldName]=value;
+  if(!record.change_log)record.change_log=[];
+  record.change_log.push({
+    ts: new Date().toISOString(),
+    by: currentUser?.name||_agentName||'מנהל',
+    field: CUSTOMER_FIELD_LABELS[fieldName]||fieldName,
+    from: oldVal||'—',
+    to: value||'—'
+  });
+  if(record.change_log.length>30) record.change_log=record.change_log.slice(-30);
+  try{ await PATCH('records',{[fieldName]:value,change_log:record.change_log},`?id=eq.${recordId}`); }
+  catch(e){ showAlert('שגיאה בשמירת פרטי לקוח','error'); }
+}
+function debounceCustomerField(recordId,fieldName,value,fileId){
+  const key=recordId+'_'+fieldName;clearTimeout(_saveTimers[key]);
+  _saveTimers[key]=setTimeout(()=>saveCustomerField(recordId,fieldName,value,fileId),700);
 }
 function debounceManagerNote(recordId,val,fileId){
   const key='note_'+recordId; clearTimeout(_saveTimers[key]);
