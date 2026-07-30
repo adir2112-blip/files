@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.24'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.25'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1500,7 +1500,8 @@ function renderRecordsPage(){
       :'';
     const histC=(isAdmin&&!_bulkMode&&(r.change_log||[]).length)?`<td><button class="btn btn-xs" onclick='showChangeLog(${JSON.stringify(r.change_log).replace(/'/g,"&#39;")},"${esc(r.first_name)} ${esc(r.last_name)}")' title="היסטוריית שינויים"><i class="ti ti-history"></i></button></td>`:(isAdmin&&!_bulkMode?'<td></td>':'');
     const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
-    const trStyle=`${isSelected?'background:var(--blue-light);':rowStyle}${_bulkMode?';cursor:pointer':''}`;
+    const isBreached=isAdmin&&recordMatchesAlert(r,f);
+    const trStyle=`${isSelected?'background:var(--blue-light);':isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
     return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td><td><strong>${esc(r.first_name)}</strong></td><td>${esc(r.last_name)}</td><td dir="ltr">${esc(r.phone)}</td><td dir="ltr">${esc(r.id_num)}</td>${extraC}${agentC}${adminC}${treatedC}${noteC}${histC}${delC}</tr>`;
   }).join('');
 
