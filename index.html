@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.32'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.33'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1675,7 +1675,7 @@ function renderAdmin(){
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='weekly'?'active':''}" onclick="loadWeeklyReportTab()"><i class="ti ti-calendar-week" style="font-size:12px"></i> דוח שבועי</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
-      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="S.adminTab='backup';render()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
+      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="loadBackupTab()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
       ${currentUser?.email==='adirlev@targetcall.co.il'?`<button class="nav-tab ${tab==='monitor'?'active':''}" onclick="loadMonitorTab()"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> מוניטור חריגה</button>`:''}
 
     </div>
@@ -4505,6 +4505,68 @@ async function runBackup(toEmail, silent=false){
   if(!silent){const btn=document.getElementById('bk-send-btn');if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> שלח עכשיו';}}
 }
 
+// ── ATTACHMENT STORAGE MANAGEMENT ──
+async function loadBackupTab(){
+  S.adminTab='backup'; S._attachStorageLoading=true; render();
+  await loadAttachmentStorageInfo();
+  S._attachStorageLoading=false; render();
+}
+async function loadAttachmentStorageInfo(){
+  let totalBytes=0,totalCount=0;
+  try{
+    const {data:topLevel}=await sbClient.storage.from(ATTACHMENTS_BUCKET).list('',{limit:1000});
+    for(const entry of (topLevel||[])){
+      if(entry.id) continue; // real files have an id; folders (one per field id) don't
+      const {data:files}=await sbClient.storage.from(ATTACHMENTS_BUCKET).list(entry.name,{limit:1000});
+      for(const file of (files||[])){ totalBytes+=file.metadata?.size||0; totalCount++; }
+    }
+  }catch(e){}
+  S._attachStorage={bytes:totalBytes,count:totalCount};
+}
+function fmtBytes(b){
+  if(b<1024) return b+' B';
+  if(b<1024*1024) return (b/1024).toFixed(1)+' KB';
+  return (b/1024/1024).toFixed(1)+' MB';
+}
+async function cleanupAttachmentsByAge(days){
+  if(!confirm(`למחוק את כל קבצי האסמכתא שהועלו לפני יותר מ-${days} ימים? הפעולה בלתי הפיכה.`)) return;
+  try{
+    const res=await fetch(`${SB_URL}/functions/v1/attachment-cleanup`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({days})
+    });
+    const data=await res.json();
+    if(data.ok){
+      showAlert(`✓ נמחקו ${data.deletedCount} קבצים`,'success');
+      await loadAttachmentStorageInfo();
+      render();
+    } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
+  }catch(e){ showAlert('שגיאה בניקוי האחסון','error'); }
+}
+function renderAttachmentStoragePanel(){
+  if(S._attachStorageLoading) return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:20px"><div class="loading"><div class="spinner"></div><p>טוען נתוני אחסון...</p></div></div>`;
+  const st=S._attachStorage||{bytes:0,count:0};
+  const periods=[{d:30,l:'חודש'},{d:60,l:'חודשיים'},{d:90,l:'3 חודשים'},{d:120,l:'4 חודשים'},{d:180,l:'6 חודשים'}];
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:20px">
+    <div class="card-title" style="margin-bottom:16px;color:var(--purple)"><i class="ti ti-photo"></i> ניהול אחסון קבצי אסמכתא</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px">
+      <div style="background:var(--purple-light);border:1px solid #ddd6fe;border-radius:var(--radius-sm);padding:14px;text-align:center">
+        <div style="font-size:24px;font-weight:900;color:var(--purple)">${fmtBytes(st.bytes)}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">מתוך 1GB (תוכנית חינמית)</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center">
+        <div style="font-size:24px;font-weight:900;color:var(--text)">${st.count}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">קבצים מאוחסנים</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">מחיקה ידנית לפי תקופה (בנוסף לניקוי האוטומטי היומי של 4+ חודשים):</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${periods.map(p=>`<button class="btn btn-sm btn-danger" onclick="cleanupAttachmentsByAge(${p.d})"><i class="ti ti-trash"></i> מחק מעל ${p.l}</button>`).join('')}
+      <button class="btn btn-sm" onclick="loadBackupTab()"><i class="ti ti-refresh"></i> רענן</button>
+    </div>
+  </div>`;
+}
 function renderAdminBackup(){
   const cfg=loadBackupDefaults();
   loadBackupHistory();
@@ -4588,7 +4650,8 @@ function renderAdminBackup(){
           </tr>`).join('')}
           </tbody></table></div>`
       }
-    </div>`;
+    </div>
+    ${renderAttachmentStoragePanel()}`;
 }
 
 
