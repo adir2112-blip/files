@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.27'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.28'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -732,16 +732,19 @@ function recordFieldPending(record, file){
 }
 
 let _alertCounts = {}; // fileId -> count
+let _fieldPendingCounts = {}; // fileId -> count of records where the SLA field is still empty (any age)
 
 async function loadAlertCounts(){
   _alertCounts = {};
+  _fieldPendingCounts = {};
   const filesWithAlerts = DB.files.filter(f=>f.alert_rule?.enabled && f.alert_rule?.fieldId);
   if(!filesWithAlerts.length) return;
   await Promise.all(filesWithAlerts.map(async f=>{
     try{
       const recs = await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
       _alertCounts[f.id] = recs.filter(r=>recordMatchesAlert(r,f)).length;
-    }catch(e){ _alertCounts[f.id]=0; }
+      _fieldPendingCounts[f.id] = recs.filter(r=>recordFieldPending(r,f)).length;
+    }catch(e){ _alertCounts[f.id]=0; _fieldPendingCounts[f.id]=0; }
   }));
 }
 
@@ -887,12 +890,19 @@ function renderOrgs(){
         cornerBadge=`<div class="notif-badge orange">${al}</div>`;
       }
     }
-    return `<div class="org-card" onclick="goFiles('${o.id}')" style="background:${st.bg}">
-      ${cornerBadge}
-      <div class="org-card-body">
-        <div class="org-card-logo">${st.logo}</div>
-        <div class="oc-name">${esc(o.name)}</div>
-        <div class="oc-count">${DB.files.filter(f=>f.org_id===o.id).length} קבצים</div>
+    const statsRow=S.adminLoggedIn&&(p>0||al>0)?`<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:6px;padding:0 2px;flex-wrap:wrap">
+      ${al>0?`<span style="font-size:15px;font-weight:900;color:#ea580c"><i class="ti ti-alert-triangle" style="font-size:13px"></i> ${al} בחריגה</span>`:''}
+      ${p>0?`<span style="font-size:12px;font-weight:600;color:var(--text2)">${p} ממתינים לטיפול</span>`:''}
+    </div>`:'';
+    return `<div>
+      ${statsRow}
+      <div class="org-card" onclick="goFiles('${o.id}')" style="background:${st.bg}">
+        ${cornerBadge}
+        <div class="org-card-body">
+          <div class="org-card-logo">${st.logo}</div>
+          <div class="oc-name">${esc(o.name)}</div>
+          <div class="oc-count">${DB.files.filter(f=>f.org_id===o.id).length} קבצים</div>
+        </div>
       </div>
     </div>`;
   }).join('')}</div>`;
