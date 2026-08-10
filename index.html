@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.29'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.30'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -754,6 +754,9 @@ function alertForOrg(orgId){
 function totalAlerts(){
   return Object.values(_alertCounts).reduce((s,v)=>s+v,0);
 }
+function fieldPendingForOrg(orgId){
+  return DB.files.filter(f=>f.org_id===orgId).reduce((s,f)=>s+(_fieldPendingCounts[f.id]||0),0);
+}
 
 function isRecordPending(record,file){
   const rules=file.pending_rules||{};
@@ -880,6 +883,7 @@ function renderOrgs(){
     const st=orgStyle(o.name);
     const p=pendingForOrg(o.id);
     const al=S.adminLoggedIn?alertForOrg(o.id):0;
+    const fp=S.adminLoggedIn?fieldPendingForOrg(o.id):0;
     let cornerBadge='';
     if(S.adminLoggedIn&&(p>0||al>0)){
       if(p>0&&al>0){
@@ -890,9 +894,9 @@ function renderOrgs(){
         cornerBadge=`<div class="notif-badge orange">${al}</div>`;
       }
     }
-    const statsRow=S.adminLoggedIn&&(p>0||al>0)?`<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:6px;padding:0 2px;flex-wrap:wrap">
+    const statsRow=S.adminLoggedIn&&(fp>0||al>0)?`<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:6px;padding:0 2px;flex-wrap:wrap">
       ${al>0?`<span style="font-size:15px;font-weight:900;color:#ea580c"><i class="ti ti-alert-triangle" style="font-size:13px"></i> ${al} בחריגה</span>`:''}
-      ${p>0?`<span style="font-size:12px;font-weight:600;color:var(--text2)">${p} ממתינים לטיפול</span>`:''}
+      ${fp>0?`<span style="font-size:12px;font-weight:600;color:var(--text2)">${fp} ממתינים לטיפול</span>`:''}
     </div>`:'';
     return `<div>
       ${statsRow}
@@ -1728,45 +1732,46 @@ function renderMonitor(){
 
   const cards=data.map(d=>{
     const sev=d.breached===0?'ok':d.breached>=10?'high':d.breached>=3?'med':'low';
-    const sevColor={ok:'#22c55e',low:'#fbbf24',med:'#fb923c',high:'#ef4444'}[sev];
-    return `<div style="background:#111827;border:1px solid ${sev==='ok'?'#1f2937':sevColor+'55'};border-radius:14px;padding:18px;position:relative;overflow:hidden;cursor:pointer" onclick="adminViewFileRecords('${d.file.id}')">
-      <div style="position:absolute;top:0;right:0;left:0;height:3px;background:${sevColor}"></div>
-      <div style="font-size:13px;font-weight:700;color:#9ca3af;margin-bottom:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(d.file.name)}">${esc(d.file.name)}</div>
+    const sevColor={ok:'#16a34a',low:'#d97706',med:'#ea580c',high:'#dc2626'}[sev];
+    const sevBg={ok:'var(--green-light)',low:'var(--amber-light)',med:'#ffedd5',high:'var(--red-light)'}[sev];
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden;cursor:pointer;box-shadow:var(--shadow)" onclick="adminViewFileRecords('${d.file.id}')">
+      <div style="position:absolute;top:0;right:0;left:0;height:4px;background:${sevColor}"></div>
+      <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(d.file.name)}">${esc(d.file.name)}</div>
       <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:12px">
         <span style="font-size:38px;font-weight:900;color:${sevColor};line-height:1">${d.breached}</span>
-        <span style="font-size:12px;color:#6b7280;font-weight:600">בחריגה</span>
+        <span style="font-size:12px;color:var(--text3);font-weight:600">בחריגה</span>
       </div>
-      <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#9ca3af;border-top:1px solid #1f2937;padding-top:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:10px">
         <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="font-size:12px"></i> ${d.oldestDays!==null?d.oldestDays+' ימים — הוותיקה ביותר':'—'}</span>
         <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-inbox" style="font-size:12px"></i> ${d.pending} ממתינים סה"כ</span>
       </div>
     </div>`;
   }).join('');
 
-  return `<div style="background:#0b0f19;border-radius:16px;padding:24px;margin:-6px">
+  return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:24px;margin:-6px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <div style="display:flex;align-items:center;gap:10px;color:#fff;font-size:18px;font-weight:800">
-        <i class="ti ti-activity-heartbeat" style="color:#ef4444"></i> מוניטור חריגה
+      <div style="display:flex;align-items:center;gap:10px;color:var(--text);font-size:18px;font-weight:800">
+        <i class="ti ti-activity-heartbeat" style="color:#dc2626"></i> מוניטור חריגה
       </div>
-      <button class="btn btn-sm" style="background:#1f2937;border-color:#374151;color:#e5e7eb" onclick="loadMonitorTab()"><i class="ti ti-refresh"></i> רענן</button>
+      <button class="btn btn-sm" onclick="loadMonitorTab()"><i class="ti ti-refresh"></i> רענן</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px">
-      <div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:30px;font-weight:900;color:#ef4444">${totalBreached}</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:4px">סה"כ חריגות</div>
+      <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:30px;font-weight:900;color:#7f1d1d">${totalBreached}</div>
+        <div style="font-size:11px;color:#b91c1c;margin-top:4px;font-weight:600">סה"כ חריגות</div>
       </div>
-      <div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:30px;font-weight:900;color:#fbbf24">${totalPending}</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:4px">ממתינים למענה בסה"כ</div>
+      <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:30px;font-weight:900;color:#78350f">${totalPending}</div>
+        <div style="font-size:11px;color:#92400e;margin-top:4px;font-weight:600">ממתינים למענה בסה"כ</div>
       </div>
-      <div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:30px;font-weight:900;color:#38bdf8">${maxOldest}</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:4px">ימים — החריגה הוותיקה ביותר</div>
+      <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:30px;font-weight:900;color:#1e3a8a">${maxOldest}</div>
+        <div style="font-size:11px;color:#1d4ed8;margin-top:4px;font-weight:600">ימים — החריגה הוותיקה ביותר</div>
       </div>
     </div>
     ${data.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">${cards}</div>`
-      :'<div style="text-align:center;color:#6b7280;padding:40px"><i class="ti ti-mood-check" style="font-size:40px"></i><p style="margin-top:10px">אין קבצים עם מעקב SLA</p></div>'}
-    <div style="text-align:center;color:#4b5563;font-size:11px;margin-top:20px">מתעדכן אוטומטית כל דקה</div>
+      :'<div class="empty"><i class="ti ti-mood-check"></i><p>אין קבצים עם מעקב SLA</p></div>'}
+    <div style="text-align:center;color:var(--text3);font-size:11px;margin-top:20px">מתעדכן אוטומטית כל דקה</div>
   </div>`;
 }
 
