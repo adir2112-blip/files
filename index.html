@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.30'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.31'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -881,32 +881,18 @@ function renderOrgs(){
   return alertBar+alertsBar+globalSearchBar+`<div class="page-title">בחר ארגון</div><div class="page-sub">לחץ על הארגון הרלוונטי להזנת פניות</div>
   <div class="org-grid">${DB.orgs.map(o=>{
     const st=orgStyle(o.name);
-    const p=pendingForOrg(o.id);
     const al=S.adminLoggedIn?alertForOrg(o.id):0;
     const fp=S.adminLoggedIn?fieldPendingForOrg(o.id):0;
-    let cornerBadge='';
-    if(S.adminLoggedIn&&(p>0||al>0)){
-      if(p>0&&al>0){
-        cornerBadge=`<div class="notif-badge dual"><span style="background:#dc2626">${p}</span><span style="background:#ea580c">${al}</span></div>`;
-      } else if(p>0){
-        cornerBadge=`<div class="notif-badge red">${p}</div>`;
-      } else {
-        cornerBadge=`<div class="notif-badge orange">${al}</div>`;
-      }
-    }
-    const statsRow=S.adminLoggedIn&&(fp>0||al>0)?`<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:6px;padding:0 2px;flex-wrap:wrap">
-      ${al>0?`<span style="font-size:15px;font-weight:900;color:#ea580c"><i class="ti ti-alert-triangle" style="font-size:13px"></i> ${al} בחריגה</span>`:''}
-      ${fp>0?`<span style="font-size:12px;font-weight:600;color:var(--text2)">${fp} ממתינים לטיפול</span>`:''}
+    const statsBar=S.adminLoggedIn&&(fp>0||al>0)?`<div style="margin:-20px -18px 14px -18px;padding:9px 18px;background:rgba(0,0,0,.28);border-bottom:1px solid rgba(255,255,255,.15);border-radius:calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      ${al>0?`<span style="font-size:13px;font-weight:900;color:#fff;display:flex;align-items:center;gap:4px"><i class="ti ti-alert-triangle" style="color:#fbbf24;font-size:13px"></i> ${al} בחריגה</span>`:''}
+      ${fp>0?`<span style="font-size:12px;font-weight:600;color:rgba(255,255,255,.8)">${fp} ממתינים לטיפול</span>`:''}
     </div>`:'';
-    return `<div>
-      ${statsRow}
-      <div class="org-card" onclick="goFiles('${o.id}')" style="background:${st.bg}">
-        ${cornerBadge}
-        <div class="org-card-body">
-          <div class="org-card-logo">${st.logo}</div>
-          <div class="oc-name">${esc(o.name)}</div>
-          <div class="oc-count">${DB.files.filter(f=>f.org_id===o.id).length} קבצים</div>
-        </div>
+    return `<div class="org-card" onclick="goFiles('${o.id}')" style="background:${st.bg}">
+      <div class="org-card-body">
+        ${statsBar}
+        <div class="org-card-logo">${st.logo}</div>
+        <div class="oc-name">${esc(o.name)}</div>
+        <div class="oc-count">${DB.files.filter(f=>f.org_id===o.id).length} קבצים</div>
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -919,20 +905,14 @@ function renderFiles(){
   const org=DB.orgs.find(o=>o.id===S.orgId);
   return `<div class="page-title">${org?esc(org.name):''}</div><div class="page-sub">בחר קובץ לעדכון</div>
   <div class="files-grid">${orgFiles.map(f=>{
-    const p=S.adminLoggedIn?(_pendingCounts[f.id]||0):0;
     const al=S.adminLoggedIn?(_alertCounts[f.id]||0):0;
-    let fileBadge='';
-    if(S.adminLoggedIn&&(p>0||al>0)){
-      if(p>0&&al>0){
-        fileBadge=`<div class="notif-badge dual"><span style="background:#dc2626">${p}</span><span style="background:#ea580c">${al}</span></div>`;
-      } else if(p>0){
-        fileBadge=`<div class="notif-badge red">${p}</div>`;
-      } else {
-        fileBadge=`<div class="notif-badge orange">${al}</div>`;
-      }
-    }
+    const fp=S.adminLoggedIn?(_fieldPendingCounts[f.id]||0):0;
+    const statsBar=S.adminLoggedIn&&(fp>0||al>0)?`<div style="margin:-22px -14px 12px -14px;padding:7px 10px;background:linear-gradient(135deg,#fff7ed,#ffedd5);border-bottom:1.5px solid #fdba74;border-radius:var(--radius) var(--radius) 0 0;display:flex;flex-direction:column;gap:2px;align-items:center">
+      ${al>0?`<span style="font-size:12px;font-weight:900;color:#c2410c;display:flex;align-items:center;gap:3px"><i class="ti ti-alert-triangle" style="font-size:11px"></i> ${al} בחריגה</span>`:''}
+      ${fp>0?`<span style="font-size:10px;font-weight:600;color:#9a3412">${fp} ממתינים לטיפול</span>`:''}
+    </div>`:'';
     return `<div class="file-card" onclick="goForm('${f.id}')" style="position:relative">
-      ${fileBadge}
+      ${statsBar}
       <i class="ti ${f.icon||'ti-file'} fc-icon"></i>
       <div class="fc-name">${esc(f.name)}</div>
     </div>`;
