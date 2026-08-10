@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.35'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.36'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4320,6 +4320,7 @@ async function exportAll(){
 }
 function buildXLSX(filename,headers,rows,adminColIdxs){
   const wb=XLSX.utils.book_new();
+  wb.Workbook={Views:[{RTL:true}]}; // עמודה A תיפתח בצד ימין, כמו טבלה עברית טבעית
   const wsData=[headers,...rows];
   const ws=XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols']=headers.map((h,ci)=>({wch:Math.min(Math.max(Math.max(h.length,...rows.map(r=>(r[ci]||'').toString().length))+2,10),40)}));
@@ -4529,16 +4530,15 @@ async function runBackup(toEmail, silent=false){
   try{
     const res=await fetch(SB_FUNC_URL,{
       method:'POST',
-      mode:'no-cors',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
       body:JSON.stringify({to:toEmail})
     });
-    // no-cors returns opaque response — assume success
-    const entry={date:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),to:toEmail,records:0,ok:true,manual:true};
+    const data=await res.json().catch(()=>({ok:res.ok,records:0}));
+    const entry={date:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),to:toEmail,records:data.records||0,ok:!!data.ok,manual:true};
     await appendBackupHistoryServer(entry);
     if(!silent){
       render();
-      showAlert(`✓ גיבוי נשלח ל-${toEmail}`,'success');
+      showAlert(data.ok?`✓ גיבוי נשלח ל-${toEmail} (${data.records||0} רשומות)`:'שליחה נכשלה','success');
     }
   }catch(e){
     if(!silent) showAlert('שגיאה: '+e.message,'error');
