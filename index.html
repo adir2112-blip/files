@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.34'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.35'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -976,6 +976,8 @@ function renderForm(){
       inp=`<input class="entry-input" type="number" name="extra_${ef.id}" placeholder="הזן ${esc(ef.label)}" ${req}>`;
     } else if(ef.type==='link'){
       inp=`<input class="entry-input" type="text" name="extra_${ef.id}" placeholder="https://..." dir="ltr" ${req}>`;
+    } else if(ef.type==='date'){
+      inp=`<input class="entry-input" type="date" name="extra_${ef.id}" dir="ltr" ${req}>`;
     } else {
       inp=`<input class="entry-input" type="text" name="extra_${ef.id}" placeholder="הזן ${esc(ef.label)}" ${req}>`;
     }
@@ -4155,7 +4157,8 @@ function fileModalHTML(f,mode,id=''){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 function fieldRowHTML(ef,i,p){
-  const typeOpts=['text','number','select','checkbox','link','attachment'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':t==='link'?'קישור (URL)':t==='attachment'?'קובץ אסמכתא (תמונה/PDF)':'תיבת סימון'}</option>`).join('');
+  const FIELD_TYPE_LABELS={text:'טקסט',number:'מספר',select:'תפריט',checkbox:'תיבת סימון',link:'קישור (URL)',attachment:'קובץ אסמכתא (תמונה/PDF)',date:'תאריך'};
+  const typeOpts=Object.keys(FIELD_TYPE_LABELS).map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${FIELD_TYPE_LABELS[t]}</option>`).join('');
   const hasNote=!!ef.noteEnabled;
   return `<div class="field-row" style="grid-template-columns:1fr;padding:12px">
     <div style="display:grid;grid-template-columns:1fr 1fr auto auto auto auto;gap:8px">
@@ -4458,6 +4461,7 @@ function initLoginBg(){
 const SB_FUNC_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/functions/v1/backup-moked';
 
 function loadBackupDefaults(){
+  // ברירת מחדל מקומית (מהירה, לפני שהעומס מהשרת נטען) — המקור האמיתי הוא app_settings.backup_config
   try{
     const s=localStorage.getItem('moked_backup_config');
     return s?JSON.parse(s):{
@@ -4466,7 +4470,35 @@ function loadBackupDefaults(){
   }catch(e){return{to:'',dayOfWeek:0,hour:8,enabled:false};}
 }
 
-function saveBackupConfig(){
+async function loadBackupConfigFromServer(){
+  try{
+    const rows=await GET('app_settings','?key=in.(backup_config,backup_history)&select=key,value');
+    const cfgRow=(rows||[]).find(r=>r.key==='backup_config');
+    const histRow=(rows||[]).find(r=>r.key==='backup_history');
+    if(cfgRow) localStorage.setItem('moked_backup_config',cfgRow.value); // עדכון המטמון המקומי
+    _backupHistory=histRow?JSON.parse(histRow.value):[];
+  }catch(e){ /* נשארים עם ברירת המחדל המקומית */ }
+}
+
+async function appendBackupHistoryServer(entry){
+  try{
+    const rows=await GET('app_settings','?key=eq.backup_history&select=value');
+    let hist=rows?.length?JSON.parse(rows[0].value):[];
+    hist=[entry,...hist].slice(0,50);
+    if(rows?.length) await PATCH('app_settings',{value:JSON.stringify(hist)},'?key=eq.backup_history');
+    else await POST('app_settings',{key:'backup_history',value:JSON.stringify(hist)});
+    _backupHistory=hist;
+  }catch(e){}
+}
+async function clearBackupHistory(){
+  if(!confirm('למחוק היסטוריה?')) return;
+  _backupHistory=[];
+  localStorage.removeItem('moked_backup_history');
+  try{ await PATCH('app_settings',{value:'[]'},'?key=eq.backup_history'); }catch(e){}
+  render();
+}
+
+async function saveBackupConfig(){
   const cfg={
     to: document.getElementById('bk-email')?.value.trim()||'',
     dayOfWeek: parseInt(document.getElementById('bk-day')?.value||0),
@@ -4474,33 +4506,19 @@ function saveBackupConfig(){
     enabled: document.getElementById('bk-enabled')?.checked||false,
   };
   localStorage.setItem('moked_backup_config', JSON.stringify(cfg));
-  startBackupAutoTimer();
-  showAlert('הגדרות גיבוי נשמרו','success');
+  try{
+    const exists=await GET('app_settings','?key=eq.backup_config&select=key');
+    if(exists?.length) await PATCH('app_settings',{value:JSON.stringify(cfg)},'?key=eq.backup_config');
+    else await POST('app_settings',{key:'backup_config',value:JSON.stringify(cfg)});
+    showAlert('הגדרות גיבוי נשמרו','success');
+  }catch(e){ showAlert('שגיאה בשמירת ההגדרות לשרת: '+e.message,'error'); }
 }
 
-
-function startBackupAutoTimer(){
-  clearInterval(_backupTimer);
-  const cfg=loadBackupDefaults();
-  if(!cfg.enabled||!cfg.to) return;
-  // check every 30 min if it's time to send
-  _backupTimer=setInterval(async()=>{
-    const now=new Date();
-    if(now.getDay()===cfg.dayOfWeek && now.getHours()===cfg.hour && now.getMinutes()<30){
-      const hist=JSON.parse(localStorage.getItem('moked_backup_history')||'[]');
-      const today=now.toISOString().slice(0,10);
-      if(!hist.find(h=>h.date===today)){
-        await runBackup(cfg.to, true);
-      }
-    }
-  }, 30*60*1000);
-}
+// השליחה האוטומטית עברה לשרת (moked-scheduler, קורא app_settings.backup_config) —
+// הטיימר בדפדפן מבוטל, כדי שלא יהיו שתי שליחות (כמו שקרה בעבר עם התראות WA)
+function startBackupAutoTimer(){ clearInterval(_backupTimer); }
 
 let _backupHistory=[];
-function loadBackupHistory(){
-  try{ _backupHistory=JSON.parse(localStorage.getItem('moked_backup_history')||'[]'); }
-  catch(e){ _backupHistory=[]; }
-}
 
 async function runBackup(toEmail, silent=false){
   if(!toEmail){showAlert('יש להזין כתובת מייל','error');return;}
@@ -4516,9 +4534,8 @@ async function runBackup(toEmail, silent=false){
       body:JSON.stringify({to:toEmail})
     });
     // no-cors returns opaque response — assume success
-    const entry={date:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),to:toEmail,records:0,ok:true};
-    _backupHistory=[entry,..._backupHistory].slice(0,50);
-    localStorage.setItem('moked_backup_history',JSON.stringify(_backupHistory));
+    const entry={date:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),to:toEmail,records:0,ok:true,manual:true};
+    await appendBackupHistoryServer(entry);
     if(!silent){
       render();
       showAlert(`✓ גיבוי נשלח ל-${toEmail}`,'success');
@@ -4532,7 +4549,7 @@ async function runBackup(toEmail, silent=false){
 // ── ATTACHMENT STORAGE MANAGEMENT ──
 async function loadBackupTab(){
   S.adminTab='backup'; S._attachStorageLoading=true; render();
-  await loadAttachmentStorageInfo();
+  await Promise.all([loadAttachmentStorageInfo(), loadBackupConfigFromServer()]);
   S._attachStorageLoading=false; render();
 }
 async function loadAttachmentStorageInfo(){
@@ -4592,8 +4609,7 @@ function renderAttachmentStoragePanel(){
   </div>`;
 }
 function renderAdminBackup(){
-  const cfg=loadBackupDefaults();
-  loadBackupHistory();
+  const cfg=loadBackupDefaults(); // מטמון מקומי — מתעדכן מהשרת ב-loadBackupConfigFromServer
   const days=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const hours=Array.from({length:24},(_,i)=>i);
 
@@ -4660,7 +4676,7 @@ function renderAdminBackup(){
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div class="card-title" style="margin-bottom:0"><i class="ti ti-history" style="color:var(--blue)"></i> היסטוריית גיבויים</div>
-        ${_backupHistory.length?`<button class="btn btn-xs btn-danger" onclick="if(confirm('למחוק היסטוריה?')){_backupHistory=[];localStorage.removeItem('moked_backup_history');render();}"><i class="ti ti-trash"></i> נקה</button>`:''}
+        ${_backupHistory.length?`<button class="btn btn-xs btn-danger" onclick="clearBackupHistory()"><i class="ti ti-trash"></i> נקה</button>`:''}
       </div>
       ${!_backupHistory.length
         ? `<div class="empty" style="padding:20px"><i class="ti ti-inbox" style="font-size:30px"></i><p>אין היסטוריה עדיין</p></div>`
