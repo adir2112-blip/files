@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.33'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.34'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -521,14 +521,14 @@ async function initLogin(){
     const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',session.user.email).eq('active',true).single();
     if(mgr){
       // load all agents for admin management
-      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
       enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[]});
       PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
       return;
     }
   }
   // load only active agents for login list
-  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active');
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active,allowed_orgs');
   allAgents=data||[];
   showLogin('mode');
 }
@@ -586,7 +586,7 @@ async function loginAgent(){
     ['p0','p1','p2','p3'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('p0').focus(); return;
   }
-  enterApp({name:_selectedAgent.name,role:'agent',is_super_admin:false});
+  enterApp({name:_selectedAgent.name,role:'agent',is_super_admin:false,allowed_orgs:_selectedAgent.allowed_orgs||[]});
   // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
   PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${_selectedAgent.id}`).catch(()=>{});
 }
@@ -622,7 +622,7 @@ function enterApp(user){
     startInactivityTimer();
     // load agents after loadAll so render has all data
     initApp().then(()=>{
-      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login').then(data=>{ allAgents=data||[]; render(); });
+      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs').then(data=>{ allAgents=data||[]; render(); });
     });
   } else {
     initApp();
@@ -634,7 +634,7 @@ async function doLogout(){
   currentUser=null; _agentName=''; _selectedAgent=null;
   S={...S_DEFAULT()}; DB={orgs:[],files:[]}; _cachedRecords={}; _allRecords=[]; _pendingCounts={};
   // reload only active for login list
-  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active');
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active,allowed_orgs');
   allAgents=data||[];
   document.getElementById('app-screen').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -879,7 +879,7 @@ function renderOrgs(){
     </div>`;
 
   return alertBar+alertsBar+globalSearchBar+`<div class="page-title">בחר ארגון</div><div class="page-sub">לחץ על הארגון הרלוונטי להזנת פניות</div>
-  <div class="org-grid">${DB.orgs.map(o=>{
+  <div class="org-grid">${visibleOrgs.map(o=>{
     const st=orgStyle(o.name);
     const al=S.adminLoggedIn?alertForOrg(o.id):0;
     const fp=S.adminLoggedIn?fieldPendingForOrg(o.id):0;
@@ -1819,14 +1819,15 @@ function renderAdminAgents(){
     <button class="btn btn-black" onclick="openNewAgent()"><i class="ti ti-user-plus"></i> נציג חדש</button>
     <button class="btn btn-sm" onclick="openImportAgents()" style="border-color:var(--green);color:var(--green)"><i class="ti ti-table-import"></i> ייבוא מ-Excel</button>
   </div>
-  <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th>ארגונים</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
   ${allAgents.map(u=>`<tr>
     <td><div style="display:flex;align-items:center;gap:8px"><div class="ali-avatar" style="width:28px;height:28px;font-size:10px">${u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>${esc(u.name)}</div></td>
     <td dir="ltr" style="letter-spacing:6px;color:var(--text3)">••••</td>
     <td><span class="badge ${u.active?'badge-success':'badge-warning'}">${u.active?'פעיל':'מושבת'}</span></td>
+    <td style="font-size:12px">${(u.allowed_orgs||[]).length?`<span class="badge badge-info"><i class="ti ti-building"></i> ${(u.allowed_orgs||[]).length} ארגונים</span>`:'<span style="color:var(--text3)">הכל</span>'}</td>
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${u.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(u.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
     <td><div class="flex-gap">
-      <button class="btn btn-xs" onclick="openEditAgent(${u.id},'${esc(u.name)}','${u.pin}',${u.active})"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-xs" onclick="openEditAgentById(${u.id})"><i class="ti ti-edit"></i></button>
       <button class="btn btn-xs btn-danger" onclick="confirmDeleteAgent(${u.id},'${esc(u.name)}')"><i class="ti ti-trash"></i></button>
     </div></td>
   </tr>`).join('')}
@@ -3676,14 +3677,35 @@ async function doDelRecord(id,fileId){
   }
   catch(e){showAlert('שגיאה במחיקה: '+e.message,'error');}
 }
+function orgCheckboxesHTML(idPrefix,allowedOrgs){
+  return DB.orgs.map(o=>{
+    const isSel=(allowedOrgs||[]).includes(o.id);
+    return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid ${isSel?'var(--blue)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;background:${isSel?'var(--blue-light)':'var(--surface2)'}">
+      <input type="checkbox" data-org="${o.id}" ${isSel?'checked':''} style="accent-color:var(--blue);cursor:pointer"> ${esc(o.name)}
+    </label>`;
+  }).join('');
+}
 function openNewAgent(){showModal(`<div class="modal-title"><i class="ti ti-user-plus" style="color:var(--blue)"></i> הוספת נציג חדש</div>
   <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" placeholder="שם מלא"></div>
   <div class="form-row"><label class="form-label">PIN (4 ספרות) *</label><input class="form-input" id="ag-pin" maxlength="4" placeholder="0000" dir="ltr"></div>
+  <div class="form-row">
+    <label class="form-label">גישה לארגונים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכולם)</span></label>
+    <div id="ag-new-orgs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">${orgCheckboxesHTML('ag-new',[])}</div>
+  </div>
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-black" onclick="saveNewAgent()"><i class="ti ti-check"></i> הוסף</button></div>`);}
-function openEditAgent(id,name,pin,active){showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת נציג</div>
+function openEditAgentById(id){
+  const u=allAgents.find(x=>x.id===id);
+  if(!u) return;
+  openEditAgent(u.id,u.name,u.pin,u.active,u.allowed_orgs||[]);
+}
+function openEditAgent(id,name,pin,active,allowedOrgs=[]){showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת נציג</div>
   <div class="form-row"><label class="form-label">שם מלא *</label><input class="form-input" id="ag-name" value="${esc(name)}"></div>
   <div class="form-row"><label class="form-label">PIN חדש (השאר ריק לאי-שינוי)</label><input class="form-input" id="ag-pin" maxlength="4" placeholder="----" dir="ltr"></div>
   <div class="form-row"><label class="form-label">סטטוס</label><select class="form-input" id="ag-active"><option value="true" ${active?'selected':''}>פעיל</option><option value="false" ${!active?'selected':''}>מושבת</option></select></div>
+  <div class="form-row">
+    <label class="form-label">גישה לארגונים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכולם)</span></label>
+    <div id="ag-edit-orgs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">${orgCheckboxesHTML('ag-edit',allowedOrgs)}</div>
+  </div>
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-black" onclick="saveEditAgent(${id})"><i class="ti ti-check"></i> שמור</button></div>`);}
 function openImportAgents(){
   showModal(`
@@ -3797,7 +3819,7 @@ async function confirmImport(){
       done++;
     } catch(e){ errors++; }
   }
-  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
+  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
   closeModal();
   render();
   showAlert(`✓ יובאו ${done} נציגים${errors?` · ${errors} שגיאות`:''}`, done>0?'success':'error');
@@ -3807,10 +3829,11 @@ async function confirmImport(){
 async function saveNewAgent(){
   const n=document.getElementById('ag-name').value.trim();
   const pin=document.getElementById('ag-pin').value.trim();
+  const allowedOrgs=[...document.querySelectorAll('#ag-new-orgs input[type=checkbox]:checked')].map(el=>el.dataset.org);
   if(!n||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}
   try{
-    await POST('app_users',{name:n,pin,active:true});
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
+    await POST('app_users',{name:n,pin,active:true,allowed_orgs:allowedOrgs});
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
     closeModal();render();showAlert('הנציג נוסף','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -3818,12 +3841,13 @@ async function saveEditAgent(id){
   const n=document.getElementById('ag-name').value.trim();
   const pin=document.getElementById('ag-pin').value.trim();
   const active=document.getElementById('ag-active').value==='true';
+  const allowedOrgs=[...document.querySelectorAll('#ag-edit-orgs input[type=checkbox]:checked')].map(el=>el.dataset.org);
   if(!n){alert('יש להזין שם');return;}
-  const body={name:n,active};
+  const body={name:n,active,allowed_orgs:allowedOrgs};
   if(pin.length===4) body.pin=pin;
   try{
     await PATCH('app_users',body,`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
     closeModal();render();showAlert('הנציג עודכן','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -3831,7 +3855,7 @@ async function confirmDeleteAgent(id,name){
   if(!confirm(`למחוק את הנציג "${name}"?`))return;
   try{
     await DEL('app_users',`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
     render();showAlert('הנציג נמחק','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
