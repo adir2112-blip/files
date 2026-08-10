@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.31'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.32'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -958,6 +958,16 @@ function renderForm(){
       </div>`;
     }
 
+    if(ef.type==='attachment'){
+      return `<div class="entry-field">
+        <label class="entry-field-label"><i class="ti ti-paperclip"></i> ${esc(ef.label)} ${reqMark}</label>
+        <input type="file" accept="image/*,application/pdf" onchange="handleAttachmentUpload(event,'${ef.id}')" style="display:block;width:100%;padding:10px;border:1.5px dashed var(--border2);border-radius:11px;background:var(--surface2);font-size:13px;font-family:inherit">
+        <input type="hidden" name="extra_${ef.id}" id="attach-val-${ef.id}" ${req}>
+        <div id="attach-status-${ef.id}" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
+        ${noteHTML}
+      </div>`;
+    }
+
     let inp='';
     if(ef.type==='select'){
       const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}">${esc(o.trim())}</option>`).join('');
@@ -1443,6 +1453,7 @@ function renderRecordsPage(){
     const extraC=extraFields.map(ef=>{
       const v=(r.extra||{})[ef.id]||'';
       if(ef.type==='select'&&v){const cls=v==='טופל'?'badge-success':v==='לא טופל'?'badge-warning':'badge-info';return `<td><span class="badge ${cls}">${esc(v)}</span></td>`;}
+      if(ef.type==='attachment') return `<td>${renderAttachmentCell(v)}</td>`;
       if(ef.type==='link'&&v){
         const url=v.match(/^https?:\/\//)?v:('https://'+v);
         return `<td><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;
@@ -1462,6 +1473,7 @@ function renderRecordsPage(){
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</div></td>`;
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</div></td>`;}
         if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}<a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></div></td>`;}
+        if(af.type==='attachment') return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${renderAttachmentCell(val)}</div></td>`;
         return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${esc(val||'')}</div></td>`;
       }
       if(_bulkMode){
@@ -1469,6 +1481,7 @@ function renderRecordsPage(){
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center">${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3);opacity:.4"></i>'}</td>`;
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
         if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;}
+        if(af.type==='attachment') return `<td class="admin-col">${renderAttachmentCell(val)}</td>`;
         return `<td class="admin-col" style="color:var(--text3)">${esc(val||'—')}</td>`;
       }
       // chat trigger — admin always sees chat, agent only if chatEnabled
@@ -1476,6 +1489,7 @@ function renderRecordsPage(){
       const chatBadge=canChat?`<span onclick="event.stopPropagation();showFieldChatFromRecord(event,'${af.id}','${esc(af.label)}',_cachedRecords['${S.fileId}']?.find(x=>x.id==='${r.id}')||{id:'${r.id}',field_comments:{}})" style="cursor:pointer;color:var(--blue);margin-right:4px;flex-shrink:0" title="פתח שיחה"><i class="ti ti-message-circle" style="font-size:14px"></i>${((r.field_comments||{})[af.id]||[]).length>0?`<sup style="font-size:9px;font-weight:800">${((r.field_comments||{})[af.id]||[]).length}</sup>`:''}</span>`:'';
       if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${chatBadge}<input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></div></td>`;
       if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<select class="admin-input" style="flex:1" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></div></td>`;}
+      if(af.type==='attachment') return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${chatBadge}${renderAttachmentCell(val)}</div></td>`;
       if(af.type==='link') return `<td class="admin-col"><div style="display:flex;gap:4px;align-items:center">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="https://..." dir="ltr" style="font-size:11px;flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">
         ${val?`<a href="${(val.match(/^https?:\/\//)?val:'https://'+val).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue);flex-shrink:0" title="פתח קישור"><i class="ti ti-external-link"></i></a>`:''}
       </div></td>`;
@@ -3462,6 +3476,66 @@ function debounceFilter(afId,val){
 }
 async function adminLoadAllRecords(){S.adminTab='records';S._loadingRecords=true;render();_allRecords=await GET('records','?order=created_at.desc');S._loadingRecords=false;render();}
 
+// ── ATTACHMENTS (קבצי אסמכתא) ──
+const ATTACHMENTS_BUCKET='attachments';
+function compressImage(file,maxDim=1280,quality=0.7){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('קריאת הקובץ נכשלה'));
+    reader.onload=e=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('טעינת התמונה נכשלה'));
+      img.onload=()=>{
+        let {width,height}=img;
+        if(width>maxDim||height>maxDim){
+          if(width>height){height=Math.round(height*maxDim/width);width=maxDim;}
+          else{width=Math.round(width*maxDim/height);height=maxDim;}
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=width;canvas.height=height;
+        canvas.getContext('2d').drawImage(img,0,0,width,height);
+        canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('דחיסת התמונה נכשלה')),'image/jpeg',quality);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+async function handleAttachmentUpload(event,fieldId){
+  const file=event.target.files[0]; if(!file) return;
+  const statusEl=document.getElementById('attach-status-'+fieldId);
+  const hiddenEl=document.getElementById('attach-val-'+fieldId);
+  const submitBtn=document.getElementById('submit-btn');
+  statusEl.innerHTML='<i class="ti ti-loader-2" style="display:inline-block;animation:spin .8s linear infinite"></i> מעלה...';
+  if(submitBtn) submitBtn.disabled=true;
+  try{
+    let blob=file,ext=(file.name.split('.').pop()||'bin').toLowerCase();
+    if(file.type.startsWith('image/')){ blob=await compressImage(file); ext='jpg'; }
+    const path=`${fieldId}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const res=await fetch(`${SB_URL}/storage/v1/object/${ATTACHMENTS_BUCKET}/${path}`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||file.type||'application/octet-stream'},
+      body:blob
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const publicUrl=`${SB_URL}/storage/v1/object/public/${ATTACHMENTS_BUCKET}/${path}`;
+    hiddenEl.value=publicUrl;
+    statusEl.innerHTML=`<i class="ti ti-circle-check" style="color:var(--green)"></i> ${esc(file.name)} (${(blob.size/1024).toFixed(0)}KB)`;
+  }catch(e){
+    statusEl.innerHTML=`<i class="ti ti-alert-circle" style="color:var(--red)"></i> שגיאה בהעלאה — נסה שוב`;
+    hiddenEl.value='';
+  }
+  if(submitBtn) submitBtn.disabled=false;
+}
+function renderAttachmentCell(val){
+  if(!val) return '';
+  const isImg=/\.(jpe?g|png|gif|webp)(\?|$)/i.test(val);
+  if(isImg){
+    return `<a href="${esc(val)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><img src="${esc(val)}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid var(--border);vertical-align:middle" onerror="this.outerHTML='&lt;span style=&quot;color:var(--text3);font-size:11px&quot;&gt;📎 פג תוקף&lt;/span&gt;'"></a>`;
+  }
+  return `<a href="${esc(val)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-file-text" style="font-size:12px"></i> פתח קובץ</a>`;
+}
+
 // ── SUBMIT ──
 async function submitRecord(e,fileId){
   e.preventDefault();
@@ -4057,7 +4131,7 @@ function fileModalHTML(f,mode,id=''){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
 function fieldRowHTML(ef,i,p){
-  const typeOpts=['text','number','select','checkbox','link'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':t==='link'?'קישור (URL)':'תיבת סימון'}</option>`).join('');
+  const typeOpts=['text','number','select','checkbox','link','attachment'].map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${t==='text'?'טקסט':t==='number'?'מספר':t==='select'?'תפריט':t==='link'?'קישור (URL)':t==='attachment'?'קובץ אסמכתא (תמונה/PDF)':'תיבת סימון'}</option>`).join('');
   const hasNote=!!ef.noteEnabled;
   return `<div class="field-row" style="grid-template-columns:1fr;padding:12px">
     <div style="display:grid;grid-template-columns:1fr 1fr auto auto auto auto;gap:8px">
