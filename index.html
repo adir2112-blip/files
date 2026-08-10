@@ -4538,7 +4538,7 @@ async function cleanupAttachmentsByAge(days){
     });
     const data=await res.json();
     if(data.ok){
-      showAlert(`✓ נמחקו ${data.deletedCount} קבצים`,'success');
+      showAlert(`✓ נמחקו ${data.deletedCount||0} קבצים`,'success');
       await loadAttachmentStorageInfo();
       render();
     } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
