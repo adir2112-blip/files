@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.40'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.41'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1814,8 +1814,7 @@ function maybeShowUsageAlert(){
 }
 
 function fmtUsageBytes(b){
-  if(b<1024*1024) return (b/1024).toFixed(0)+' KB';
-  if(b<1024*1024*1024) return (b/1024/1024).toFixed(1)+' MB';
+  // תמיד ב-GB, כמו בדשבורד של Supabase עצמו (לצורך השוואה ישירה)
   return (b/1024/1024/1024).toFixed(2)+' GB';
 }
 
@@ -1857,7 +1856,7 @@ function renderUsageScreen(){
   }).join('');
 
   return `<div>
-    <div class="page-sub" style="margin-bottom:16px">מדדים אמיתיים ממסד הנתונים בפועל. תעבורת נתונים (egress) / משתמשים פעילים / קריאות Edge Functions אינם נגישים דרך שום API של Supabase ולכן לא מוצגים כאן — רק מסד נתונים ואחסון קבצים, שכן ניתן למדוד במדויק.</div>
+    <div class="page-sub" style="margin-bottom:16px">מדדים אמיתיים ממסד הנתונים בפועל (מדידת SQL ישירה). תעבורת נתונים (egress) / משתמשים פעילים / קריאות Edge Functions אינם נגישים דרך שום API של Supabase ולכן לא מוצגים כאן — רק מסד נתונים ואחסון קבצים, שכן ניתן למדוד במדויק. <span style="color:var(--text3)">שים לב: מדד "מסד נתונים" עשוי להיות מעט שונה מהמספר בדשבורד של Supabase עצמו (שם ייתכן שנספח overhead נוסף כמו WAL) — זו מדידה ישירה ואמינה, אך לא בהכרח זהה ל-100%.</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
       ${usageBar('מסד נתונים (Database)',latest.db_size_bytes,USAGE_LIMITS.db,'ti-database')}
       ${usageBar('אחסון קבצים (Storage)',latest.storage_size_bytes,USAGE_LIMITS.storage,'ti-photo')}
