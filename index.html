@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.36'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.37'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1491,7 +1491,13 @@ function renderRecordsPage(){
       const chatBadge=canChat?`<span onclick="event.stopPropagation();showFieldChatFromRecord(event,'${af.id}','${esc(af.label)}',_cachedRecords['${S.fileId}']?.find(x=>x.id==='${r.id}')||{id:'${r.id}',field_comments:{}})" style="cursor:pointer;color:var(--blue);margin-right:4px;flex-shrink:0" title="פתח שיחה"><i class="ti ti-message-circle" style="font-size:14px"></i>${((r.field_comments||{})[af.id]||[]).length>0?`<sup style="font-size:9px;font-weight:800">${((r.field_comments||{})[af.id]||[]).length}</sup>`:''}</span>`:'';
       if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${chatBadge}<input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></div></td>`;
       if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<select class="admin-input" style="flex:1" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></div></td>`;}
-      if(af.type==='attachment') return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${chatBadge}${renderAttachmentCell(val)}</div></td>`;
+      if(af.type==='attachment'){
+        const uploadLbl=`<label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--blue);white-space:nowrap" title="${val?'החלף קובץ':'הוסף קובץ'}" onclick="event.stopPropagation()">
+          <i class="ti ti-upload" style="font-size:13px"></i>${val?'':'הוסף'}
+          <input type="file" accept="image/*,application/pdf" style="display:none" onchange="handleAdminAttachmentUpload(event,'${r.id}','${af.id}','${S.fileId}')">
+        </label>`;
+        return `<td class="admin-col"><div style="display:flex;align-items:center;gap:6px">${chatBadge}${renderAttachmentCell(val)}${uploadLbl}</div></td>`;
+      }
       if(af.type==='link') return `<td class="admin-col"><div style="display:flex;gap:4px;align-items:center">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="https://..." dir="ltr" style="font-size:11px;flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">
         ${val?`<a href="${(val.match(/^https?:\/\//)?val:'https://'+val).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue);flex-shrink:0" title="פתח קישור"><i class="ti ti-external-link"></i></a>`:''}
       </div></td>`;
@@ -3529,6 +3535,24 @@ async function handleAttachmentUpload(event,fieldId){
     hiddenEl.value='';
   }
   if(submitBtn) submitBtn.disabled=false;
+}
+async function handleAdminAttachmentUpload(event,recordId,fieldId,fileId){
+  const file=event.target.files[0]; if(!file) return;
+  try{
+    let blob=file,ext=(file.name.split('.').pop()||'bin').toLowerCase();
+    if(file.type.startsWith('image/')){ blob=await compressImage(file); ext='jpg'; }
+    const path=`${fieldId}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const res=await fetch(`${SB_URL}/storage/v1/object/${ATTACHMENTS_BUCKET}/${path}`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||file.type||'application/octet-stream'},
+      body:blob
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const publicUrl=`${SB_URL}/storage/v1/object/public/${ATTACHMENTS_BUCKET}/${path}`;
+    await saveAdminField(recordId,fieldId,publicUrl,fileId);
+    render();
+    showAlert('הקובץ הועלה בהצלחה','success');
+  }catch(e){ showAlert('שגיאה בהעלאת הקובץ','error'); }
 }
 function renderAttachmentCell(val){
   if(!val) return '';
