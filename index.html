@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.39'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.40'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1688,9 +1688,10 @@ function renderAdmin(){
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="loadBackupTab()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
       ${currentUser?.email==='adirlev@targetcall.co.il'?`<button class="nav-tab ${tab==='monitor'?'active':''}" onclick="loadMonitorTab()"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> מוניטור חריגה</button>`:''}
+      ${currentUser?.email==='adirlev@targetcall.co.il'?`<button class="nav-tab ${tab==='usage'?'active':''}" onclick="loadUsageTab()"><i class="ti ti-gauge" style="font-size:12px;color:#0891b2"></i> ניצול נתונים</button>`:''}
 
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='weekly'?renderWeeklyReport():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():tab==='monitor'?renderMonitor():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='weekly'?renderWeeklyReport():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():tab==='monitor'?renderMonitor():tab==='usage'?renderUsageScreen():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -1777,6 +1778,95 @@ function renderMonitor(){
     ${data.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">${cards}</div>`
       :'<div class="empty"><i class="ti ti-mood-check"></i><p>אין קבצים עם מעקב SLA</p></div>'}
     <div style="text-align:center;color:var(--text3);font-size:11px;margin-top:20px">מתעדכן אוטומטית כל דקה</div>
+  </div>`;
+}
+
+// ══ ניצול נתונים (אדיר בלבד) — מדדים אמיתיים מ-Supabase, לא הערכה ══
+// מסך פורטבילי במכוון — אמור לעבור העתקה למערכות נוספות. תלוי רק ב-GET/SB_URL/SB_KEY
+// הרגילים של האפליקציה, וב-usage_snapshots + get_usage_sizes() שנוצרו בפרויקט ה-Supabase.
+const USAGE_LIMITS = { db: 500*1024*1024, storage: 1024*1024*1024 }; // מגבלות תוכנית Free של Supabase
+const USAGE_ALERT_THRESHOLD = 0.7;
+
+async function loadUsageTab(){
+  S.adminTab='usage'; S._usageLoading=true; render();
+  try{
+    S._usageSnapshots=await GET('usage_snapshots','?order=snapshot_date.asc&select=snapshot_date,db_size_bytes,storage_size_bytes');
+  }catch(e){ S._usageSnapshots=[]; }
+  S._usageLoading=false; render();
+  maybeShowUsageAlert();
+}
+
+function maybeShowUsageAlert(){
+  const snaps=S._usageSnapshots||[];
+  if(!snaps.length) return;
+  const latest=snaps[snaps.length-1];
+  const dbPct=latest.db_size_bytes/USAGE_LIMITS.db;
+  const storagePct=latest.storage_size_bytes/USAGE_LIMITS.storage;
+  if(dbPct<USAGE_ALERT_THRESHOLD && storagePct<USAGE_ALERT_THRESHOLD) return;
+  const lines=[];
+  if(dbPct>=USAGE_ALERT_THRESHOLD) lines.push(`מסד נתונים: ${(dbPct*100).toFixed(0)}% מתוך 500MB`);
+  if(storagePct>=USAGE_ALERT_THRESHOLD) lines.push(`אחסון קבצים: ${(storagePct*100).toFixed(0)}% מתוך 1GB`);
+  showModal(`<div class="modal-title"><i class="ti ti-alert-triangle" style="color:#dc2626"></i> אזהרת ניצול משאבים</div>
+    <div class="alert alert-error" style="margin-bottom:10px">חצית 70% מהמכסה החינמית ב-Supabase באחד המדדים הבאים:</div>
+    <ul style="margin:0 0 14px 0;padding-right:20px;font-size:14px;line-height:2">${lines.map(l=>`<li>${l}</li>`).join('')}</ul>
+    <div style="font-size:13px;color:var(--text2)">אם תעברו את המכסה, Supabase יחסמו פעולות או יחייבו שדרוג לתוכנית בתשלום. בטאב "גיבוי" יש ניהול אחסון קבצי אסמכתא — אפשר לפנות שם מקום.</div>
+    <div class="modal-footer"><button class="btn btn-black" onclick="closeModal()">הבנתי</button></div>`);
+}
+
+function fmtUsageBytes(b){
+  if(b<1024*1024) return (b/1024).toFixed(0)+' KB';
+  if(b<1024*1024*1024) return (b/1024/1024).toFixed(1)+' MB';
+  return (b/1024/1024/1024).toFixed(2)+' GB';
+}
+
+function usageBar(label,current,limit,icon){
+  const pct=Math.min(100,(current/limit)*100);
+  const color=pct>=90?'#dc2626':pct>=70?'#ea580c':'#16a34a';
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px"><i class="ti ${icon}" style="color:${color}"></i> ${label}</div>
+      <div style="font-weight:900;font-size:16px;color:${color}">${pct.toFixed(1)}%</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:20px;height:10px;overflow:hidden;margin-bottom:8px">
+      <div style="background:${color};height:100%;width:${pct}%;border-radius:20px"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text2)">${fmtUsageBytes(current)} מתוך ${fmtUsageBytes(limit)}</div>
+  </div>`;
+}
+
+function renderUsageScreen(){
+  if(S._usageLoading) return `<div class="loading"><div class="spinner"></div><p>טוען נתוני ניצול...</p></div>`;
+  const snaps=S._usageSnapshots||[];
+  if(!snaps.length) return `<div class="empty"><i class="ti ti-gauge"></i><p>עדיין אין נתוני ניצול — הצילום היומי הראשון ירוץ הלילה. אפשר לרענן שוב מחר.</p></div>`;
+  const latest=snaps[snaps.length-1];
+
+  const byMonth={};
+  snaps.forEach(s=>{ byMonth[s.snapshot_date.slice(0,7)]=s; }); // ordered asc — האחרון בכל חודש דורס את הקודם
+  const months=Object.keys(byMonth).sort();
+  const monthNames=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const monthLabel=m=>{ const [y,mo]=m.split('-'); return `${monthNames[parseInt(mo)-1]} ${y}`; };
+
+  const rows=months.map(m=>{
+    const s=byMonth[m];
+    return `<tr>
+      <td>${monthLabel(m)}</td>
+      <td style="text-align:center">${fmtUsageBytes(s.db_size_bytes)} <span style="color:var(--text3);font-size:11px">(${((s.db_size_bytes/USAGE_LIMITS.db)*100).toFixed(1)}%)</span></td>
+      <td style="text-align:center">${fmtUsageBytes(s.storage_size_bytes)} <span style="color:var(--text3);font-size:11px">(${((s.storage_size_bytes/USAGE_LIMITS.storage)*100).toFixed(1)}%)</span></td>
+      <td style="text-align:center;font-size:11px;color:var(--text3)">${s.snapshot_date}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div>
+    <div class="page-sub" style="margin-bottom:16px">מדדים אמיתיים ממסד הנתונים בפועל. תעבורת נתונים (egress) / משתמשים פעילים / קריאות Edge Functions אינם נגישים דרך שום API של Supabase ולכן לא מוצגים כאן — רק מסד נתונים ואחסון קבצים, שכן ניתן למדוד במדויק.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      ${usageBar('מסד נתונים (Database)',latest.db_size_bytes,USAGE_LIMITS.db,'ti-database')}
+      ${usageBar('אחסון קבצים (Storage)',latest.storage_size_bytes,USAGE_LIMITS.storage,'ti-photo')}
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+      <div class="card-title" style="margin-bottom:16px"><i class="ti ti-calendar-stats" style="color:#0891b2"></i> השוואה חודשית</div>
+      <div class="table-wrap"><table><thead><tr><th>חודש</th><th style="text-align:center">מסד נתונים</th><th style="text-align:center">אחסון</th><th style="text-align:center">נכון לתאריך</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px">כל שורה מציגה את המדידה האחרונה שנרשמה באותו חודש. הנתונים נאספים אוטומטית פעם ביום, החל מ-${monthLabel(months[0])}.</div>
+    </div>
   </div>`;
 }
 
