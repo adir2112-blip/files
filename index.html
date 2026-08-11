@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.38'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.39'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4269,7 +4269,9 @@ function onTypeChange(p,i,val){
   refreshFields(p);
 }
 function refreshFields(p){
-  saveFieldsFromDOM(p);
+  // הערה: אין כאן קריאה ל-saveFieldsFromDOM — כל הקוראים לפונקציה הזו (addField/removeField/
+  // onTypeChange) כבר מסנכרנים בעצמם לפני שהם קוראים לה. קריאה נוספת כאן קראה לפי אינדקס
+  // מה-DOM הישן אחרי שהמערך כבר התקצר/גדל, מה שגרם לתוכן של שדות "לזחול" בין השורות אחרי מחיקה.
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
   const el=document.getElementById(p==='f'?'field-list':'admin-field-list');
   if(el)el.innerHTML=arr.map((ef,i)=>fieldRowHTML(ef,i,p)).join('');
