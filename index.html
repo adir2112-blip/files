@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.42'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.43'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -798,14 +798,39 @@ function render(){
   else if(S.view==='records') html+=renderRecordsPage();
   else if(S.view==='admin')   html+=renderAdmin();
   app.innerHTML=html;
-  if(S.view==='form') setTimeout(wireFormShortcuts,30);
+  if(S.view==='form') setTimeout(()=>{wireFieldDependencies();wireFormShortcuts();},30);
 }
 
 // ── KEYBOARD SHORTCUTS for entry form ──
+function wireFieldDependencies(){
+  const form=document.getElementById('entry-form');
+  if(!form) return;
+  const dependents=[...form.querySelectorAll('[data-depends-on]')];
+  if(!dependents.length) return;
+  function evaluate(){
+    dependents.forEach(dep=>{
+      const parentEl=form.elements[dep.dataset.dependsOn];
+      const wantValue=dep.dataset.dependsValue;
+      const currentVal=parentEl?(parentEl.type==='checkbox'?String(parentEl.checked):parentEl.value):'';
+      const show=currentVal===wantValue;
+      dep.style.display=show?'':'none';
+      if(dep.dataset.reqIfShown==='1'){
+        const inp=dep.querySelector('input,select,textarea');
+        if(inp) inp.required=show;
+      }
+    });
+  }
+  form.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',evaluate));
+  evaluate();
+}
 function wireFormShortcuts(){
   const form=document.getElementById('entry-form');
   if(!form) return;
   const fields=[...form.querySelectorAll('input,select,textarea')].filter(el=>el.type!=='checkbox'&&el.type!=='submit');
+  function nextVisible(fromIdx){
+    for(let j=fromIdx;j<fields.length;j++){ if(fields[j].offsetParent!==null) return fields[j]; }
+    return null;
+  }
   fields.forEach((el,i)=>{
     el.addEventListener('keydown',(e)=>{
       // Ctrl+Enter or Cmd+Enter — submit form immediately
@@ -814,17 +839,18 @@ function wireFormShortcuts(){
         form.requestSubmit?form.requestSubmit():form.dispatchEvent(new Event('submit',{cancelable:true}));
         return;
       }
-      // plain Enter on text/number/select — move to next field (not textarea, not last field which submits)
+      // plain Enter on text/number/select — move to next VISIBLE field (skip hidden dependent fields)
       if(e.key==='Enter'&&el.tagName!=='TEXTAREA'){
         e.preventDefault();
-        const next=fields[i+1];
+        const next=nextVisible(i+1);
         if(next){ next.focus(); if(next.select) next.select(); }
         else { form.requestSubmit?form.requestSubmit():form.dispatchEvent(new Event('submit',{cancelable:true})); }
       }
     });
   });
-  // focus first field automatically
-  if(fields[0]) fields[0].focus();
+  // focus first visible field automatically
+  const first=nextVisible(0);
+  if(first) first.focus();
 }
 function renderBreadcrumb(){
   if(S.view==='orgs'||S.view==='admin') return '';
@@ -939,7 +965,9 @@ function fieldIconGuess(label){
 function renderForm(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
   const extraF=(f.extra_fields||[]).map(ef=>{
-    const req=ef.required?'required':'';
+    const isDependent=!!ef.dependsOn;
+    // בשדה תלוי — לא שמים required מקורי (השדה מוסתר בהתחלה); JS יוסיף/יסיר את זה בזמן אמת
+    const req=(ef.required&&!isDependent)?'required':'';
     const reqMark=ef.required?`<span class="req-star">*</span>`:'';
     const icon=fieldIconGuess(ef.label);
     const noteHTML=(ef.noteEnabled&&ef.note)?`
@@ -947,9 +975,11 @@ function renderForm(){
         <i class="ti ti-info-circle"></i>
         <span>${esc(ef.note)}</span>
       </div>`:'';
+    const depAttrs=isDependent?` data-depends-on="extra_${ef.dependsOn}" data-depends-value="${esc(ef.dependsOnValue||'')}" data-req-if-shown="${ef.required?'1':'0'}"`:'';
+    const depDisplay=isDependent?'display:none;':'';
 
     if(ef.type==='checkbox'){
-      return `<div class="entry-field">
+      return `<div class="entry-field" style="${depDisplay}"${depAttrs}>
         <label class="entry-checkbox-row">
           <input type="checkbox" name="extra_${ef.id}">
           <span>${esc(ef.label)}</span>
@@ -959,7 +989,7 @@ function renderForm(){
     }
 
     if(ef.type==='attachment'){
-      return `<div class="entry-field">
+      return `<div class="entry-field" style="${depDisplay}"${depAttrs}>
         <label class="entry-field-label"><i class="ti ti-paperclip"></i> ${esc(ef.label)} ${reqMark}</label>
         <input type="file" accept="image/*,application/pdf" onchange="handleAttachmentUpload(event,'${ef.id}')" style="display:block;width:100%;padding:10px;border:1.5px dashed var(--border2);border-radius:11px;background:var(--surface2);font-size:13px;font-family:inherit">
         <input type="hidden" name="extra_${ef.id}" id="attach-val-${ef.id}" ${req}>
@@ -984,7 +1014,7 @@ function renderForm(){
 
     const chatDot=ef.chatEnabled?`<div class="field-chat-dot" title="לחץ להוספת הערה"></div>`:'';
     const chatWrap=ef.chatEnabled?` onmouseenter="showFieldChat(event,'${ef.id}','${esc(ef.label)}')" onmouseleave="scheduleHideChat()"`:'' ;
-    return `<div class="entry-field" style="position:relative"${chatWrap}>
+    return `<div class="entry-field" style="position:relative;${depDisplay}"${chatWrap}${depAttrs}>
       ${chatDot}
       <label class="entry-field-label"><i class="ti ${icon}"></i> ${esc(ef.label)} ${reqMark}${ef.chatEnabled?` <span style="font-size:10px;color:var(--blue);font-weight:600">💬</span>`:''}</label>
       <div class="entry-input-wrap">
@@ -4348,6 +4378,43 @@ function fileModalHTML(f,mode,id=''){
 
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button>${saveBtn}</div>`;
 }
+function fieldOptionChipsHTML(ef,i,p){
+  const opts=(ef.options||'').split(',').map(o=>o.trim()).filter(Boolean);
+  const chips=opts.map((o,oi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:20px;padding:3px 6px 3px 10px;font-size:12px;color:var(--blue-dark)">
+    ${esc(o)}
+    <span onclick="removeFieldOption('${p}',${i},${oi})" title="הסר" style="cursor:pointer;width:15px;height:15px;border-radius:50%;background:rgba(255,255,255,.7);display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1">✕</span>
+  </span>`).join('');
+  return `<div class="mt-1" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-xs)">
+    ${chips}
+    <input type="text" placeholder="+ הוסף אופציה, Enter" style="border:none;background:transparent;outline:none;font-size:12px;flex:1;min-width:90px;font-family:inherit;color:var(--text)" onkeydown="if(event.key==='Enter'){event.preventDefault();addFieldOption('${p}',${i},this.value);this.value='';}">
+  </div>`;
+}
+function fieldDependsOnHTML(ef,i,p){
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  const candidates=arr.filter((of,oi)=>oi!==i&&of.label&&(of.type==='select'||of.type==='checkbox'));
+  if(!candidates.length) return '';
+  const dependsOnOpts=candidates.map(of=>`<option value="${of.id}" ${ef.dependsOn===of.id?'selected':''}>${esc(of.label)}</option>`).join('');
+  const parentField=candidates.find(of=>of.id===ef.dependsOn);
+  let valueSelect='';
+  if(parentField){
+    const valueOpts=parentField.type==='checkbox'
+      ?`<option value="true" ${ef.dependsOnValue==='true'?'selected':''}>מסומן ✓</option>`
+      :(parentField.options||'').split(',').map(o=>o.trim()).filter(Boolean).map(o=>`<option value="${esc(o)}" ${ef.dependsOnValue===o?'selected':''}>${esc(o)}</option>`).join('');
+    valueSelect=`<select class="form-input" style="font-size:12px" data-fdv="${p}_${i}"><option value="">בחר ערך מפעיל...</option>${valueOpts}</select>`;
+  }
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--purple)">
+      <i class="ti ti-git-branch" style="font-size:13px"></i> שדה תלוי — מוצג רק בתנאי
+    </label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+      <select class="form-input" style="font-size:12px" data-fdo="${p}_${i}" onchange="onDependsOnChange('${p}',${i},this.value)">
+        <option value="">— תמיד מוצג —</option>
+        ${dependsOnOpts}
+      </select>
+      ${valueSelect}
+    </div>
+  </div>`;
+}
 function fieldRowHTML(ef,i,p){
   const FIELD_TYPE_LABELS={text:'טקסט',number:'מספר',select:'תפריט',checkbox:'תיבת סימון',link:'קישור (URL)',attachment:'קובץ אסמכתא (תמונה/PDF)',date:'תאריך'};
   const typeOpts=Object.keys(FIELD_TYPE_LABELS).map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${FIELD_TYPE_LABELS[t]}</option>`).join('');
@@ -4357,7 +4424,7 @@ function fieldRowHTML(ef,i,p){
       <div><label class="form-label" style="font-size:10px">שם השדה</label><input class="form-input" data-fl="${p}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
       <div><label class="form-label" style="font-size:10px">סוג</label>
         <select class="form-input" data-ft="${p}_${i}" onchange="onTypeChange('${p}',${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
-        ${ef.type==='select'?`<input class="form-input mt-1" data-fo="${p}_${i}" value="${esc(ef.options||'')}" placeholder="אפ1,אפ2,אפ3">`:''}
+        ${ef.type==='select'?fieldOptionChipsHTML(ef,i,p):''}
       </div>
       <div style="padding-top:20px;text-align:center">
         <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block">חובה</label>
@@ -4386,6 +4453,7 @@ function fieldRowHTML(ef,i,p){
         <textarea class="form-input" data-fn="${p}_${i}" placeholder="לדוגמה: יש לוודא שהמספר תואם לחשבונית..." style="min-height:50px;resize:vertical;font-size:13px;border-color:#fcd34d;background:#fffbeb">${esc(ef.note||'')}</textarea>
       </div>
     </div>
+    ${fieldDependsOnHTML(ef,i,p)}
   </div>`;
 }
 function toggleFieldNote(p,i,checked){
@@ -4414,6 +4482,10 @@ function saveFieldsFromDOM(p){
     if(c) ef.chatEnabled=c.checked;
     const a=document.querySelector('[data-fa="'+p+'_'+i+'"]');
     if(a) ef.agentEditable=a.checked;
+    const fdo=document.querySelector('[data-fdo="'+p+'_'+i+'"]');
+    if(fdo) ef.dependsOn=fdo.value;
+    const fdv=document.querySelector('[data-fdv="'+p+'_'+i+'"]');
+    if(fdv) ef.dependsOnValue=fdv.value;
   });
 }
 function onTypeChange(p,i,val){
@@ -4421,6 +4493,30 @@ function onTypeChange(p,i,val){
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
   arr[i].type=val;
   if(val!=='select') arr[i].options='';
+  refreshFields(p);
+}
+function addFieldOption(p,i,val){
+  val=(val||'').trim(); if(!val) return;
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
+  if(!opts.includes(val)) opts.push(val);
+  arr[i].options=opts.join(',');
+  refreshFields(p);
+}
+function removeFieldOption(p,i,oi){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
+  opts.splice(oi,1);
+  arr[i].options=opts.join(',');
+  refreshFields(p);
+}
+function onDependsOnChange(p,i,val){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  arr[i].dependsOn=val;
+  arr[i].dependsOnValue='';
   refreshFields(p);
 }
 function refreshFields(p){
@@ -4452,7 +4548,9 @@ function collectCoreFields(){
 }
 function collectFields(p){const arr=p==='f'?_tmpFields:_tmpAdminFields;return arr.map((ef,i)=>{const l=document.querySelector(`[data-fl="${p}_${i}"]`),t=document.querySelector(`[data-ft="${p}_${i}"]`),o=document.querySelector(`[data-fo="${p}_${i}"]`),r=document.querySelector(`[data-fr="${p}_${i}"]`),b=document.querySelector(`[data-fb="${p}_${i}"]`),ne=document.querySelector(`[data-fne="${p}_${i}"]`),n=document.querySelector(`[data-fn="${p}_${i}"]`);const c2=document.querySelector(`[data-fc="${p}_${i}"]`);
 const a2=document.querySelector(`[data-fa="${p}_${i}"]`);
-return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled,agentEditable:a2?a2.checked:!!ef.agentEditable};}).filter(ef=>ef.label);}
+const fdo=document.querySelector(`[data-fdo="${p}_${i}"]`);
+const fdv=document.querySelector(`[data-fdv="${p}_${i}"]`);
+return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled,agentEditable:a2?a2.checked:!!ef.agentEditable,dependsOn:fdo?fdo.value:(ef.dependsOn||''),dependsOnValue:fdv?fdv.value:(ef.dependsOnValue||'')};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
 function collectAlertEmails(){
   return [0,1,2,3].map(i=>document.getElementById(`email-alert-${i}`)?.value.trim()||'').filter(Boolean);
