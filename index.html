@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.43'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.44'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4386,7 +4386,7 @@ function fieldOptionChipsHTML(ef,i,p){
   </span>`).join('');
   return `<div class="mt-1" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-xs)">
     ${chips}
-    <input type="text" placeholder="+ הוסף אופציה, Enter" style="border:none;background:transparent;outline:none;font-size:12px;flex:1;min-width:90px;font-family:inherit;color:var(--text)" onkeydown="if(event.key==='Enter'){event.preventDefault();addFieldOption('${p}',${i},this.value);this.value='';}">
+    <input type="text" placeholder="+ הוסף אופציה, Enter" style="border:none;background:transparent;outline:none;font-size:12px;flex:1;min-width:90px;font-family:inherit;color:var(--text)" onkeydown="if(event.key==='Enter'){event.preventDefault();addFieldOption('${p}',${i},this.value);this.value='';}" onblur="if(this.value.trim()){addFieldOption('${p}',${i},this.value);this.value='';}">
   </div>`;
 }
 function fieldDependsOnHTML(ef,i,p){
