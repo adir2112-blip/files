@@ -295,6 +295,13 @@ tr:hover td.admin-col{background:var(--purple-light)}
 .admin-input:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 2px rgba(124,58,237,.1)}
 .admin-checkbox{width:17px;height:17px;accent-color:var(--purple);cursor:pointer}
 
+/* LONG-TEXT CELL TOOLS (copy / expand) */
+.cell-tools{display:inline-flex;gap:2px;opacity:0;transition:opacity .12s;flex-shrink:0}
+tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
+.cell-tool-btn{width:20px;height:20px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);background:var(--surface2);border:1px solid var(--border2);font-size:11px}
+.cell-tool-btn:hover{color:var(--blue);border-color:var(--blue)}
+.cell-txt-trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+
 /* SECTION DIVIDER */
 .section-divider{font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.06em;padding:10px 0 8px;border-top:1px solid var(--border);margin-top:18px;display:flex;align-items:center;gap:6px}
 
@@ -424,7 +431,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.46'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.47'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1494,14 +1501,14 @@ function renderRecordsPage(){
           const url=v.match(/^https?:\/\//)?v:('https://'+v);
           return `<td><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;
         }
-        return `<td>${esc(v)}</td>`;
+        return `<td><div style="display:flex;align-items:center;gap:4px;justify-content:space-between"><span>${esc(v)}</span>${cellToolsHTML(v)}</div></td>`;
       }
       const editBorder='style="border-color:var(--blue)"';
       if(ef.type==='checkbox') return `<td style="text-align:center"><input type="checkbox" class="admin-checkbox" ${v==='כן'?'checked':''} onclick="event.stopPropagation()" onchange="saveExtraField('${r.id}','${ef.id}',this.checked?'כן':'לא','${S.fileId}')"></td>`;
       if(ef.type==='select'){const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${v===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td><select class="admin-input" ${editBorder} onclick="event.stopPropagation()" onchange="saveExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></td>`;}
       if(ef.type==='date') return `<td><input class="admin-input" type="date" value="${esc(v)}" ${editBorder} onclick="event.stopPropagation()" onchange="saveExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"></td>`;
       if(ef.type==='link') return `<td><input class="admin-input" type="text" value="${esc(v)}" dir="ltr" placeholder="https://..." ${editBorder} onclick="event.stopPropagation()" oninput="debounceExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"></td>`;
-      return `<td><input class="admin-input" type="${ef.type==='number'?'number':'text'}" value="${esc(v)}" ${editBorder} onclick="event.stopPropagation()" oninput="debounceExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"></td>`;
+      return `<td><div style="display:flex;align-items:center;gap:4px"><input class="admin-input" type="${ef.type==='number'?'number':'text'}" value="${esc(v)}" ${editBorder} onclick="event.stopPropagation()" oninput="debounceExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')">${cellToolsHTML(v)}</div></td>`;
     }).join('');
     const adminC=adminFields.map(af=>{
       const val=(r.admin_data||{})[af.id];
@@ -1511,13 +1518,13 @@ function renderRecordsPage(){
         if(af.agentEditable){
           if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}<input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></div></td>`;
           if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${agentChatBadge}<select class="admin-input" style="flex:1;border-color:#ea580c" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></div></td>`;}
-          return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${agentChatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1;border-color:#ea580c" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></div></td>`;
+          return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${agentChatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1;border-color:#ea580c" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">${cellToolsHTML(val)}</div></td>`;
         }
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</div></td>`;
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</div></td>`;}
         if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}<a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></div></td>`;}
         if(af.type==='attachment') return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${renderAttachmentCell(val)}</div></td>`;
-        return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${esc(val||'')}</div></td>`;
+        return `<td class="admin-col"><div style="display:flex;align-items:center;gap:4px;justify-content:space-between"><div style="display:flex;align-items:center;gap:4px">${agentChatBadge}${esc(val||'')}</div>${cellToolsHTML(val)}</div></td>`;
       }
       if(_bulkMode){
         // in bulk mode show read-only admin fields
@@ -1525,7 +1532,7 @@ function renderRecordsPage(){
         if(af.type==='select'){const cls=val==='כן'||val==='מאושר'?'badge-success':val==='לא'||val==='דחוי'?'badge-warning':'badge-info';return `<td class="admin-col">${val?`<span class="badge ${cls}">${esc(val)}</span>`:''}</td>`;}
         if(af.type==='link'&&val){const url=val.match(/^https?:\/\//)?val:('https://'+val);return `<td class="admin-col"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;}
         if(af.type==='attachment') return `<td class="admin-col">${renderAttachmentCell(val)}</td>`;
-        return `<td class="admin-col" style="color:var(--text3)">${esc(val||'—')}</td>`;
+        return `<td class="admin-col" style="color:var(--text3)"><div style="display:flex;align-items:center;gap:4px;justify-content:space-between"><span>${esc(val||'—')}</span>${cellToolsHTML(val)}</div></td>`;
       }
       // chat trigger — admin always sees chat, agent only if chatEnabled
       const canChat = isAdmin || af.chatEnabled;
@@ -1542,7 +1549,7 @@ function renderRecordsPage(){
       if(af.type==='link') return `<td class="admin-col"><div style="display:flex;gap:4px;align-items:center">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="https://..." dir="ltr" style="font-size:11px;flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">
         ${val?`<a href="${(val.match(/^https?:\/\//)?val:'https://'+val).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue);flex-shrink:0" title="פתח קישור"><i class="ti ti-external-link"></i></a>`:''}
       </div></td>`;
-      return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"></div></td>`;
+      return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${chatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">${cellToolsHTML(val)}</div></td>`;
     }).join('');
     const agentC=`<td><span class="badge badge-neutral">${esc(r.agent_name||'—')}</span></td>`;
     const lastChange=(r.change_log||[]).slice(-1)[0];
@@ -4686,6 +4693,37 @@ function showModal(html){document.getElementById('modal-body').innerHTML=html;do
 function closeModal(){if(_modalLocked)return;document.getElementById('modal-overlay').style.display='none';}
 function showAlert(msg,type='success'){S.alert={msg,type};render();setTimeout(()=>{S.alert=null;render();},3500);}
 function esc(s){return(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// ── LONG-TEXT CELL TOOLS ──
+function cellToolsHTML(text){
+  text=(text||'').toString();
+  if(text.length<20) return '';
+  return `<span class="cell-tools" data-celltext="${esc(text)}">
+    <span class="cell-tool-btn" onclick="event.stopPropagation();quickCopyCell(this)" title="העתק"><i class="ti ti-copy"></i></span>
+    <span class="cell-tool-btn" onclick="event.stopPropagation();openCellTextPopup(this)" title="הצג טקסט מלא"><i class="ti ti-maximize"></i></span>
+  </span>`;
+}
+async function quickCopyCell(el){
+  const text=el.closest('[data-celltext]')?.dataset.celltext||'';
+  try{ await navigator.clipboard.writeText(text); showAlert('הועתק ללוח ✓','success'); }
+  catch(e){ showAlert('שגיאה בהעתקה','error'); }
+}
+function openCellTextPopup(el){
+  const text=el.closest('[data-celltext]')?.dataset.celltext||'';
+  showModal(`
+    <div class="modal-title"><i class="ti ti-file-text" style="color:var(--blue)"></i> טקסט מלא</div>
+    <div id="cell-popup-text" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:14px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;max-height:50vh;overflow-y:auto;user-select:text">${esc(text)}</div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">סגור</button>
+      <button class="btn btn-black" onclick="copyCellPopupText()"><i class="ti ti-copy"></i> העתק</button>
+    </div>
+  `);
+}
+async function copyCellPopupText(){
+  const el=document.getElementById('cell-popup-text');
+  if(!el) return;
+  try{ await navigator.clipboard.writeText(el.textContent); showAlert('הועתק ללוח ✓','success'); }
+  catch(e){ showAlert('שגיאה בהעתקה','error'); }
+}
 function fmtDate(ts){return new Date(ts).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function genId(){return Math.random().toString(36).slice(2,9);}
 
