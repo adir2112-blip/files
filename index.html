@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.44'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.45'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1486,13 +1486,22 @@ function renderRecordsPage(){
     const rowStyle=isSelected?'background:var(--blue-light)':'';
     const extraC=extraFields.map(ef=>{
       const v=(r.extra||{})[ef.id]||'';
-      if(ef.type==='select'&&v){const cls=v==='טופל'?'badge-success':v==='לא טופל'?'badge-warning':'badge-info';return `<td><span class="badge ${cls}">${esc(v)}</span></td>`;}
-      if(ef.type==='attachment') return `<td>${renderAttachmentCell(v)}</td>`;
-      if(ef.type==='link'&&v){
-        const url=v.match(/^https?:\/\//)?v:('https://'+v);
-        return `<td><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;
+      const canEdit=(isAdmin||ef.agentEditable)&&!_bulkMode&&ef.type!=='attachment';
+      if(!canEdit){
+        if(ef.type==='select'&&v){const cls=v==='טופל'?'badge-success':v==='לא טופל'?'badge-warning':'badge-info';return `<td><span class="badge ${cls}">${esc(v)}</span></td>`;}
+        if(ef.type==='attachment') return `<td>${renderAttachmentCell(v)}</td>`;
+        if(ef.type==='link'&&v){
+          const url=v.match(/^https?:\/\//)?v:('https://'+v);
+          return `<td><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><i class="ti ti-link" style="font-size:12px"></i> פתח</a></td>`;
+        }
+        return `<td>${esc(v)}</td>`;
       }
-      return `<td>${esc(v)}</td>`;
+      const editBorder='style="border-color:var(--blue)"';
+      if(ef.type==='checkbox') return `<td style="text-align:center"><input type="checkbox" class="admin-checkbox" ${v==='כן'?'checked':''} onclick="event.stopPropagation()" onchange="saveExtraField('${r.id}','${ef.id}',this.checked?'כן':'לא','${S.fileId}')"></td>`;
+      if(ef.type==='select'){const opts=(ef.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${v===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td><select class="admin-input" ${editBorder} onclick="event.stopPropagation()" onchange="saveExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select></td>`;}
+      if(ef.type==='date') return `<td><input class="admin-input" type="date" value="${esc(v)}" ${editBorder} onclick="event.stopPropagation()" onchange="saveExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"></td>`;
+      if(ef.type==='link') return `<td><input class="admin-input" type="text" value="${esc(v)}" dir="ltr" placeholder="https://..." ${editBorder} onclick="event.stopPropagation()" oninput="debounceExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"></td>`;
+      return `<td><input class="admin-input" type="${ef.type==='number'?'number':'text'}" value="${esc(v)}" ${editBorder} onclick="event.stopPropagation()" oninput="debounceExtraField('${r.id}','${ef.id}',this.value,'${S.fileId}')"></td>`;
     }).join('');
     const adminC=adminFields.map(af=>{
       const val=(r.admin_data||{})[af.id];
@@ -3817,6 +3826,32 @@ function debounceAdminField(recordId,fieldId,value,fileId){
   const key=recordId+'_'+fieldId;clearTimeout(_saveTimers[key]);
   _saveTimers[key]=setTimeout(()=>saveAdminField(recordId,fieldId,value,fileId),700);
 }
+async function saveExtraField(recordId,fieldId,value,fileId){
+  const recs=_cachedRecords[fileId]||[];
+  const record=recs.find(r=>r.id===recordId);if(!record)return;
+  const f=DB.files.find(x=>x.id===fileId);
+  const ef=(f?.extra_fields||[]).find(x=>x.id===fieldId);
+  const oldVal=(record.extra||{})[fieldId];
+  if(!record.extra)record.extra={};
+  record.extra[fieldId]=value;
+  if(!record.change_log) record.change_log=[];
+  record.change_log.push({
+    ts: new Date().toISOString(),
+    by: currentUser?.name||_agentName||'נציג',
+    field: ef?ef.label:fieldId,
+    from: oldVal===undefined||oldVal===null||oldVal===''?'—':String(oldVal),
+    to: String(value)
+  });
+  if(record.change_log.length>30) record.change_log=record.change_log.slice(-30);
+  try{
+    await PATCH('records',{extra:record.extra,change_log:record.change_log},`?id=eq.${recordId}`);
+  }
+  catch(e){showAlert('שגיאה בשמירה','error');}
+}
+function debounceExtraField(recordId,fieldId,value,fileId){
+  const key='extra_'+recordId+'_'+fieldId;clearTimeout(_saveTimers[key]);
+  _saveTimers[key]=setTimeout(()=>saveExtraField(recordId,fieldId,value,fileId),700);
+}
 
 // ── DELETE ──
 function showChangeLog(log,customerName){
@@ -4420,7 +4455,7 @@ function fieldRowHTML(ef,i,p){
   const typeOpts=Object.keys(FIELD_TYPE_LABELS).map(t=>`<option value="${t}" ${ef.type===t?'selected':''}>${FIELD_TYPE_LABELS[t]}</option>`).join('');
   const hasNote=!!ef.noteEnabled;
   return `<div class="field-row" style="grid-template-columns:1fr;padding:12px">
-    <div style="display:grid;grid-template-columns:1fr 1fr auto auto auto auto;gap:8px">
+    <div style="display:grid;grid-template-columns:1fr 1fr auto auto auto auto auto;gap:8px">
       <div><label class="form-label" style="font-size:10px">שם השדה</label><input class="form-input" data-fl="${p}_${i}" value="${esc(ef.label)}" placeholder="שם"></div>
       <div><label class="form-label" style="font-size:10px">סוג</label>
         <select class="form-input" data-ft="${p}_${i}" onchange="onTypeChange('${p}',${i},this.value)"><option value="">בחר...</option>${typeOpts}</select>
@@ -4438,10 +4473,10 @@ function fieldRowHTML(ef,i,p){
         <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--blue)">💬 צ'אט</label>
         <input type="checkbox" data-fc="${p}_${i}" ${ef.chatEnabled?'checked':''} style="width:17px;height:17px;accent-color:var(--blue);cursor:pointer" title="אפשר הערות שיחה על שדה זה">
       </div>
-      ${p==='a'?`<div style="padding-top:20px;text-align:center">
-        <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--orange,#ea580c)">נציג עורך</label>
-        <input type="checkbox" data-fa="${p}_${i}" ${ef.agentEditable?'checked':''} style="width:17px;height:17px;accent-color:#ea580c;cursor:pointer" title="נציג יכול לערוך שדה זה">
-      </div>`:''}
+      <div style="padding-top:20px;text-align:center">
+        <label class="form-label" style="font-size:10px;margin-bottom:6px;display:block;color:var(--orange,#ea580c)">ניתן לעריכה</label>
+        <input type="checkbox" data-fa="${p}_${i}" ${ef.agentEditable?'checked':''} style="width:17px;height:17px;accent-color:#ea580c;cursor:pointer" title="נציג יכול לערוך את השדה גם אחרי שמירת הרשומה (בטבלת הרשומות)">
+      </div>
       <div style="padding-top:38px"><button class="btn btn-xs btn-danger" type="button" onclick="removeField('${p}',${i})"><i class="ti ti-trash"></i></button></div>
     </div>
     <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
