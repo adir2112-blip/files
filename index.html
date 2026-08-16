@@ -424,7 +424,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.45'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.46'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2368,6 +2368,14 @@ function dashPeriodRange(key){
   return { from: from?from.toISOString():null, to: null };
 }
 
+function customDateRange(dateStr){
+  if(!dateStr) return { from:null, to:null };
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const from=new Date(y,m-1,d);
+  const to=new Date(y,m-1,d+1);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
 let _dashPeriod = 'all';
 
 async function loadDashboardTab(){
@@ -2730,7 +2738,7 @@ function renderAdminPerformance(){
 }
 
 // ══ PIE CHART POPUP ══
-let _pieFileId=null, _pieFieldId=null, _piePeriod='all';
+let _pieFileId=null, _pieFieldId=null, _piePeriod='all', _pieCustomDate='';
 
 async function openPieChart(fileId){
   _pieFileId=fileId;
@@ -2743,7 +2751,9 @@ async function openPieChart(fileId){
 
 async function renderPiePopup(f, adminFields){
   const fieldOpts=adminFields.map(af=>`<option value="${af.id}" ${_pieFieldId===af.id?'selected':''}>${esc(af.label)}</option>`).join('');
-  const periodOpts=DASH_PERIODS.map(p=>`<option value="${p.key}" ${_piePeriod===p.key?'selected':''}>${p.label}</option>`).join('');
+  const periodOpts=DASH_PERIODS.map(p=>`<option value="${p.key}" ${_piePeriod===p.key?'selected':''}>${p.label}</option>`).join('')
+    +`<option value="custom" ${_piePeriod==='custom'?'selected':''}>תאריך ספציפי</option>`;
+  if(!_pieCustomDate) _pieCustomDate=new Date().toISOString().slice(0,10);
 
   showModal(`
     <div class="modal-title"><i class="ti ti-chart-pie" style="color:var(--purple)"></i> פילוח — ${esc(f.name)}</div>
@@ -2760,6 +2770,10 @@ async function renderPiePopup(f, adminFields){
           ${periodOpts}
         </select>
       </div>
+      <div style="flex:1;min-width:140px;display:${_piePeriod==='custom'?'block':'none'}" id="pie-custom-date-wrap">
+        <label class="form-label">תאריך</label>
+        <input type="date" class="form-input" id="pie-custom-date" value="${esc(_pieCustomDate)}" onchange="onPieChange('${f.id}')">
+      </div>
     </div>
     <div id="pie-chart-area" style="min-height:260px;display:flex;align-items:center;justify-content:center">
       <div class="spinner"></div>
@@ -2772,6 +2786,9 @@ async function renderPiePopup(f, adminFields){
 async function onPieChange(fileId){
   _pieFieldId=document.getElementById('pie-field')?.value||_pieFieldId;
   _piePeriod=document.getElementById('pie-period')?.value||_piePeriod;
+  _pieCustomDate=document.getElementById('pie-custom-date')?.value||_pieCustomDate;
+  const wrap=document.getElementById('pie-custom-date-wrap');
+  if(wrap) wrap.style.display=_piePeriod==='custom'?'block':'none';
   const area=document.getElementById('pie-chart-area');
   if(area) area.innerHTML='<div class="spinner"></div>';
   await loadPieData(fileId);
@@ -2788,7 +2805,7 @@ async function loadPieData(fileId){
   // for form fields — filter by created_at (when record was created)
   const dateField = isAdminField ? 'treated_at' : 'created_at';
 
-  const {from,to}=dashPeriodRange(_piePeriod);
+  const {from,to}=_piePeriod==='custom'?customDateRange(_pieCustomDate):dashPeriodRange(_piePeriod);
   let params=`?file_id=eq.${fileId}&select=admin_data,extra,treated_at,created_at`;
   if(from) params+=`&${dateField}=gte.${encodeURIComponent(from)}`;
   if(to)   params+=`&${dateField}=lt.${encodeURIComponent(to)}`;
