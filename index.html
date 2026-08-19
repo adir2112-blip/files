@@ -431,7 +431,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.49'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.50'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -651,7 +651,7 @@ async function doLogout(){
 }
 
 // ══ APP STATE ══
-function S_DEFAULT(){return{view:'orgs',orgId:null,fileId:null,adminLoggedIn:false,adminTab:'orgs',searchQ:'',alert:null,filters:{},phoneSearch:'',phoneLookup:null,sortCol:null,sortDir:1,showBulkAll:false,globalSearch:'',globalSearchResults:null,archiveMode:false};}
+function S_DEFAULT(){return{view:'orgs',orgId:null,fileId:null,adminLoggedIn:false,adminTab:'orgs',searchQ:'',alert:null,filters:{},chatFilter:'',phoneSearch:'',phoneLookup:null,sortCol:null,sortDir:1,showBulkAll:false,globalSearch:'',globalSearchResults:null,archiveMode:false};}
 let S=S_DEFAULT();
 let DB={orgs:[],files:[]};
 let _agentName='';
@@ -723,6 +723,15 @@ function recordMatchesAlert(record, file){
   if(rule.condition==='not_value') return val !== (rule.value||'');
   if(rule.condition==='value')     return val === (rule.value||'');
   return false;
+}
+
+// "פתוח" = יש לפחות שרשור הערות אחד שבו התגובה האחרונה היא של נציג וטרם נענתה על ידי מנהל
+function recordChatStatus(record){
+  const threads=Object.values(record.field_comments||{});
+  for(const thread of threads){
+    if(thread.length && thread[thread.length-1].role==='agent') return 'open';
+  }
+  return 'closed';
 }
 
 // כמה פניות ממתינות למענה בשדה הניהולי — לפי אותו שדה של כלל ה-SLA, בלי תנאי הימים
@@ -1447,6 +1456,7 @@ function renderRecordsPage(){
       return v.toLowerCase().includes(val.toLowerCase());
     });
   });
+  if(S.chatFilter==='open') filtered=filtered.filter(r=>recordChatStatus(r)==='open');
   const sortable=(col,label,cls='')=>{
     const active=S.sortCol===col;
     const arrow=active?(S.sortDir===1?'↑':'↓'):'';
@@ -1578,7 +1588,8 @@ function renderRecordsPage(){
     const histC=(isAdmin&&!_bulkMode&&(r.change_log||[]).length)?`<td><button class="btn btn-xs" onclick='showChangeLog(${JSON.stringify(r.change_log).replace(/'/g,"&#39;")},"${esc(r.first_name)} ${esc(r.last_name)}")' title="היסטוריית שינויים"><i class="ti ti-history"></i></button></td>`:(isAdmin&&!_bulkMode?'<td></td>':'');
     const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
     const isBreached=isAdmin&&recordMatchesAlert(r,f);
-    const trStyle=`${isSelected?'background:var(--blue-light);':isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
+    const isChatOpen=recordChatStatus(r)==='open';
+    const trStyle=`${isSelected?'background:var(--blue-light);':isChatOpen?'background:#fef2f2;box-shadow:inset 3px 0 0 #dc2626;':isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
     const coreC=(cf.first_name!==false?`<td><strong>${esc(r.first_name)}</strong></td>`:'')+(cf.last_name!==false?`<td>${esc(r.last_name)}</td>`:'')+(cf.phone!==false?`<td dir="ltr">${esc(r.phone)}</td>`:'')+(cf.id_num!==false?`<td dir="ltr">${esc(r.id_num)}</td>`:'');
     return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td>${coreC}${extraC}${agentC}${adminC}${treatedC}${noteC}${histC}${delC}</tr>`;
   }).join('');
@@ -1589,8 +1600,14 @@ function renderRecordsPage(){
     ...adminFields.map(af=>({...af,_isAdmin:true}))
   ];
 
-  const filterBar=allFilterableFields.length?`<div class="filter-bar">
+  const hasChatFields=[...extraFields,...adminFields].some(fld=>fld.chatEnabled);
+  const chatFilterHTML=hasChatFields?`<select onchange="setChatFilter(this.value)" style="border-color:${S.chatFilter==='open'?'#dc2626':''}">
+    <option value="">כל הסטטוסים</option>
+    <option value="open" ${S.chatFilter==='open'?'selected':''}>🔴 פתוח — ממתין לתגובת מנהל</option>
+  </select>`:'';
+  const filterBar=(allFilterableFields.length||hasChatFields)?`<div class="filter-bar">
     <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
+    ${chatFilterHTML}
     ${allFilterableFields.map(field=>{
       const fid=field.id;
       const cur=esc(S.filters[fid]||'');
@@ -1599,7 +1616,7 @@ function renderRecordsPage(){
       if(field.type==='select') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option><option value="__empty__" ${cur==='__empty__'?'selected':''}>— ריק / טרם נבחר —</option>${(field.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${cur===esc(o.trim())?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
       return `<input type="text" placeholder="סנן ${esc(field.label)}..." value="${cur}" id="filter-txt-${fid}" oninput="debounceFilter('${fid}',this.value)" style="min-width:120px${field._isAdmin?';border-color:var(--purple)':''}">`;
     }).join('')}
-    <button class="btn btn-xs" onclick="S.filters={};render()"><i class="ti ti-x"></i> נקה</button>
+    <button class="btn btn-xs" onclick="S.filters={};S.chatFilter='';render()"><i class="ti ti-x"></i> נקה</button>
   </div>`:'';
 
   // BULK UPDATE ALL FILTERED — no selection needed
@@ -2070,7 +2087,7 @@ function renderAdminAllRecords(){
 }
 
 // ── NAV ──
-function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.globalSearch='';S.globalSearchResults=null;loadAll().then(()=>loadAllCounts().then(render));}
+function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.chatFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.globalSearch='';S.globalSearchResults=null;loadAll().then(()=>loadAllCounts().then(render));}
 
 // ══ FIELD CHAT SYSTEM ══
 let _chatPopup=null;
@@ -2178,6 +2195,8 @@ async function sendChatMsg(){
       list.appendChild(msgEl);
       list.scrollTop=list.scrollHeight;
     }
+    // מעדכן את צביעת השורה בטבלה (פתוח/סגור) מיד, בלי לסגור את הפופ-אפ
+    if(S.view==='records') render();
   }catch(e){ showAlert('שגיאה בשמירת הערה','error'); }
   input.disabled=false;
   input.focus();
@@ -2321,9 +2340,9 @@ async function openGlobalResult(fileId, isArchived=false){
   await adminViewFileRecords(fileId, isArchived);
 }
 function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;_bulkMode=false;_selectedRows.clear();render();}
-function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();}
+function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.chatFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();}
 async function goRecords(fileId, archiveMode=false){
-  S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};
+  S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};S.chatFilter='';
   _bulkMode=false;_selectedRows.clear();S.showBulkAll=false;
   S.archiveMode=archiveMode;
   render();
@@ -2342,7 +2361,7 @@ async function adminViewFileRecords(fileId, archiveMode=false){
   const fCheck=DB.files.find(x=>x.id===fileId);
   if(fCheck&&!canManagerAccessFile(fCheck)&&!currentUser?.is_super_admin){showAlert('אין לך גישה לקובץ זה','error');return;}
   S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;
-  S.view='records';S.searchQ='';S.filters={};_bulkMode=false;_selectedRows.clear();
+  S.view='records';S.searchQ='';S.filters={};S.chatFilter='';_bulkMode=false;_selectedRows.clear();
   S.showBulkAll=false;S.archiveMode=archiveMode;
   render();
   await getRecords(fileId, archiveMode);
@@ -3727,6 +3746,7 @@ async function confirmDeleteManager(email){
 
 function gotoAdmin(){S.view='admin';render();}
 function toggleSort(col){if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;}render();}
+function setChatFilter(val){ S.chatFilter=val||''; render(); }
 function setFilter(afId,val){
   if(val===''){ delete S.filters[afId]; }
   else { S.filters[afId]=val; }
