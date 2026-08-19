@@ -431,7 +431,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.47'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.48'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -529,7 +529,7 @@ async function initLogin(){
     if(mgr){
       // load all agents for admin management
       allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
-      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[]});
+      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{}});
       PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
       return;
     }
@@ -609,7 +609,7 @@ async function loginManager(){
   if(error){showLoginErr('mgr-err','mgr-err-msg','מייל או סיסמה שגויים');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
   const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',email).eq('active',true).single();
   if(!mgr){await sbClient.auth.signOut();showLoginErr('mgr-err','mgr-err-msg','אין הרשאת מנהל');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
-  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[]});
+  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{}});
   // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
   PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
 }
@@ -1716,19 +1716,25 @@ function debounceSearch(val){
 }
 
 // ADMIN
+function canSeeAdminTab(key){
+  if(currentUser?.is_super_admin) return true;
+  return (currentUser?.tab_permissions||{})[key]!==false;
+}
 function renderAdmin(){
   if(!S.adminLoggedIn) return `<div class="empty"><i class="ti ti-lock"></i><p>אין גישה</p></div>`;
-  const tab=S.adminTab;
+  let tab=S.adminTab;
+  const gateable={dashboard:1,trends:1,perf:1,orgs:1,agents:1};
+  if(gateable[tab] && !canSeeAdminTab(tab)){ tab='files'; S.adminTab='files'; }
   return `<div class="card">
     <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
     <div class="nav-tabs">
-      <button class="nav-tab ${tab==='dashboard'?'active':''}" onclick="loadDashboardTab()"><i class="ti ti-layout-dashboard" style="font-size:13px"></i> דשבורד</button>
-      <button class="nav-tab ${tab==='trends'?'active':''}" onclick="loadTrendsTab()"><i class="ti ti-chart-line" style="font-size:13px"></i> גרף מגמה</button>
-      <button class="nav-tab ${tab==='perf'?'active':''}" onclick="loadPerformanceTab()"><i class="ti ti-trophy" style="font-size:13px"></i> ביצועי נציגים</button>
-      <button class="nav-tab ${tab==='orgs'?'active':''}" onclick="S.adminTab='orgs';render()">ארגונים</button>
+      ${canSeeAdminTab('dashboard')?`<button class="nav-tab ${tab==='dashboard'?'active':''}" onclick="loadDashboardTab()"><i class="ti ti-layout-dashboard" style="font-size:13px"></i> דשבורד</button>`:''}
+      ${canSeeAdminTab('trends')?`<button class="nav-tab ${tab==='trends'?'active':''}" onclick="loadTrendsTab()"><i class="ti ti-chart-line" style="font-size:13px"></i> גרף מגמה</button>`:''}
+      ${canSeeAdminTab('perf')?`<button class="nav-tab ${tab==='perf'?'active':''}" onclick="loadPerformanceTab()"><i class="ti ti-trophy" style="font-size:13px"></i> ביצועי נציגים</button>`:''}
+      ${canSeeAdminTab('orgs')?`<button class="nav-tab ${tab==='orgs'?'active':''}" onclick="S.adminTab='orgs';render()">ארגונים</button>`:''}
       <button class="nav-tab ${tab==='files'?'active':''}" onclick="S.adminTab='files';render()">קבצים</button>
       <button class="nav-tab ${tab==='records'?'active':''}" onclick="adminLoadAllRecords()">כל הרשומות</button>
-      <button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>
+      ${canSeeAdminTab('agents')?`<button class="nav-tab ${tab==='agents'?'active':''}" onclick="S.adminTab='agents';render()">נציגים</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='managers'?'active':''}" onclick="loadManagersTab()">מנהלים</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='weekly'?'active':''}" onclick="loadWeeklyReportTab()"><i class="ti ti-calendar-week" style="font-size:12px"></i> דוח שבועי</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
@@ -3574,7 +3580,7 @@ function renderAdminManagers(){
     </div>
     ${!managers.length
       ?`<div class="empty"><i class="ti ti-shield-off"></i><p>אין מנהלים מוגדרים</p></div>`
-      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>ארגונים</th><th>סופר מנהל</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
+      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>קבצים</th><th>סופר מנהל</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
       ${managers.map(m=>`<tr>
         <td dir="ltr" style="font-size:13px">${esc(m.email)}</td>
         <td><div style="display:flex;align-items:center;gap:8px">
@@ -3583,7 +3589,7 @@ function renderAdminManagers(){
         </div></td>
         <td dir="ltr" style="font-size:12px;color:var(--text2)">${m.phone?`<i class="ti ti-brand-whatsapp" style="color:#25d366;font-size:11px"></i> ${esc(m.phone)}`:'<span style="color:var(--text3)">—</span>'}</td>
         <td><span class="badge ${m.active?'badge-success':'badge-warning'}">${m.active?'פעיל':'מושבת'}</span></td>
-        <td style="font-size:12px">${(m.allowed_orgs||[]).length?`<span class="badge badge-info"><i class="ti ti-building"></i> ${(m.allowed_orgs||[]).length} ארגונים</span>`:'<span style="color:var(--text3)">הכל</span>'}</td>
+        <td style="font-size:12px">${(m.allowed_files||[]).length?`<span class="badge badge-info"><i class="ti ti-files"></i> ${(m.allowed_files||[]).length} קבצים</span>`:'<span style="color:var(--text3)">הכל</span>'}</td>
         <td>${m.is_super_admin?'<span class="badge badge-purple"><i class="ti ti-star"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
         <td style="font-size:12px;color:var(--text2);white-space:nowrap">${m.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(m.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
         <td><div class="flex-gap">
@@ -3594,10 +3600,36 @@ function renderAdminManagers(){
       </tbody></table></div>`}`;
 }
 
+const MGR_TAB_DEFS=[['dashboard','דשבורד'],['trends','גרף מגמה'],['perf','ביצועי נציגים'],['orgs','ארגונים'],['agents','נציגים']];
+function mgrTabChecklistHTML(tp){
+  tp=tp||{};
+  return MGR_TAB_DEFS.map(([k,l])=>{
+    const isSel=tp[k]!==false;
+    return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid ${isSel?'var(--green)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;background:${isSel?'#f0fdf4':'var(--surface2)'}">
+      <input type="checkbox" data-tab="${k}" ${isSel?'checked':''} style="accent-color:var(--green);cursor:pointer"> ${l}
+    </label>`;
+  }).join('');
+}
+function mgrFileChecklistHTML(allowedFiles){
+  allowedFiles=allowedFiles||[];
+  const groups=DB.orgs.map(o=>{
+    const files=DB.files.filter(f=>f.org_id===o.id);
+    if(!files.length) return '';
+    const rows=files.map(f=>{
+      const isSel=allowedFiles.includes(f.id);
+      return `<label style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1.5px solid ${isSel?'var(--blue)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;background:${isSel?'var(--blue-light)':'var(--surface2)'}">
+        <input type="checkbox" data-file="${f.id}" ${isSel?'checked':''} style="accent-color:var(--blue);cursor:pointer"> ${esc(f.name)}
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:5px;text-transform:uppercase">${esc(o.name)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${rows}</div>
+    </div>`;
+  }).join('');
+  return groups||'<div style="color:var(--text3);font-size:12px">אין קבצים במערכת</div>';
+}
+
 function openNewManager(){
-  const orgOpts=DB.orgs.map(o=>`<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;background:var(--surface2)">
-    <input type="checkbox" data-org="${o.id}" style="accent-color:var(--blue);cursor:pointer"> ${esc(o.name)}
-  </label>`).join('');
   showModal(`<div class="modal-title"><i class="ti ti-shield-plus" style="color:var(--purple)"></i> הוסף מנהל</div>
     <div class="alert alert-info" style="margin-bottom:16px;font-size:13px"><i class="ti ti-info-circle"></i> ודא שיצרת את המשתמש תחילה ב-Supabase Auth עם אותו מייל</div>
     <div class="form-row"><label class="form-label">מייל *</label><input class="form-input" id="mgr-new-email" type="email" placeholder="manager@example.com" dir="ltr"></div>
@@ -3605,8 +3637,12 @@ function openNewManager(){
     <div class="form-row"><label class="form-label">טלפון וואטסאפ (972XXXXXXXXX)</label><input class="form-input" id="mgr-new-phone" type="text" dir="ltr" placeholder="972501234567"></div>
     <div class="form-row"><label class="form-label">סוג</label><select class="form-input" id="mgr-new-super"><option value="false">מנהל רגיל</option><option value="true">סופר מנהל</option></select></div>
     <div class="form-row">
-      <label class="form-label">גישה לארגונים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכולם)</span></label>
-      <div id="mgr-new-orgs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">${orgOpts}</div>
+      <label class="form-label">טאבים גלויים במסך אדמין <span style="color:var(--text3);font-weight:400">(ברירת מחדל: הכל מוצג)</span></label>
+      <div id="mgr-new-tabs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">${mgrTabChecklistHTML({})}</div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">הרשאת קבצים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכל הקבצים)</span></label>
+      <div id="mgr-new-files" style="margin-top:6px;max-height:260px;overflow-y:auto;padding-left:2px">${mgrFileChecklistHTML([])}</div>
     </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-purple" onclick="saveNewManager()"><i class="ti ti-check"></i> הוסף</button></div>`);
 }
@@ -3614,16 +3650,10 @@ function openNewManager(){
 function openEditManagerById(email){
   const m=(S._managers||[]).find(x=>x.email===email);
   if(!m) return;
-  openEditManager(m.email,m.name||'',m.phone||'',m.active,!!m.is_super_admin,m.allowed_orgs||[]);
+  openEditManager(m.email,m.name||'',m.phone||'',m.active,!!m.is_super_admin,m.allowed_files||[],m.tab_permissions||{});
 }
 
-function openEditManager(email,name,phone,active,isSuper,allowedOrgs=[]){
-  const orgOpts=DB.orgs.map(o=>{
-    const isSel=(allowedOrgs||[]).includes(o.id);
-    return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid ${isSel?'var(--blue)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;background:${isSel?'var(--blue-light)':'var(--surface2)'}">
-      <input type="checkbox" data-org="${o.id}" ${isSel?'checked':''} style="accent-color:var(--blue);cursor:pointer"> ${esc(o.name)}
-    </label>`;
-  }).join('');
+function openEditManager(email,name,phone,active,isSuper,allowedFiles=[],tabPerms={}){
   showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--purple)"></i> עריכת מנהל</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm)" dir="ltr">${esc(email)}</div>
     <div class="form-row"><label class="form-label">שם *</label><input class="form-input" id="mgr-edit-name" value="${esc(name)}"></div>
@@ -3631,10 +3661,20 @@ function openEditManager(email,name,phone,active,isSuper,allowedOrgs=[]){
     <div class="form-row"><label class="form-label">סטטוס</label><select class="form-input" id="mgr-edit-active"><option value="true" ${active?'selected':''}>פעיל</option><option value="false" ${!active?'selected':''}>מושבת</option></select></div>
     <div class="form-row"><label class="form-label">סוג</label><select class="form-input" id="mgr-edit-super"><option value="false" ${!isSuper?'selected':''}>מנהל רגיל</option><option value="true" ${isSuper?'selected':''}>סופר מנהל</option></select></div>
     <div class="form-row">
-      <label class="form-label">גישה לארגונים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכולם)</span></label>
-      <div id="mgr-edit-orgs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">${orgOpts}</div>
+      <label class="form-label">טאבים גלויים במסך אדמין <span style="color:var(--text3);font-weight:400">(לא רלוונטי לסופר מנהל — רואה הכל)</span></label>
+      <div id="mgr-edit-tabs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">${mgrTabChecklistHTML(tabPerms)}</div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">הרשאת קבצים <span style="color:var(--text3);font-weight:400">(ריק = גישה לכל הקבצים; לא רלוונטי לסופר מנהל)</span></label>
+      <div id="mgr-edit-files" style="margin-top:6px;max-height:260px;overflow-y:auto;padding-left:2px">${mgrFileChecklistHTML(allowedFiles)}</div>
     </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-purple" onclick="saveEditManager('${esc(email)}')"><i class="ti ti-check"></i> שמור</button></div>`);
+}
+
+function collectMgrTabPerms(containerId){
+  const tp={};
+  document.querySelectorAll(`#${containerId} input[type=checkbox]`).forEach(el=>{ tp[el.dataset.tab]=el.checked; });
+  return tp;
 }
 
 async function saveNewManager(){
@@ -3642,10 +3682,11 @@ async function saveNewManager(){
   const name=document.getElementById('mgr-new-name').value.trim();
   const phone=document.getElementById('mgr-new-phone').value.trim();
   const isSuper=document.getElementById('mgr-new-super').value==='true';
-  const allowedOrgs=[...document.querySelectorAll('#mgr-new-orgs input[type=checkbox]:checked')].map(el=>el.dataset.org);
+  const allowedFiles=[...document.querySelectorAll('#mgr-new-files input[type=checkbox]:checked')].map(el=>el.dataset.file);
+  const tabPerms=collectMgrTabPerms('mgr-new-tabs');
   if(!email||!name){showAlert('יש למלא מייל ושם','error');return;}
   try{
-    await POST('app_managers',{email,name,phone,active:true,is_super_admin:isSuper,allowed_orgs:allowedOrgs});
+    await POST('app_managers',{email,name,phone,active:true,is_super_admin:isSuper,allowed_files:allowedFiles,tab_permissions:tabPerms});
     await loadManagersTab(); closeModal(); showAlert('המנהל נוסף בהצלחה','success');
   }catch(e){
     showAlert(e.message.includes('duplicate')||e.message.includes('unique')?'מייל זה כבר קיים':'שגיאה: '+e.message,'error');
@@ -3657,10 +3698,11 @@ async function saveEditManager(email){
   const phone=document.getElementById('mgr-edit-phone').value.trim();
   const active=document.getElementById('mgr-edit-active').value==='true';
   const isSuper=document.getElementById('mgr-edit-super').value==='true';
-  const allowedOrgs=[...document.querySelectorAll('#mgr-edit-orgs input[type=checkbox]:checked')].map(el=>el.dataset.org);
+  const allowedFiles=[...document.querySelectorAll('#mgr-edit-files input[type=checkbox]:checked')].map(el=>el.dataset.file);
+  const tabPerms=collectMgrTabPerms('mgr-edit-tabs');
   if(!name){showAlert('יש להזין שם','error');return;}
   try{
-    await PATCH('app_managers',{name,phone,active,is_super_admin:isSuper,allowed_orgs:allowedOrgs},`?email=eq.${encodeURIComponent(email)}`);
+    await PATCH('app_managers',{name,phone,active,is_super_admin:isSuper,allowed_files:allowedFiles,tab_permissions:tabPerms},`?email=eq.${encodeURIComponent(email)}`);
     await loadManagersTab(); closeModal(); showAlert('המנהל עודכן','success');
   }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
 }
@@ -4210,6 +4252,11 @@ async function saveFilePermissions(fileId){
 // Filter orgs by manager permissions
 function canManagerAccessOrg(orgId){
   if(currentUser?.is_super_admin) return true;
+  if(currentUser?.role==='manager'){
+    // הרשאת מנהלים כיום ברמת קובץ בלבד — ארגון "נגיש" אם יש בו לפחות קובץ אחד שהמנהל רשאי בו
+    return DB.files.some(f=>f.org_id===orgId && canManagerAccessFile(f));
+  }
+  // נציגים — עדיין ברמת ארגון (allowed_orgs)
   const allowedOrgs=currentUser?.allowed_orgs||[];
   if(!allowedOrgs.length) return true; // no restriction
   return allowedOrgs.includes(orgId);
@@ -4218,9 +4265,11 @@ function canManagerAccessOrg(orgId){
 // Filter files by manager permissions
 function canManagerAccessFile(file){
   if(currentUser?.is_super_admin) return true; // אדיר רואה הכל
-  const allowed=file.allowed_managers||[];
-  if(!allowed.length) return true; // אין הגבלה
-  return allowed.includes(currentUser?.email||'');
+  const allowedByFile=file.allowed_managers||[];
+  if(allowedByFile.length && !allowedByFile.includes(currentUser?.email||'')) return false;
+  const allowedByManager=currentUser?.allowed_files||[];
+  if(allowedByManager.length && !allowedByManager.includes(file.id)) return false;
+  return true;
 }
 
 function buildAlertRuleHTML(f){
