@@ -431,7 +431,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.50'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.51'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1456,7 +1456,7 @@ function renderRecordsPage(){
       return v.toLowerCase().includes(val.toLowerCase());
     });
   });
-  if(S.chatFilter==='open') filtered=filtered.filter(r=>recordChatStatus(r)==='open');
+  if(S.chatFilter==='open'||S.chatFilter==='closed') filtered=filtered.filter(r=>recordChatStatus(r)===S.chatFilter);
   const sortable=(col,label,cls='')=>{
     const active=S.sortCol===col;
     const arrow=active?(S.sortDir===1?'↑':'↓'):'';
@@ -1589,7 +1589,7 @@ function renderRecordsPage(){
     const delC=isAdmin&&!_bulkMode?`<td><button class="btn btn-xs btn-danger" onclick="confirmDelRecord('${r.id}','${S.fileId}')"><i class="ti ti-trash"></i></button></td>`:(isAdmin?'<td></td>':'');
     const isBreached=isAdmin&&recordMatchesAlert(r,f);
     const isChatOpen=recordChatStatus(r)==='open';
-    const trStyle=`${isSelected?'background:var(--blue-light);':isChatOpen?'background:#fef2f2;box-shadow:inset 3px 0 0 #dc2626;':isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
+    const trStyle=`${isSelected?'background:var(--blue-light);':isChatOpen?'background:#fecaca;box-shadow:inset 4px 0 0 #b91c1c;':isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
     const coreC=(cf.first_name!==false?`<td><strong>${esc(r.first_name)}</strong></td>`:'')+(cf.last_name!==false?`<td>${esc(r.last_name)}</td>`:'')+(cf.phone!==false?`<td dir="ltr">${esc(r.phone)}</td>`:'')+(cf.id_num!==false?`<td dir="ltr">${esc(r.id_num)}</td>`:'');
     return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td>${coreC}${extraC}${agentC}${adminC}${treatedC}${noteC}${histC}${delC}</tr>`;
   }).join('');
@@ -1601,9 +1601,10 @@ function renderRecordsPage(){
   ];
 
   const hasChatFields=[...extraFields,...adminFields].some(fld=>fld.chatEnabled);
-  const chatFilterHTML=hasChatFields?`<select onchange="setChatFilter(this.value)" style="border-color:${S.chatFilter==='open'?'#dc2626':''}">
-    <option value="">כל הסטטוסים</option>
-    <option value="open" ${S.chatFilter==='open'?'selected':''}>🔴 פתוח — ממתין לתגובת מנהל</option>
+  const chatFilterHTML=hasChatFields?`<select onchange="setChatFilter(this.value)" style="border-color:${S.chatFilter==='open'?'#b91c1c':S.chatFilter==='closed'?'var(--border2)':''}">
+    <option value="">כל הצבעים</option>
+    <option value="open" ${S.chatFilter==='open'?'selected':''}>🔴 אדום — פתוח, ממתין לתגובת מנהל</option>
+    <option value="closed" ${S.chatFilter==='closed'?'selected':''}>⚪ לבן — סגור</option>
   </select>`:'';
   const filterBar=(allFilterableFields.length||hasChatFields)?`<div class="filter-bar">
     <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
