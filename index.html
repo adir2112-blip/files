@@ -431,7 +431,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.48'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.49'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -933,7 +933,7 @@ function renderOrgs(){
 
 // FILES
 function renderFiles(){
-  const orgFiles=DB.files.filter(f=>f.org_id===S.orgId);
+  const orgFiles=DB.files.filter(f=>f.org_id===S.orgId && (currentUser?.role!=='manager' || canManagerAccessFile(f)));
   if(!orgFiles.length) return `<div class="empty"><i class="ti ti-folder-off"></i><p>אין קבצים לארגון זה.</p></div>`;
   const org=DB.orgs.find(o=>o.id===S.orgId);
   return `<div class="page-title">${org?esc(org.name):''}</div><div class="page-sub">בחר קובץ לעדכון</div>
@@ -2042,8 +2042,12 @@ function renderAdminAgents(){
 
 function renderAdminAllRecords(){
   if(S._loadingRecords) return `<div class="loading"><div class="spinner"></div><p>טוען...</p></div>`;
-  if(!_allRecords.length) return `<div class="empty"><i class="ti ti-database-off"></i><p>אין רשומות</p></div>`;
-  const rows=_allRecords.map(r=>{
+  const visibleRecords=_allRecords.filter(r=>{
+    const f=DB.files.find(x=>x.id===r.file_id);
+    return f && canManagerAccessFile(f) && canManagerAccessOrg(f.org_id);
+  });
+  if(!visibleRecords.length) return `<div class="empty"><i class="ti ti-database-off"></i><p>אין רשומות</p></div>`;
+  const rows=visibleRecords.map(r=>{
     const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));
     return `<tr>
       <td><span class="badge badge-neutral">${esc(o?o.name:'')}</span></td>
@@ -2059,7 +2063,7 @@ function renderAdminAllRecords(){
     </tr>`;
   }).join('');
   return `<div class="flex-between" style="margin-bottom:14px">
-    <span style="font-size:13px;color:var(--text2);font-weight:600">${_allRecords.length} רשומות סה"כ</span>
+    <span style="font-size:13px;color:var(--text2);font-weight:600">${visibleRecords.length} רשומות סה"כ</span>
     <button class="btn btn-sm btn-success" onclick="exportAll()"><i class="ti ti-download"></i> ייצוא Excel</button>
   </div>
   <div class="table-wrap"><table><thead><tr><th>ארגון</th><th>קובץ</th><th>תאריך</th><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>ת"ז</th><th>נציג</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -2424,11 +2428,13 @@ async function loadDashDataForPeriod(){
       else S._dashboardData.push({file:f, total, breached});
     }catch(e){}
   }));
-  // ensure all files present
-  DB.files.forEach(f=>{
+  // ensure all accessible files present
+  DB.files.filter(f=>canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)).forEach(f=>{
     if(!S._dashboardData) S._dashboardData=[];
     if(!S._dashboardData.find(d=>d.file.id===f.id)) S._dashboardData.push({file:f,total:0,breached:0});
   });
+  // drop any stale entries for files the manager no longer has access to
+  if(S._dashboardData) S._dashboardData=S._dashboardData.filter(d=>canManagerAccessFile(d.file)&&canManagerAccessOrg(d.file.org_id));
 }
 
 function renderAdminDashboard(){
@@ -2543,7 +2549,8 @@ async function loadTrendsTab(){
   S.adminTab='trends'; S._trendsLoading=true; render();
   try{
     await loadAll();
-    if(!_trendsFileId && DB.files.length) _trendsFileId = DB.files[0].id;
+    const accessibleFiles=DB.files.filter(f=>canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id));
+    if(!accessibleFiles.find(f=>f.id===_trendsFileId)) _trendsFileId = accessibleFiles.length ? accessibleFiles[0].id : null;
   }catch(e){}
   S._trendsLoading=false;
   if(_trendsFileId) await loadTrendData();
@@ -2577,12 +2584,13 @@ function onTrendFileChange(id){ _trendsFileId=id; loadTrendData(); }
 function onTrendRangeChange(days){ _trendsRange=parseInt(days); loadTrendData(); }
 
 function renderAdminTrends(){
-  const fileOpts = DB.files.map(f=>{
+  const trendFiles = DB.files.filter(f=>canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id));
+  const fileOpts = trendFiles.map(f=>{
     const o=DB.orgs.find(x=>x.id===f.org_id);
     return `<option value="${f.id}" ${_trendsFileId===f.id?'selected':''}>${esc(o?o.name+' › ':'')}${esc(f.name)}</option>`;
   }).join('');
 
-  if(!DB.files.length) return `<div class="empty"><i class="ti ti-chart-line"></i><p>אין קבצים במערכת</p></div>`;
+  if(!trendFiles.length) return `<div class="empty"><i class="ti ti-chart-line"></i><p>אין קבצים זמינים</p></div>`;
 
   const maxCount = Math.max(1, ...(_trendData.map(d=>d.count)));
   const totalInRange = _trendData.reduce((s,d)=>s+d.count,0);
@@ -2669,7 +2677,8 @@ async function loadPerformanceTab(){
   S.adminTab='perf'; S._perfLoading=true; render();
   try{
     await loadAll();
-    const allRecs = await GET('records','?select=agent_name,created_at,admin_data,treated_at,file_id');
+    const accessibleFileIds=new Set(DB.files.filter(f=>canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)).map(f=>f.id));
+    const allRecs = (await GET('records','?select=agent_name,created_at,admin_data,treated_at,file_id')).filter(r=>accessibleFileIds.has(r.file_id));
     // group by agent
     const byAgent = {};
     allRecs.forEach(r=>{
@@ -4721,7 +4730,11 @@ async function exportFile(fileId){
 async function exportAll(){
   showAlert('מכין קובץ Excel...','success');
   const headers=['ארגון','קובץ','תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג'];
-  const rows=_allRecords.map(r=>{const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));return[o?o.name:'',f?f.name:'',fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||''];});
+  const visibleRecords=_allRecords.filter(r=>{
+    const f=DB.files.find(x=>x.id===r.file_id);
+    return f && canManagerAccessFile(f) && canManagerAccessOrg(f.org_id);
+  });
+  const rows=visibleRecords.map(r=>{const f=DB.files.find(x=>x.id===r.file_id),o=DB.orgs.find(x=>x.id===(f&&f.org_id));return[o?o.name:'',f?f.name:'',fmtDate(r.created_at),r.first_name,r.last_name,r.phone,r.id_num,r.agent_name||''];});
   buildXLSX('כל_הרשומות',headers,rows,[]);
 }
 function buildXLSX(filename,headers,rows,adminColIdxs){
