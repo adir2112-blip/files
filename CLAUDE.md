@@ -37,6 +37,20 @@
 נתוני אמת. זו נקודת תורפה מוכרת בגישה הזו — אם בעתיד המשתמש ירצה בידוד מלא, יידרש מסד
 Supabase שני.
 
+## נקודות שחזור יציבות (git tags)
+
+כשהמשתמש מבקש "לגבות" את המערכת כגרסה יציבה — יוצרים git tag על `main` בשם
+`stable-<VERSION>` (למשל `stable-1.0.53`), עם הודעה שכוללת תאריך ואת הפקודות
+לשחזור, ודוחפים אותו ל-`origin` (`git push origin stable-<VERSION>`). ה-tag
+נשאר בריפו לצמיתות ונגיש מכל שיחה עתידית דרך `git tag -l -n99` או `git log --all --oneline --decorate`.
+
+**לשחזור נקודת שחזור בעתיד**:
+```
+git fetch origin --tags
+git checkout stable-<VERSION> -- index.html version.txt
+```
+ואז ממשיכים בתהליך הרגיל (commit על main, בדיקה בדמה, ורק אחרי אישור — עלייה ל-production).
+
 ## גישה טכנית
 
 - אין build step — קובץ HTML יחיד, בלי תלות ב-node/npm.
