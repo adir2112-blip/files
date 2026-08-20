@@ -431,7 +431,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.52'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.53'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4636,13 +4636,16 @@ function onTypeChange(p,i,val){
   if(val!=='select') arr[i].options='';
   refreshFields(p);
 }
+function sortOptionsHe(opts){
+  return [...opts].sort((a,b)=>a.localeCompare(b,'he'));
+}
 function addFieldOption(p,i,val){
   val=(val||'').trim(); if(!val) return;
   saveFieldsFromDOM(p);
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
   const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
   if(!opts.includes(val)) opts.push(val);
-  arr[i].options=opts.join(',');
+  arr[i].options=sortOptionsHe(opts).join(',');
   refreshFields(p);
 }
 function removeFieldOption(p,i,oi){
@@ -4650,7 +4653,7 @@ function removeFieldOption(p,i,oi){
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
   const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
   opts.splice(oi,1);
-  arr[i].options=opts.join(',');
+  arr[i].options=sortOptionsHe(opts).join(',');
   refreshFields(p);
 }
 function onDependsOnChange(p,i,val){
