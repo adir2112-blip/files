@@ -467,7 +467,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.100'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.101'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4908,14 +4908,15 @@ async function saveOrgPermissions(orgId){
 // Filter orgs by manager permissions
 function canManagerAccessOrg(orgId){
   if(currentUser?.is_super_admin) return true;
-  const org=DB.orgs.find(o=>o.id===orgId);
-  const allowedByOrg=org?.allowed_managers||[];
-  if(allowedByOrg.length && !allowedByOrg.includes(currentUser?.email||'')) return false;
   if(currentUser?.role==='manager'){
+    // הרשאת ארגון (allowed_managers על הארגון) שייכת למנהלים בלבד — לא נוגעת לנציגים בכלל
+    const org=DB.orgs.find(o=>o.id===orgId);
+    const allowedByOrg=org?.allowed_managers||[];
+    if(allowedByOrg.length && !allowedByOrg.includes(currentUser?.email||'')) return false;
     // הרשאת מנהלים ברמת קובץ — ארגון "נגיש" אם יש בו לפחות קובץ אחד שהמנהל רשאי בו
     return DB.files.some(f=>f.org_id===orgId && canManagerAccessFile(f));
   }
-  // נציגים — עדיין ברמת ארגון (allowed_orgs)
+  // נציגים — עדיין ברמת ארגון (allowed_orgs), לא מושפעים מהרשאת ארגון של מנהלים
   const allowedOrgs=currentUser?.allowed_orgs||[];
   if(!allowedOrgs.length) return true; // no restriction
   return allowedOrgs.includes(orgId);
@@ -4924,6 +4925,9 @@ function canManagerAccessOrg(orgId){
 // Filter files by manager permissions
 function canManagerAccessFile(file){
   if(currentUser?.is_super_admin) return true; // אדיר רואה הכל
+  // הרשאות אלו (allowed_managers על ארגון/קובץ, allowed_files על מנהל) הן ענייני מנהלים
+  // בלבד — לא נוגעות לנציגים, שמוגבלים ברמת ארגון בלבד דרך allowed_orgs
+  if(currentUser?.role!=='manager') return true;
   const org=DB.orgs.find(o=>o.id===file.org_id);
   const allowedByOrg=org?.allowed_managers||[];
   if(allowedByOrg.length && !allowedByOrg.includes(currentUser?.email||'')) return false;
