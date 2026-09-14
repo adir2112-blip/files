@@ -467,7 +467,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.102'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.103'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1770,7 +1770,7 @@ function renderRecordsPage(){
     const isClosed=!!r.closed_at;
     const trStyle=`${isSelected?'background:var(--blue-light);':isClosed?'background:#bbf7d0;box-shadow:inset 4px 0 0 #15803d;':isChatOpen?'background:#fecaca;box-shadow:inset 4px 0 0 #b91c1c;':isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
     const closeC=(isAdmin&&f.allow_close_record&&!_bulkMode)?(isClosed
-      ?`<td style="text-align:center"><button class="btn btn-xs" style="background:#dcfce7;border-color:#86efac;color:#15803d" onclick="event.stopPropagation();closeRecord('${r.id}','${S.fileId}',false)" title="${esc(r.closed_by||'')} · ${r.closed_at?fmtDate(r.closed_at):''}"><i class="ti ti-circle-check-filled"></i> סגור</button></td>`
+      ?`<td style="text-align:center"><button class="btn btn-xs" style="background:#dcfce7;border-color:#86efac;color:#15803d" onclick="event.stopPropagation();closeRecord('${r.id}','${S.fileId}',false)" title="${esc(r.closed_by||'')}${r.closed_by_is_pm?' (מנהל פרויקט)':''} · ${r.closed_at?fmtDate(r.closed_at):''}"><i class="ti ti-circle-check-filled"></i> סגור${r.closed_by_is_pm?' <i class="ti ti-crown" style="font-size:10px"></i>':''}</button></td>`
       :`<td style="text-align:center"><button class="btn btn-xs" onclick="event.stopPropagation();closeRecord('${r.id}','${S.fileId}',true)">סגור רשומה</button></td>`)
       :(isAdmin&&f.allow_close_record?'<td></td>':'');
     const coreC=(cf.first_name!==false?`<td><strong>${esc(r.first_name)}</strong></td>`:'')+(cf.last_name!==false?`<td>${esc(r.last_name)}</td>`:'')+(cf.phone!==false?`<td dir="ltr">${esc(r.phone)}</td>`:'')+(cf.id_num!==false?`<td dir="ltr">${esc(r.id_num)}</td>`:'');
@@ -2542,15 +2542,18 @@ async function sendChatMsg(){
   };
   record.field_comments[_chatFieldId].push(msg);
 
-  // תגובת נציג מבטלת "סגירת רשומה" — הקריאה נפתחת מחדש עד שמנהל יטפל וייסגור שוב
+  // תגובת נציג מבטלת "סגירת רשומה" — הקריאה נפתחת מחדש עד שמנהל יטפל וייסגור שוב.
+  // בנוסף: אם מנהל פרויקט סגר את הרשומה, ואחר כך מנהל רגיל (לא מנהל פרויקט) מגיב בצ'אט —
+  // הרשומה נפתחת מחדש גם כן (סימן שיש עוד מה לבדוק, גם אם המנהל שסגר חשב שהטיפול הושלם)
   const wasClosed=!!record.closed_at;
-  const reopening=msg.role==='agent'&&wasClosed;
+  const managerReopens=msg.role==='manager'&&!!record.closed_by_is_pm&&!isProjectManager();
+  const reopening=wasClosed&&(msg.role==='agent'||managerReopens);
   const patchBody={field_comments:record.field_comments};
-  if(reopening){ patchBody.closed_at=null; patchBody.closed_by=null; }
+  if(reopening){ patchBody.closed_at=null; patchBody.closed_by=null; patchBody.closed_by_is_pm=false; }
 
   try{
     await PATCH('records',patchBody,`?id=eq.${_chatRecordId}`);
-    if(reopening){ record.closed_at=null; record.closed_by=null; }
+    if(reopening){ record.closed_at=null; record.closed_by=null; record.closed_by_is_pm=false; }
     // update popup messages
     const list=document.getElementById('chat-messages-list');
     if(list){
@@ -2562,7 +2565,7 @@ async function sendChatMsg(){
     }
     // מעדכן את צביעת השורה בטבלה (פתוח/סגור) מיד, בלי לסגור את הפופ-אפ
     if(S.view==='records') render();
-    if(reopening) showAlert('הרשומה נפתחה מחדש — הנציג הגיב','success');
+    if(reopening) showAlert(managerReopens?'הרשומה נפתחה מחדש — מנהל הגיב על סגירה של מנהל פרויקט':'הרשומה נפתחה מחדש — הנציג הגיב','success');
   }catch(e){ showAlert('שגיאה בשמירת הערה','error'); }
   input.disabled=false;
   input.focus();
@@ -4429,10 +4432,13 @@ async function closeRecord(recordId,fileId,close){
   const record=recs.find(r=>r.id===recordId); if(!record) return;
   const closed_at=close?new Date().toISOString():null;
   const closed_by=close?(currentUser?.name||_agentName||'מנהל'):null;
+  // נשמר כדי שתגובת מנהל רגיל בצ'אט תוכל לפתוח מחדש רשומה שנסגרה ע"י מנהל פרויקט
+  const closed_by_is_pm=close?isProjectManager():false;
   try{
-    await PATCH('records',{closed_at,closed_by},`?id=eq.${recordId}`);
+    await PATCH('records',{closed_at,closed_by,closed_by_is_pm},`?id=eq.${recordId}`);
     record.closed_at=closed_at;
     record.closed_by=closed_by;
+    record.closed_by_is_pm=closed_by_is_pm;
     render();
     showAlert(close?'הרשומה סומנה כסגורה':'הרשומה נפתחה מחדש','success');
   }catch(e){ showAlert('שגיאה בעדכון סטטוס','error'); }
