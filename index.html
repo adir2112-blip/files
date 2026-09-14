@@ -467,7 +467,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.101'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.102'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -751,6 +751,9 @@ function recordMatchesAlert(record, file){
     if(age < parseFloat(rule.days)) return false;
   }
 
+  // ערך מיוחד: "עד סגירת רשומה" — במקום שדה, בודקים אם הרשומה נסגרה
+  if(rule.fieldId==='__closed__') return !record.closed_at;
+
   // get field value (extra or admin)
   const extraFields = file.extra_fields||[];
   const adminFields = file.admin_fields||[];
@@ -763,6 +766,28 @@ function recordMatchesAlert(record, file){
   if(rule.condition==='not_value') return val !== (rule.value||'');
   if(rule.condition==='value')     return val === (rule.value||'');
   return false;
+}
+// כמה ימי עסקים עברו מאז היצירה, כל עוד תנאי ה"עדיין פתוח" של כלל ה-SLA מתקיים —
+// ללא קשר לסף הימים שמוגדר בכלל (משמש לתצוגה חיה מתחת לתאריך יצירה בטבלה)
+function recordOpenBusinessDays(record, file){
+  const rule = file.alert_rule||{};
+  if(!rule.enabled || !rule.fieldId) return null;
+  let stillOpen;
+  if(rule.fieldId==='__closed__'){
+    stillOpen = !record.closed_at;
+  } else {
+    const adminFields = file.admin_fields||[];
+    const isAdmin = adminFields.find(f=>f.id===rule.fieldId);
+    const val = isAdmin
+      ? ((record.admin_data||{})[rule.fieldId]||'').toString()
+      : ((record.extra||{})[rule.fieldId]||'').toString();
+    if(rule.condition==='empty')          stillOpen = !val || val.trim()==='';
+    else if(rule.condition==='not_value') stillOpen = val !== (rule.value||'');
+    else if(rule.condition==='value')     stillOpen = val === (rule.value||'');
+    else stillOpen = false;
+  }
+  if(!stillOpen) return null;
+  return businessDaysBetween(new Date(record.created_at), new Date());
 }
 
 // "פתוח" = יש לפחות שרשור הערות אחד שבו התגובה האחרונה היא של נציג וטרם נענתה על ידי מנהל
@@ -797,7 +822,7 @@ async function loadAlertCounts(){
   if(!filesWithAlerts.length) return;
   await Promise.all(filesWithAlerts.map(async f=>{
     try{
-      const recs = await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+      const recs = await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,field_comments`);
       _alertCounts[f.id] = recs.filter(r=>recordMatchesAlert(r,f)).length;
       _fieldPendingCounts[f.id] = recs.filter(r=>recordFieldPending(r,f)).length;
     }catch(e){ _alertCounts[f.id]=0; _fieldPendingCounts[f.id]=0; }
@@ -1749,7 +1774,9 @@ function renderRecordsPage(){
       :`<td style="text-align:center"><button class="btn btn-xs" onclick="event.stopPropagation();closeRecord('${r.id}','${S.fileId}',true)">סגור רשומה</button></td>`)
       :(isAdmin&&f.allow_close_record?'<td></td>':'');
     const coreC=(cf.first_name!==false?`<td><strong>${esc(r.first_name)}</strong></td>`:'')+(cf.last_name!==false?`<td>${esc(r.last_name)}</td>`:'')+(cf.phone!==false?`<td dir="ltr">${esc(r.phone)}</td>`:'')+(cf.id_num!==false?`<td dir="ltr">${esc(r.id_num)}</td>`:'');
-    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}</td>${coreC}${extraC}${agentC}${adminC}${treatedC}${noteC}${closeC}${histC}${delC}</tr>`;
+    const openDays=recordOpenBusinessDays(r,f);
+    const dateC=`<td style="font-size:12px;white-space:nowrap;color:var(--text3)">${fmtDate(r.created_at)}${openDays!=null?`<div style="color:#c2410c;font-weight:700;font-size:11px;margin-top:2px"><i class="ti ti-clock-exclamation" style="font-size:10px"></i> ${openDays} ימי עסקים</div>`:''}</td>`;
+    return `<tr style="${trStyle}" onclick="${_bulkMode?`event.stopPropagation();toggleRowSelect('${r.id}')`:''}">${bulkCb}${dateC}${coreC}${extraC}${agentC}${adminC}${treatedC}${noteC}${closeC}${histC}${delC}</tr>`;
   }).join('');
 
   // שדות זמינים לסינון (extra + admin) — רק אלה שהאדמין הפעיל במפורש בהגדרות סינון לטופס.
@@ -2101,7 +2128,7 @@ async function loadMonitorData(){
   const filesWithSLA=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false);
   const results=await Promise.all(filesWithSLA.map(async f=>{
     try{
-      const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,extra,admin_data`);
+      const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,extra,admin_data,closed_at,field_comments`);
       const breached=recs.filter(r=>recordMatchesAlert(r,f));
       const pending=recs.filter(r=>recordFieldPending(r,f));
       let oldestDays=null;
@@ -2820,7 +2847,7 @@ async function loadDashDataForPeriod(){
       // שולפים את כל הרשומות (בלי סינון תאריך) — חריגה היא מצב "עכשיו" (תלוי בגיל הרשומה),
       // ולא בהכרח נופלת בטווח התאריכים של תקופת התצוגה. סינון לפי תקופה כאן היה מסתיר
       // חריגות אמיתיות ברשומות שנוצרו מחוץ לתקופה (למשל "היום") למרות שהן חורגות עכשיו.
-      const params=`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,escalated_at`;
+      const params=`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,escalated_at,field_comments`;
       const recs = await GET('records', params);
       const inPeriod = (from||to) ? recs.filter(r=>{const t=new Date(r.created_at).getTime();return (!from||t>=new Date(from).getTime())&&(!to||t<new Date(to).getTime());}) : recs;
       const total = inPeriod.length;
@@ -3522,7 +3549,7 @@ async function sendDailyReportNow(silent=false){
   await Promise.all(filesToCheck.map(async f=>{
     if(!f.alert_rule?.enabled||!f.alert_rule?.fieldId) return;
     try{
-      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,field_comments`);
       const breached=recs.filter(r=>recordMatchesAlert(r,f)).length;
       if(breached>0){
         const contacts=(f.wa_contacts||[]).map(c=>c.name).filter(Boolean);
@@ -3591,7 +3618,7 @@ async function buildWeeklyData(){
         const from=day.key+'T00:00:00.000Z';
         const to=day.key+'T23:59:59.999Z';
         // count records created that day
-        const recs=await GET('records',`?file_id=eq.${f.id}&created_at=gte.${encodeURIComponent(from)}&created_at=lte.${encodeURIComponent(to)}&select=id,created_at,extra,admin_data`);
+        const recs=await GET('records',`?file_id=eq.${f.id}&created_at=gte.${encodeURIComponent(from)}&created_at=lte.${encodeURIComponent(to)}&select=id,created_at,extra,admin_data,closed_at,field_comments`);
         const breached=recs.filter(r=>recordMatchesAlert(r,f)).length;
         breachData[f.id][day.key]=breached;
       }catch(e){ breachData[f.id][day.key]=0; }
@@ -3964,7 +3991,7 @@ async function checkAndSendWAAlerts(silent=false){
 
   await Promise.all(filesWithAlerts.map(async f=>{
     try{
-      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,field_comments`);
       const breached=recs.filter(r=>recordMatchesAlert(r,f));
       if(!breached.length) return;
       totalBreached+=breached.length;
@@ -4954,8 +4981,11 @@ function managerCanAccessFile(mgr,file){
 function buildAlertRuleHTML(f){
   const rule = f.alert_rule||{};
   const allFields = [...(f.extra_fields||[]),...(f.admin_fields||[])];
-  if(!allFields.length) return `<div style="font-size:13px;color:var(--text3)">יש להגדיר שדות תחילה</div>`;
+  const isSpecial = rule.fieldId==='__closed__'||rule.fieldId==='__chat_open__';
+  if(!allFields.length && !isSpecial && !f.allow_close_record) return `<div style="font-size:13px;color:var(--text3)">יש להגדיר שדות תחילה</div>`;
 
+  const specialOpts = (f.allow_close_record?`<option value="__closed__" ${rule.fieldId==='__closed__'?'selected':''}>🔒 סגירת רשומה</option>`:'')
+    + `<option value="__chat_open__" ${rule.fieldId==='__chat_open__'?'selected':''}>💬 סטטוס טיפול (פתוח)</option>`;
   const fieldOpts = allFields.map(fld=>`<option value="${fld.id}" ${rule.fieldId===fld.id?'selected':''}>${esc(fld.label)}</option>`).join('');
   const selField = allFields.find(fld=>fld.id===rule.fieldId);
 
@@ -4998,15 +5028,16 @@ function buildAlertRuleHTML(f){
         <div style="display:grid;grid-template-columns:auto 1fr auto 1fr;gap:10px;align-items:center">
           <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap">ושדה</span>
           <select class="form-input" id="ar-field" style="font-size:13px;padding:6px 10px" onchange="refreshAlertModal()">
-            <option value="">בחר שדה...</option>${fieldOpts}
+            <option value="">בחר שדה...</option>${specialOpts}${fieldOpts}
           </select>
+          ${isSpecial?`<span style="font-size:13px;color:var(--text3);grid-column:span 2">${rule.fieldId==='__closed__'?'התנאי: הרשומה עדיין לא נסגרה':'התנאי: יש הודעת נציג שטרם נענתה'}</span>`:`
           <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap">הוא</span>
           <div style="display:flex;gap:8px">
             <select class="form-input" id="ar-condition" style="font-size:13px;padding:6px 10px" onchange="refreshAlertModal()">
               ${condOpts}
             </select>
             ${valueInput?`<div id="ar-value-wrap">${valueInput}</div>`:''}
-          </div>
+          </div>`}
         </div>
         <div style="margin-top:10px;font-size:12px;color:var(--text3)">
           <i class="ti ti-info-circle"></i> השאר ימים ריק או 0 לבדיקה ללא תנאי זמן
@@ -6280,7 +6311,7 @@ function startEmailAlertTimers(){
 
       // check breaches
       try{
-        const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data`);
+        const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,field_comments`);
         const breached=recs.filter(r=>recordMatchesAlert(r,f)).length;
         if(!breached) return;
         await sendAlertEmail(f, breached);
