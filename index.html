@@ -467,7 +467,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.103'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.104'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -703,7 +703,6 @@ let _pendingCounts={};
 let _waAutoTimer=null;
 let _backupTimer=null;
 let _waPolicy=null;
-let _waHistory=[];
 
 async function loadAll(){[DB.orgs,DB.files]=await Promise.all([GET('organizations','?order=created_at.asc'),GET('files','?order=created_at.asc')]);}
 async function getRecords(fileId, archiveMode=false){
@@ -3796,12 +3795,52 @@ async function loadWAAlertsTab(){
     const stored = localStorage.getItem('moked_wa_policy');
     _waPolicy = stored ? JSON.parse(stored) : defaultWAPolicy();
   }catch(e){ _waPolicy = defaultWAPolicy(); }
-  // load history
-  try{
-    const stored = localStorage.getItem('moked_wa_history');
-    _waHistory = stored ? JSON.parse(stored) : [];
-  }catch(e){ _waHistory = []; }
+  await loadWALog();
+}
+
+// ── היסטוריית שליחת וואטסאפ — נשמרת בשרת (wa_log), משותפת לכל השליחות ──
+// (אוטומטיות מהשרת וגם ידניות מהדפדפן) כדי שהתצוגה תשקף את מה שבאמת נשלח
+const WA_LOG_PERIODS=[
+  {key:'today', label:'היום'},
+  {key:'yesterday', label:'אתמול'},
+  {key:'2days', label:'שלשום'},
+  {key:'week', label:'שבוע אחרון'},
+  {key:'month', label:'חודש אחרון'},
+  {key:'all', label:'הכל'},
+];
+function waLogPeriodRange(key){
+  const now=new Date();
+  const startOfDay=(d)=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  if(key==='today') return {from:startOfDay(now), to:null};
+  if(key==='yesterday'){ const y=new Date(now); y.setDate(y.getDate()-1); return {from:startOfDay(y), to:startOfDay(now)}; }
+  if(key==='2days'){ const d2=new Date(now); d2.setDate(d2.getDate()-2); const d1=new Date(now); d1.setDate(d1.getDate()-1); return {from:startOfDay(d2), to:startOfDay(d1)}; }
+  if(key==='week'){ const w=new Date(now); w.setDate(w.getDate()-7); return {from:w, to:null}; }
+  if(key==='month'){ const m=new Date(now); m.setMonth(m.getMonth()-1); return {from:m, to:null}; }
+  return {from:null, to:null};
+}
+async function loadWALog(){
+  S._waLogFilter = S._waLogFilter || {period:'today', recipient:''};
+  const {from,to} = waLogPeriodRange(S._waLogFilter.period);
+  let params = '?order=sent_at.desc&limit=300';
+  if(from) params += `&sent_at=gte.${encodeURIComponent(from.toISOString())}`;
+  if(to) params += `&sent_at=lt.${encodeURIComponent(to.toISOString())}`;
+  if(S._waLogFilter.recipient) params += `&recipient_name=eq.${encodeURIComponent(S._waLogFilter.recipient)}`;
+  try{ S._waLogResults = await GET('wa_log', params); }catch(e){ S._waLogResults=[]; }
   render();
+}
+function setWALogPeriod(period){ S._waLogFilter=S._waLogFilter||{}; S._waLogFilter.period=period; loadWALog(); }
+function setWALogRecipient(recipient){ S._waLogFilter=S._waLogFilter||{}; S._waLogFilter.recipient=recipient; loadWALog(); }
+async function clearWALog(){
+  if(!confirm('למחוק את כל היסטוריית השליחה? הפעולה בלתי הפיכה.')) return;
+  try{ await DEL('wa_log','?id=gt.0'); showAlert('ההיסטוריה נמחקה','success'); await loadWALog(); }
+  catch(e){ showAlert('שגיאה במחיקה','error'); }
+}
+function waLogRecipientOptions(){
+  const names=new Set();
+  DB.files.forEach(f=>(f.wa_contacts||[]).forEach(c=>{ if(c.name) names.add(c.name); }));
+  names.add('קבוצת מנהל ובכירי אדיר');
+  names.add('דוח יומי');
+  return [...names].sort((a,b)=>a.localeCompare(b,'he'));
 }
 
 function defaultWAPolicy(){
@@ -3855,11 +3894,6 @@ function isWASendAllowed(policy){
   const hour = now.getHours();
   if(hour < policy.startHour || hour >= policy.endHour) return false;
   return true;
-}
-
-function addWAHistory(entries){
-  _waHistory = [...entries, ..._waHistory].slice(0,100); // keep last 100
-  localStorage.setItem('moked_wa_history', JSON.stringify(_waHistory));
 }
 
 function renderWAAlerts(){
@@ -3940,6 +3974,7 @@ function renderWAAlerts(){
                   <i class="ti ti-brand-whatsapp" style="color:#25d366"></i> ${esc(c.name)} <span dir="ltr" style="color:var(--text3)">${esc(c.phone)}</span>
                 </div>`).join('')}
                 ${rule.enabled?`<div style="font-size:11px;color:var(--amber);margin-top:4px"><i class="ti ti-clock"></i> SLA: ${rule.days||0} ימים</div>`:'<div style="font-size:11px;color:var(--text3);margin-top:4px">⚠️ אין תנאי SLA מוגדר</div>'}
+                <div style="font-size:11px;margin-top:2px;color:${f.wa_notify_group?'#25d366':'var(--text3)'}"><i class="ti ${f.wa_notify_group?'ti-users':'ti-user-x'}"></i> ${f.wa_notify_group?'שולח גם לקבוצה':'לא שולח לקבוצה'}</div>
                 <button class="btn btn-xs" style="margin-top:6px" onclick="openEditFile('${f.id}')"><i class="ti ti-edit"></i> ערוך</button>
               </div>`;
             }).join('')
@@ -3952,21 +3987,37 @@ function renderWAAlerts(){
     ${renderDailyReportSection()}
 
     <!-- HISTORY -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    ${renderWALogSection()}`;
+}
+function renderWALogSection(){
+  const filter=S._waLogFilter||{period:'today',recipient:''};
+  const results=S._waLogResults||[];
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
         <div class="card-title" style="margin-bottom:0"><i class="ti ti-history" style="color:#25d366"></i> היסטוריית שליחה</div>
-        ${_waHistory.length?`<button class="btn btn-xs btn-danger" onclick="if(confirm('למחוק היסטוריה?')){_waHistory=[];localStorage.removeItem('moked_wa_history');render();}"><i class="ti ti-trash"></i> נקה</button>`:''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="form-input" style="font-size:12px;padding:6px 10px" onchange="setWALogPeriod(this.value)">
+            ${WA_LOG_PERIODS.map(p=>`<option value="${p.key}" ${filter.period===p.key?'selected':''}>${p.label}</option>`).join('')}
+          </select>
+          <select class="form-input" style="font-size:12px;padding:6px 10px" onchange="setWALogRecipient(this.value)">
+            <option value="">כל הנמענים</option>
+            ${waLogRecipientOptions().map(n=>`<option value="${esc(n)}" ${filter.recipient===n?'selected':''}>${esc(n)}</option>`).join('')}
+          </select>
+          <button class="btn btn-xs" onclick="loadWALog()"><i class="ti ti-refresh"></i></button>
+          ${results.length?`<button class="btn btn-xs btn-danger" onclick="clearWALog()"><i class="ti ti-trash"></i> נקה הכל</button>`:''}
+        </div>
       </div>
-      ${!_waHistory.length
-        ? `<div class="empty" style="padding:20px"><i class="ti ti-inbox" style="font-size:30px"></i><p>אין היסטוריה עדיין</p></div>`
-        : `<div class="table-wrap"><table><thead><tr><th>תאריך ושעה</th><th>קובץ</th><th>נמען</th><th>טלפון</th><th>חריגות</th><th>סטטוס</th></tr></thead><tbody>
-          ${_waHistory.map(h=>`<tr>
-            <td style="white-space:nowrap;font-size:12px;color:var(--text3)">${fmtDate(h.ts)}</td>
-            <td style="font-size:13px">${esc(h.fileName||'')}</td>
-            <td style="font-size:13px">${esc(h.contactName||'')}</td>
-            <td dir="ltr" style="font-size:12px;color:var(--text3)">${esc(h.phone||'')}</td>
-            <td style="text-align:center"><span class="badge badge-warning">${h.breached||0}</span></td>
-            <td><span class="badge ${h.success?'badge-success':'badge-warning'}">${h.success?'✓ נשלח':'⚠ שגיאה'}</span></td>
+      ${!results.length
+        ? `<div class="empty" style="padding:20px"><i class="ti ti-inbox" style="font-size:30px"></i><p>אין שליחות בטווח שנבחר</p></div>`
+        : `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${results.length} שליחות</div>
+           <div class="table-wrap"><table><thead><tr><th>תאריך ושעה</th><th>סוג</th><th>קובץ</th><th>נמען</th><th>טלפון</th><th>סטטוס</th></tr></thead><tbody>
+          ${results.map(h=>`<tr>
+            <td style="white-space:nowrap;font-size:12px;color:var(--text3)">${fmtDate(h.sent_at)}</td>
+            <td style="font-size:11px;color:var(--text3)">${esc(h.msg_type||'')}</td>
+            <td style="font-size:13px">${esc(h.file_name||'')}</td>
+            <td style="font-size:13px">${esc(h.recipient_name||'')}</td>
+            <td dir="ltr" style="font-size:12px;color:var(--text3)">${esc(h.recipient_phone||'')}</td>
+            <td><span class="badge ${h.ok?'badge-success':'badge-warning'}">${h.ok?'✓ נשלח':'⚠ שגיאה'}</span></td>
           </tr>`).join('')}
           </tbody></table></div>`
       }
@@ -3990,7 +4041,7 @@ async function checkAndSendWAAlerts(silent=false){
   const filesWithAlerts=DB.files.filter(f=>canManagerAccessFile(f)&&f.active!==false&&f.alert_rule?.enabled&&f.alert_rule?.fieldId&&(f.wa_contacts||[]).length>0);
   if(!filesWithAlerts.length){if(!silent)showAlert('אין קבצים עם התראות WA מוגדרות','error');return;}
 
-  let totalSent=0,totalBreached=0;const msgs=[];const historyEntries=[];
+  let totalSent=0,totalBreached=0;const msgs=[];const logEntries=[];
 
   await Promise.all(filesWithAlerts.map(async f=>{
     try{
@@ -3998,29 +4049,28 @@ async function checkAndSendWAAlerts(silent=false){
       const breached=recs.filter(r=>recordMatchesAlert(r,f));
       if(!breached.length) return;
       totalBreached+=breached.length;
-      const org=DB.orgs.find(x=>x.id===f.org_id);
-      const rule=f.alert_rule||{};
-      const allFields=[...(f.extra_fields||[]),...(f.admin_fields||[])];
-      const fieldLabel=(allFields.find(x=>x.id===rule.fieldId)||{}).label||rule.fieldId;
       const dateStr=new Date().toLocaleDateString('he-IL');
       const msg=`מובמנט | ${dateStr}\n\n${f.name}: ${breached.length} פניות ממתינות לטיפול\n\nלכניסה: https://adir2112-blip.github.io/files/`;
       for(const contact of (f.wa_contacts||[])){
         const phone=formatWAPhone(contact.phone);
-        let success=true;
-        try{ await sendWA(phone,msg); }catch(e){ success=false; }
+        let ok=true;
+        try{ await sendWA(phone,msg); }catch(e){ ok=false; }
         totalSent++; msgs.push(`${contact.name} (${f.name})`);
-        historyEntries.push({ts:new Date().toISOString(),fileName:f.name,contactName:contact.name,phone,breached:breached.length,success});
+        logEntries.push({recipient_name:contact.name,recipient_phone:phone,file_name:f.name,msg_type:'SLA',ok});
       }
-      // שליחה לקבוצה
-      try{
-        await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({phone:'120363429161263528@g.us',message:msg,source:'מערכת קבצים'})});
-        historyEntries.push({ts:new Date().toISOString(),fileName:f.name,contactName:'קבוצה',phone:'120363429161263528@g.us',breached:breached.length,success:true});
-      }catch(e){}
+      // שליחה לקבוצה — רק אם הקובץ סומן לכך במפורש
+      if(f.wa_notify_group===true){
+        let ok=true;
+        try{
+          await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({phone:'120363429161263528@g.us',message:msg,source:'מערכת קבצים'})});
+        }catch(e){ ok=false; }
+        logEntries.push({recipient_name:'קבוצת מנהל ובכירי אדיר',recipient_phone:'120363429161263528@g.us',file_name:f.name,msg_type:'SLA_GROUP',ok});
+      }
     }catch(e){}
   }));
 
-  if(historyEntries.length) addWAHistory(historyEntries);
+  if(logEntries.length){ try{ await POST('wa_log',logEntries); }catch(e){} if(S.adminTab==='wa_alerts') loadWALog(); }
   if(!silent){
     if(totalSent>0) showAlert(`✓ נשלחו ${totalSent} הודעות WA על ${totalBreached} חריגות`,'success');
     else showAlert('אין חריגות כרגע','success');
@@ -5199,6 +5249,11 @@ function fileModalHTML(f,mode,id=''){
       style="display:grid;grid-template-columns:1fr 1fr;gap:8px;min-height:60px">
       <div style="color:var(--text3);font-size:13px;padding:10px">טוען מנהלים...</div>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#075e54;margin-top:10px">
+      <input type="checkbox" id="mf-wa-group" ${f.wa_notify_group?'checked':''} style="width:16px;height:16px;accent-color:#25d366;cursor:pointer">
+      <i class="ti ti-brand-whatsapp" style="font-size:15px"></i> הוסף התראות לקבוצת וואטסאפ "מנהל ובכירי אדיר"
+    </label>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">כבוי כברירת מחדל — רק קבצים שמסומנים כך ישלחו הודעות חריגה גם לקבוצה הכללית (בנוסף לאנשי הקשר שנבחרו למעלה)</div>
 
 
 
@@ -5529,8 +5584,8 @@ function collectWaContacts(){
   }));
 }
 
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||''});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||''},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||'',wa_notify_group:document.getElementById('mf-wa-group')?.checked||false});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||'',wa_notify_group:document.getElementById('mf-wa-group')?.checked||false},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){if(!isAdirAdmin()){showAlert('רק אדיר יכול למחוק קבצים','error');return;}const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 async function toggleFileActive(id,newActive){
   if(!isAdirAdmin()){showAlert('רק אדיר יכול לשנות סטטוס קובץ','error');return;}
