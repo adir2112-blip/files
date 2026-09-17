@@ -467,7 +467,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.105'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.106'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -578,8 +578,8 @@ async function initLogin(){
       return;
     }
   }
-  // load only active agents for login list
-  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active,allowed_orgs');
+  // load only active agents for login list — בלי pin: הכניסה עצמה נבדקת בשרת דרך agent-login
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,active,allowed_orgs');
   allAgents=data||[];
   showLogin('mode');
 }
@@ -632,12 +632,26 @@ async function loginAgent(){
   if(!_selectedAgent){showLoginErr('agent-err','agent-err-msg','בחר שם תחילה');return;}
   const pin=['p0','p1','p2','p3'].map(id=>document.getElementById(id).value).join('');
   if(pin.length<4){showLoginErr('agent-err','agent-err-msg','יש להזין 4 ספרות');return;}
-  if(_selectedAgent.pin!==pin){
-    showLoginErr('agent-err','agent-err-msg','קוד שגוי — נסה שנית');
+  // בדיקת ה-PIN מתבצעת בשרת בלבד (Edge Function agent-login), שמנפיק session אמיתי
+  // של Supabase Auth לנציג — כך ה-PIN לא נשלח/מושווה יותר בצד לקוח.
+  let res;
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/agent-login`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({agentId:_selectedAgent.id,pin})
+    });
+    res=await r.json();
+  }catch(e){
+    showLoginErr('agent-err','agent-err-msg','שגיאת תקשורת — נסה שוב'); return;
+  }
+  if(!res?.ok){
+    showLoginErr('agent-err','agent-err-msg',res?.error||'קוד שגוי — נסה שנית');
     ['p0','p1','p2','p3'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('p0').focus(); return;
   }
-  enterApp({name:_selectedAgent.name,role:'agent',is_super_admin:false,allowed_orgs:_selectedAgent.allowed_orgs||[]});
+  await sbClient.auth.setSession({access_token:res.access_token,refresh_token:res.refresh_token});
+  enterApp({name:res.agent.name,role:'agent',is_super_admin:false,allowed_orgs:res.agent.allowed_orgs||[]});
   // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
   PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${_selectedAgent.id}`).catch(()=>{});
 }
@@ -684,11 +698,12 @@ function enterApp(user){
 }
 
 async function doLogout(){
-  if(currentUser?.role==='manager') await sbClient.auth.signOut();
+  // גם לנציגים יש עכשיו session אמיתי (agent-login) — תמיד מתנתקים ממנו, לא רק למנהלים
+  await sbClient.auth.signOut();
   currentUser=null; _agentName=''; _selectedAgent=null;
   S={...S_DEFAULT()}; DB={orgs:[],files:[]}; _cachedRecords={}; _allRecords=[]; _pendingCounts={};
-  // reload only active for login list
-  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,pin,active,allowed_orgs');
+  // reload only active for login list — בלי pin
+  const data=await GET('app_users','?active=eq.true&order=name.asc&select=id,name,active,allowed_orgs');
   allAgents=data||[];
   document.getElementById('app-screen').style.display='none';
   document.getElementById('login-screen').style.display='flex';
