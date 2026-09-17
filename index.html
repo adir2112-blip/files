@@ -467,7 +467,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.104'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.105'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -518,7 +518,15 @@ let allAgents = [];
 let _selectedAgent = null;
 
 async function api(method,table,body=null,params=''){
-  const r=await fetch(`${SB_REST}/${table}${params}`,{method,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:body?JSON.stringify(body):null});
+  // אם יש session אמיתי (מנהל שהתחבר עם סיסמה) — שולחים את הטוקן שלו, כדי שמסד הנתונים
+  // יזהה אותו כ-authenticated ולא כ-anon. לנציגים (שמתחברים עם PIN, בלי session ב-Supabase
+  // Auth) אין השפעה — הם ממשיכים לקבל בדיוק את אותה התנהגות כמו קודם (anon key).
+  let token=SB_KEY;
+  try{
+    const {data:{session}}=await sbClient.auth.getSession();
+    if(session?.access_token) token=session.access_token;
+  }catch(e){}
+  const r=await fetch(`${SB_REST}/${table}${params}`,{method,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},body:body?JSON.stringify(body):null});
   if(!r.ok) throw new Error(await r.text());
   const t=await r.text(); return t?JSON.parse(t):null;
 }
