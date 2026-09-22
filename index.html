@@ -468,7 +468,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.111'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.112'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -3967,21 +3967,37 @@ function isWASendAllowed(policy){
 // ══ SLA BREACH DIGEST (מקובץ לפי ארגון, לנמענים נבחרים) ══
 let _slaDigestCfg=null;
 let _slaDigestManagers=[];
-function defaultSlaDigestCfg(){ return {enabled:false,recipients:[],days:[0,1,2,3,4],hour:8}; }
+function defaultSlaDigestTpl(){
+  return {
+    header:'📊 *דוח חריגות SLA יומי — {date}*',
+    orgBlock:'📁 *{org}{contact}*\n{files}',
+    fileLine:'• {file}\n  {count} פניות בחריגה · ⏱ ישנה ביותר: {days} ימים',
+    footer:'📌 סה"כ: {total} פניות בחריגה'
+  };
+}
+function defaultSlaDigestCfg(){ return {enabled:false,recipients:[],days:[0,1,2,3,4],hour:8,tpl:defaultSlaDigestTpl()}; }
 
 async function loadSlaDigestConfig(){
   try{
     const rows=await GET('app_settings','?key=eq.sla_digest&select=value');
     const v=rows?.[0]?.value;
-    _slaDigestCfg = v ? (typeof v==='string'?JSON.parse(v):v) : defaultSlaDigestCfg();
+    const parsed = v ? (typeof v==='string'?JSON.parse(v):v) : defaultSlaDigestCfg();
+    _slaDigestCfg = {...defaultSlaDigestCfg(), ...parsed, tpl:{...defaultSlaDigestTpl(), ...(parsed.tpl||{})}};
   }catch(e){ _slaDigestCfg = defaultSlaDigestCfg(); }
   try{
     _slaDigestManagers = (await GET('app_managers','?active=eq.true&order=name.asc&select=email,name,phone')).filter(m=>m.phone);
   }catch(e){ _slaDigestManagers = []; }
 }
 
-// בונה את גוף ההודעה — מקובץ לפי ארגון, קבצים בלי חריגות מדולגים, שם איש קשר בסוגריים אם הוגדר
-function buildSlaDigestMessage(){
+// ממלא placeholder-ים בסגנון {key} מתוך אובייקט ערכים — משמש לתבנית ההודעה הניתנת לעריכה
+function fillSlaTpl(tpl,vars){
+  return (tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!==undefined?vars[k]:m);
+}
+
+// בונה את גוף ההודעה לפי התבנית הנוכחית (מוגדר ע"י המשתמש או ברירת המחדל) — מקובץ לפי
+// ארגון, קבצים בלי חריגות מדולגים, שם איש קשר בסוגריים אם הוגדר
+function buildSlaDigestMessage(tplOverride){
+  const tpl = tplOverride || (_slaDigestCfg?.tpl) || defaultSlaDigestTpl();
   const data=_monitorData||[];
   const byOrg={};
   data.forEach(d=>{ if(d.breached>0) (byOrg[d.file.org_id]=byOrg[d.file.org_id]||[]).push(d); });
@@ -3995,10 +4011,12 @@ function buildSlaDigestMessage(){
     const org=DB.orgs.find(o=>o.id===oid);
     const orgName=org?org.name:'ארגון לא ידוע';
     const contact=org?.sla_contact_name?` (${org.sla_contact_name})`:'';
-    const lines=byOrg[oid].map(d=>`• ${d.file.name}\n  ${d.breached} פניות בחריגה · ⏱ ישנה ביותר: ${d.oldestDays} ימים`).join('\n');
-    return `📁 *${orgName}${contact}*\n${lines}`;
+    const filesStr=byOrg[oid].map(d=>fillSlaTpl(tpl.fileLine,{file:d.file.name,count:d.breached,days:d.oldestDays})).join('\n');
+    return fillSlaTpl(tpl.orgBlock,{org:orgName,contact,files:filesStr});
   }).join('\n\n');
-  return `📊 *דוח חריגות SLA יומי — ${dateStr}*\n\n${sections}\n\n📌 סה"כ: ${totalBreached} פניות בחריגה`;
+  const header=fillSlaTpl(tpl.header,{date:dateStr});
+  const footer=fillSlaTpl(tpl.footer,{total:totalBreached});
+  return `${header}\n\n${sections}\n\n${footer}`;
 }
 
 function collectSlaDigestForm(){
@@ -4007,7 +4025,14 @@ function collectSlaDigestForm(){
   const days=[0,1,2,3,4].filter(i=>document.querySelector(`[data-sdg-day="${i}"]`)?.checked);
   const recipients=_slaDigestManagers.filter(m=>document.querySelector(`[data-sdg-recipient="${esc(m.email)}"]`)?.checked)
     .map(m=>({email:m.email,name:m.name,phone:m.phone}));
-  return {enabled,hour,days,recipients};
+  const d=defaultSlaDigestTpl();
+  const tpl={
+    header: document.getElementById('sdg-tpl-header')?.value || d.header,
+    orgBlock: document.getElementById('sdg-tpl-org')?.value || d.orgBlock,
+    fileLine: document.getElementById('sdg-tpl-file')?.value || d.fileLine,
+    footer: document.getElementById('sdg-tpl-footer')?.value || d.footer,
+  };
+  return {enabled,hour,days,recipients,tpl};
 }
 
 async function saveSlaDigestConfig(){
@@ -4023,12 +4048,21 @@ async function saveSlaDigestConfig(){
   }catch(e){ showAlert('שגיאה בשמירה: '+e.message,'error'); }
 }
 
+async function previewSlaDigest(){
+  const cfg=collectSlaDigestForm();
+  showAlert('בודק חריגות...','success');
+  await loadMonitorData();
+  const msg=buildSlaDigestMessage(cfg.tpl);
+  const box=document.getElementById('sdg-preview');
+  if(box) box.textContent = msg || 'אין חריגות פתוחות כרגע — לא הייתה נשלחת הודעה';
+}
+
 async function sendSlaDigestTestNow(){
   const cfg=collectSlaDigestForm();
   if(!cfg.recipients.length){ showAlert('יש לבחור לפחות נמען אחד לפני שליחת בדיקה','error'); return; }
   showAlert('בודק חריגות ושולח...','success');
   await loadMonitorData();
-  const msg=buildSlaDigestMessage();
+  const msg=buildSlaDigestMessage(cfg.tpl);
   if(!msg){ showAlert('אין חריגות פתוחות כרגע — לא נשלחה הודעה','success'); return; }
   for(const r of cfg.recipients){
     try{
@@ -4103,6 +4137,37 @@ function renderSlaDigestSection(){
           ${recipientRows||'<div class="empty" style="padding:10px"><p>אין מנהלים עם מספר טלפון</p></div>'}
         </div>
       </div>
+    </div>
+
+    <!-- TEMPLATE EDITOR -->
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px">✏️ טמפלט ההודעה</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.7">
+        אפשר לערוך את הניסוח החופשי, כולל אימוג'ים וירידות שורה. השדות בסוגריים מסולסלות
+        מתמלאים אוטומטית בכל שליחה: <code>{date}</code> תאריך,
+        <code>{org}</code>/<code>{contact}</code>/<code>{files}</code> בשורת כותרת הארגון (חובה שיישאר <code>{files}</code>),
+        <code>{file}</code>/<code>{count}</code>/<code>{days}</code> בשורת קובץ בודד, <code>{total}</code> בשורת הסיכום.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">כותרת ההודעה</label>
+          <input class="form-input" id="sdg-tpl-header" style="font-family:inherit" value="${esc(cfg.tpl?.header||defaultSlaDigestTpl().header)}">
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">שורת סיכום (בסוף)</label>
+          <input class="form-input" id="sdg-tpl-footer" style="font-family:inherit" value="${esc(cfg.tpl?.footer||defaultSlaDigestTpl().footer)}">
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">כותרת ארגון (לכל ארגון)</label>
+          <textarea class="form-input" id="sdg-tpl-org" rows="2" style="font-family:inherit;resize:vertical">${esc(cfg.tpl?.orgBlock||defaultSlaDigestTpl().orgBlock)}</textarea>
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">שורת קובץ (לכל קובץ בחריגה)</label>
+          <textarea class="form-input" id="sdg-tpl-file" rows="2" style="font-family:inherit;resize:vertical">${esc(cfg.tpl?.fileLine||defaultSlaDigestTpl().fileLine)}</textarea>
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="previewSlaDigest()"><i class="ti ti-eye"></i> תצוגה מקדימה (לפי חריגות אמיתיות עכשיו)</button>
+      <pre id="sdg-preview" style="white-space:pre-wrap;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:10px;font-family:inherit;font-size:13px;min-height:20px"></pre>
     </div>
   </div>`;
 }
