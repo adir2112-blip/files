@@ -468,7 +468,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.110'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.111'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2407,7 +2407,7 @@ function renderAdminOrgs(){
     <div style="width:36px;height:36px;border-radius:8px;background:${st.bg};display:flex;align-items:center;justify-content:center">${st.logo.replace('width="36"','width="28"')}</div>
     <div style="flex:1;font-weight:600">${esc(o.name)}</div>
     <div class="flex-gap">
-      <button class="btn btn-sm" onclick="openEditOrg('${o.id}','${escJs(o.name)}')"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-sm" onclick="openEditOrg('${o.id}','${escJs(o.name)}','${escJs(o.sla_contact_name||'')}')"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm btn-danger" onclick="confirmDeleteOrg('${o.id}')"><i class="ti ti-trash"></i></button>
     </div>
   </div>`;}).join('')||'<div class="empty"><i class="ti ti-building-off"></i><p>אין ארגונים</p></div>'}`;
@@ -3862,6 +3862,8 @@ async function loadWAAlertsTab(){
     _waPolicy = stored ? JSON.parse(stored) : defaultWAPolicy();
   }catch(e){ _waPolicy = defaultWAPolicy(); }
   await loadWALog();
+  await loadSlaDigestConfig();
+  render();
 }
 
 // ── היסטוריית שליחת וואטסאפ — נשמרת בשרת (wa_log), משותפת לכל השליחות ──
@@ -3962,6 +3964,149 @@ function isWASendAllowed(policy){
   return true;
 }
 
+// ══ SLA BREACH DIGEST (מקובץ לפי ארגון, לנמענים נבחרים) ══
+let _slaDigestCfg=null;
+let _slaDigestManagers=[];
+function defaultSlaDigestCfg(){ return {enabled:false,recipients:[],days:[0,1,2,3,4],hour:8}; }
+
+async function loadSlaDigestConfig(){
+  try{
+    const rows=await GET('app_settings','?key=eq.sla_digest&select=value');
+    const v=rows?.[0]?.value;
+    _slaDigestCfg = v ? (typeof v==='string'?JSON.parse(v):v) : defaultSlaDigestCfg();
+  }catch(e){ _slaDigestCfg = defaultSlaDigestCfg(); }
+  try{
+    _slaDigestManagers = (await GET('app_managers','?active=eq.true&order=name.asc&select=email,name,phone')).filter(m=>m.phone);
+  }catch(e){ _slaDigestManagers = []; }
+}
+
+// בונה את גוף ההודעה — מקובץ לפי ארגון, קבצים בלי חריגות מדולגים, שם איש קשר בסוגריים אם הוגדר
+function buildSlaDigestMessage(){
+  const data=_monitorData||[];
+  const byOrg={};
+  data.forEach(d=>{ if(d.breached>0) (byOrg[d.file.org_id]=byOrg[d.file.org_id]||[]).push(d); });
+  const orgIds=Object.keys(byOrg).sort((a,b)=>
+    byOrg[b].reduce((s,d)=>s+d.breached,0) - byOrg[a].reduce((s,d)=>s+d.breached,0)
+  );
+  const totalBreached=orgIds.reduce((s,oid)=>s+byOrg[oid].reduce((s2,d)=>s2+d.breached,0),0);
+  if(!totalBreached) return null;
+  const dateStr=new Date().toLocaleDateString('he-IL');
+  const sections=orgIds.map(oid=>{
+    const org=DB.orgs.find(o=>o.id===oid);
+    const orgName=org?org.name:'ארגון לא ידוע';
+    const contact=org?.sla_contact_name?` (${org.sla_contact_name})`:'';
+    const lines=byOrg[oid].map(d=>`• ${d.file.name}\n  ${d.breached} פניות בחריגה · ⏱ ישנה ביותר: ${d.oldestDays} ימים`).join('\n');
+    return `📁 *${orgName}${contact}*\n${lines}`;
+  }).join('\n\n');
+  return `📊 *דוח חריגות SLA יומי — ${dateStr}*\n\n${sections}\n\n📌 סה"כ: ${totalBreached} פניות בחריגה`;
+}
+
+function collectSlaDigestForm(){
+  const enabled=document.getElementById('sdg-enabled')?.checked||false;
+  const hour=parseInt(document.getElementById('sdg-hour')?.value||8);
+  const days=[0,1,2,3,4].filter(i=>document.querySelector(`[data-sdg-day="${i}"]`)?.checked);
+  const recipients=_slaDigestManagers.filter(m=>document.querySelector(`[data-sdg-recipient="${esc(m.email)}"]`)?.checked)
+    .map(m=>({email:m.email,name:m.name,phone:m.phone}));
+  return {enabled,hour,days,recipients};
+}
+
+async function saveSlaDigestConfig(){
+  const cfg=collectSlaDigestForm();
+  if(cfg.enabled && !cfg.recipients.length){ showAlert('יש לבחור לפחות נמען אחד','error'); return; }
+  try{
+    const exists=await GET('app_settings','?key=eq.sla_digest&select=key');
+    if(exists?.length) await PATCH('app_settings',{value:JSON.stringify(cfg)},'?key=eq.sla_digest');
+    else await POST('app_settings',{key:'sla_digest',value:JSON.stringify(cfg)});
+    _slaDigestCfg=cfg;
+    showAlert('✓ הגדרות דוח החריגות נשמרו','success');
+    render();
+  }catch(e){ showAlert('שגיאה בשמירה: '+e.message,'error'); }
+}
+
+async function sendSlaDigestTestNow(){
+  const cfg=collectSlaDigestForm();
+  if(!cfg.recipients.length){ showAlert('יש לבחור לפחות נמען אחד לפני שליחת בדיקה','error'); return; }
+  showAlert('בודק חריגות ושולח...','success');
+  await loadMonitorData();
+  const msg=buildSlaDigestMessage();
+  if(!msg){ showAlert('אין חריגות פתוחות כרגע — לא נשלחה הודעה','success'); return; }
+  for(const r of cfg.recipients){
+    try{
+      await sendWA(formatWAPhone(r.phone), msg);
+      await POST('wa_log',{recipient_name:r.name,recipient_phone:r.phone,file_name:'בדיקה ידנית',msg_type:'SLA_DIGEST_TEST',ok:true}).catch(()=>{});
+    }catch(e){}
+  }
+  showAlert(`✓ נשלחה הודעת בדיקה ל-${cfg.recipients.length} נמענים`,'success');
+  if(S.adminTab==='wa_alerts') loadWALog();
+}
+
+function renderSlaDigestSection(){
+  const cfg=_slaDigestCfg||defaultSlaDigestCfg();
+  const days=['ראשון','שני','שלישי','רביעי','חמישי'];
+  const hours=Array.from({length:24},(_,i)=>i);
+  const recipientRows=_slaDigestManagers.map(m=>{
+    const checked=(cfg.recipients||[]).some(r=>r.email===m.email);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid ${checked?'#25d366':'var(--border)'};border-radius:8px;cursor:pointer;background:${checked?'#f0fdf4':'var(--surface2)'};margin-bottom:5px;font-size:13px">
+      <input type="checkbox" data-sdg-recipient="${esc(m.email)}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:#25d366;cursor:pointer">
+      <span style="font-weight:600">${esc(m.name)}</span>
+      <span dir="ltr" style="color:var(--text3);font-size:11px">${esc(m.phone)}</span>
+    </label>`;
+  }).join('');
+
+  return `
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:16px;color:#25d366"><i class="ti ti-activity-heartbeat"></i> דוח חריגות SLA יומי</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:${cfg.enabled?'#f0fdf4':'var(--surface2)'};border:1px solid ${cfg.enabled?'#86efac':'var(--border)'};border-radius:var(--radius-sm)">
+          <input type="checkbox" id="sdg-enabled" ${cfg.enabled?'checked':''} style="width:18px;height:18px;accent-color:#25d366;cursor:pointer">
+          <label for="sdg-enabled" style="font-weight:700;font-size:14px;cursor:pointer">שלח דוח חריגות יומי</label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">שעת שליחה</label>
+            <select class="form-input" id="sdg-hour">
+              ${hours.map(h=>`<option value="${h}" ${cfg.hour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">ימי שליחה</label>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">
+              ${days.map((d,i)=>{
+                const isActive=(cfg.days||[0,1,2,3,4]).includes(i);
+                return `<label style="display:flex;align-items:center;gap:3px;padding:4px 8px;border:1.5px solid ${isActive?'#25d366':'var(--border2)'};border-radius:7px;cursor:pointer;background:${isActive?'#f0fdf4':'var(--surface2)'};font-size:12px;font-weight:600">
+                  <input type="checkbox" data-sdg-day="${i}" ${isActive?'checked':''} style="width:13px;height:13px;accent-color:#25d366;cursor:pointer">
+                  ${d}
+                </label>`;
+              }).join('')}
+            </div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">שישי-שבת לא זמינים (המערכת לא פועלת בהם)</div>
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+          שם איש הקשר שמוצג בסוגריים ליד כל ארגון נקבע בעריכת הארגון עצמו (טאב "ארגונים").
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-success" onclick="saveSlaDigestConfig()"><i class="ti ti-check"></i> שמור</button>
+          <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="sendSlaDigestTestNow()">
+            <i class="ti ti-send"></i> שלח בדיקה עכשיו
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label" style="margin-bottom:8px;display:block">נמענים</label>
+        <div style="max-height:280px;overflow-y:auto;padding-left:2px">
+          ${recipientRows||'<div class="empty" style="padding:10px"><p>אין מנהלים עם מספר טלפון</p></div>'}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderWAAlerts(){
   const p = _waPolicy || defaultWAPolicy();
   const days = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
@@ -4048,6 +4193,9 @@ function renderWAAlerts(){
         }
       </div>
     </div>
+
+    <!-- SLA DIGEST -->
+    ${renderSlaDigestSection()}
 
     <!-- DAILY REPORT -->
     ${renderDailyReportSection()}
@@ -4894,11 +5042,12 @@ async function confirmDeleteAgent(id,name){
 function openNewOrg(){showModal(`<div class="modal-title"><i class="ti ti-building" style="color:var(--blue)"></i> ארגון חדש</div>
   <div class="form-row"><label class="form-label">שם הארגון *</label><input class="form-input" id="org-name" placeholder="לדוגמה: כללית אקטיב"></div>
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-black" onclick="saveNewOrg()"><i class="ti ti-check"></i> צור</button></div>`);}
-function openEditOrg(id,name){showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת ארגון</div>
+function openEditOrg(id,name,slaContact){showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--blue)"></i> עריכת ארגון</div>
   <div class="form-row"><label class="form-label">שם הארגון *</label><input class="form-input" id="org-name" value="${esc(name)}"></div>
+  <div class="form-row"><label class="form-label">איש קשר לדוח חריגות SLA (לא חובה)</label><input class="form-input" id="org-sla-contact" placeholder="לדוגמה: עומרי ניניו" value="${esc(slaContact||'')}"></div>
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-black" onclick="saveEditOrg('${id}')"><i class="ti ti-check"></i> שמור</button></div>`);}
 async function saveNewOrg(){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await POST('organizations',{name:n});await loadAll();closeModal();render();showAlert('הארגון נוסף','success');}
-async function saveEditOrg(id){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}await PATCH('organizations',{name:n},`?id=eq.${id}`);await loadAll();closeModal();render();showAlert('הארגון עודכן','success');}
+async function saveEditOrg(id){const n=document.getElementById('org-name').value.trim();if(!n){alert('יש להזין שם');return;}const slaContact=document.getElementById('org-sla-contact')?.value.trim()||null;await PATCH('organizations',{name:n,sla_contact_name:slaContact},`?id=eq.${id}`);await loadAll();closeModal();render();showAlert('הארגון עודכן','success');}
 async function confirmDeleteOrg(id){if(!confirm('למחוק ארגון זה וכל קבציו?'))return;await DEL('organizations',`?id=eq.${id}`);await loadAll();render();showAlert('הארגון נמחק','success');}
 
 // ── DUPLICATE FILE TO OTHER ORG(S) ──
