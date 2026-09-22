@@ -449,6 +449,7 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
       <span class="agent-chip" id="agent-chip"></span>
       <button class="btn btn-ghost btn-sm" id="home-btn" style="display:none" onclick="goOrgs()"><i class="ti ti-home"></i> ראשי</button>
       <button class="btn btn-ghost btn-sm" id="dashboard-btn" style="display:none" onclick="gotoDashboard()"><i class="ti ti-layout-dashboard"></i> דשבורד</button>
+      <button class="btn btn-sm" id="monitor-btn" style="display:none;background:#dc2626;border-color:#dc2626;color:#fff" onclick="gotoMonitor()"><i class="ti ti-activity-heartbeat"></i> מוניטור חריגה</button>
       <button class="btn btn-ghost btn-sm" id="admin-btn" style="display:none" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()"><i class="ti ti-logout"></i> יציאה</button>
     </div>
@@ -467,7 +468,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.107'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.108'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -680,6 +681,7 @@ function enterApp(user){
   document.getElementById('agent-chip').innerHTML=`<i class="ti ${icon}"></i> ${esc(user.name)}`;
   document.getElementById('admin-btn').style.display=user.role==='manager'?'':'none';
   document.getElementById('dashboard-btn').style.display=user.role==='manager'?'':'none';
+  document.getElementById('monitor-btn').style.display=(user.role==='manager'&&canSeeAdminTab('monitor'))?'':'none';
   S.adminLoggedIn=user.role==='manager';
   _agentName=user.name;
   if(user.role==='manager'){
@@ -4317,6 +4319,7 @@ async function confirmDeleteManager(email){
 
 function gotoAdmin(){S.view='admin';render();}
 function gotoDashboard(){S.view='admin';loadDashboardTab();}
+function gotoMonitor(){S.view='admin';loadMonitorTab();}
 function toggleSort(col){if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;}render();}
 function setChatFilter(val){ S.chatFilter=val||''; render(); }
 function setPmFilter(val){ S.pmFilter=val||''; render(); }
