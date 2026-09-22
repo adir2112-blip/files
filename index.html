@@ -449,7 +449,7 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
       <span class="agent-chip" id="agent-chip"></span>
       <button class="btn btn-ghost btn-sm" id="home-btn" style="display:none" onclick="goOrgs()"><i class="ti ti-home"></i> ראשי</button>
       <button class="btn btn-ghost btn-sm" id="dashboard-btn" style="display:none" onclick="gotoDashboard()"><i class="ti ti-layout-dashboard"></i> דשבורד</button>
-      <button class="btn btn-sm" id="monitor-btn" style="display:none;background:#dc2626;border-color:#dc2626;color:#fff" onclick="gotoMonitor()"><i class="ti ti-activity-heartbeat"></i> מוניטור חריגה</button>
+      <button class="btn btn-sm" id="monitor-btn" style="display:none;position:relative;background:#dc2626;border-color:#dc2626;color:#fff" onclick="gotoMonitor()"><i class="ti ti-activity-heartbeat"></i> מוניטור חריגה<span id="monitor-badge" style="display:none;position:absolute;top:-7px;right:-7px;background:#111;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;line-height:18px;border-radius:9px;text-align:center;padding:0 4px;border:2px solid var(--surface)"></span></button>
       <button class="btn btn-ghost btn-sm" id="admin-btn" style="display:none" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()"><i class="ti ti-logout"></i> יציאה</button>
     </div>
@@ -468,7 +468,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.108'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.109'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -693,6 +693,11 @@ function enterApp(user){
     initApp().then(()=>{
       loadDashboardTab();
       GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs').then(data=>{ allAgents=data||[]; render(); });
+      if(canSeeAdminTab('monitor')){
+        loadMonitorData();
+        clearInterval(_monitorBadgeTimer);
+        _monitorBadgeTimer=setInterval(loadMonitorData,120000);
+      }
     });
   } else {
     initApp();
@@ -2164,7 +2169,18 @@ async function loadMonitorData(){
     }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
   }));
   _monitorData=results.sort((a,b)=>b.breached-a.breached);
+  updateMonitorBadge();
 }
+
+function updateMonitorBadge(){
+  const el=document.getElementById('monitor-badge');
+  if(!el) return;
+  const total=(_monitorData||[]).reduce((s,d)=>s+d.breached,0);
+  el.textContent=total>99?'99+':total;
+  el.style.display=total>0?'block':'none';
+}
+
+let _monitorBadgeTimer=null;
 
 function renderMonitor(){
   if(S._monitorLoading) return `<div class="loading"><div class="spinner"></div><p>טוען מוניטור...</p></div>`;
