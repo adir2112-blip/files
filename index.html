@@ -468,7 +468,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.112'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.113'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -3975,7 +3975,7 @@ function defaultSlaDigestTpl(){
     footer:'📌 סה"כ: {total} פניות בחריגה'
   };
 }
-function defaultSlaDigestCfg(){ return {enabled:false,recipients:[],days:[0,1,2,3,4],hour:8,tpl:defaultSlaDigestTpl()}; }
+function defaultSlaDigestCfg(){ return {enabled:false,recipients:[],files:[],days:[0,1,2,3,4],hour:8,tpl:defaultSlaDigestTpl()}; }
 
 async function loadSlaDigestConfig(){
   try{
@@ -3996,9 +3996,10 @@ function fillSlaTpl(tpl,vars){
 
 // בונה את גוף ההודעה לפי התבנית הנוכחית (מוגדר ע"י המשתמש או ברירת המחדל) — מקובץ לפי
 // ארגון, קבצים בלי חריגות מדולגים, שם איש קשר בסוגריים אם הוגדר
-function buildSlaDigestMessage(tplOverride){
+function buildSlaDigestMessage(tplOverride,fileIdsOverride){
   const tpl = tplOverride || (_slaDigestCfg?.tpl) || defaultSlaDigestTpl();
-  const data=_monitorData||[];
+  const fileIds = fileIdsOverride || _slaDigestCfg?.files || [];
+  const data=(_monitorData||[]).filter(d=>!fileIds.length||fileIds.includes(d.file.id));
   const byOrg={};
   data.forEach(d=>{ if(d.breached>0) (byOrg[d.file.org_id]=byOrg[d.file.org_id]||[]).push(d); });
   const orgIds=Object.keys(byOrg).sort((a,b)=>
@@ -4025,6 +4026,7 @@ function collectSlaDigestForm(){
   const days=[0,1,2,3,4].filter(i=>document.querySelector(`[data-sdg-day="${i}"]`)?.checked);
   const recipients=_slaDigestManagers.filter(m=>document.querySelector(`[data-sdg-recipient="${esc(m.email)}"]`)?.checked)
     .map(m=>({email:m.email,name:m.name,phone:m.phone}));
+  const files=[...document.querySelectorAll('[data-sdg-file]:checked')].map(el=>el.dataset.sdgFile);
   const d=defaultSlaDigestTpl();
   const tpl={
     header: document.getElementById('sdg-tpl-header')?.value || d.header,
@@ -4032,7 +4034,7 @@ function collectSlaDigestForm(){
     fileLine: document.getElementById('sdg-tpl-file')?.value || d.fileLine,
     footer: document.getElementById('sdg-tpl-footer')?.value || d.footer,
   };
-  return {enabled,hour,days,recipients,tpl};
+  return {enabled,hour,days,recipients,files,tpl};
 }
 
 async function saveSlaDigestConfig(){
@@ -4052,7 +4054,7 @@ async function previewSlaDigest(){
   const cfg=collectSlaDigestForm();
   showAlert('בודק חריגות...','success');
   await loadMonitorData();
-  const msg=buildSlaDigestMessage(cfg.tpl);
+  const msg=buildSlaDigestMessage(cfg.tpl,cfg.files);
   const box=document.getElementById('sdg-preview');
   if(box) box.textContent = msg || 'אין חריגות פתוחות כרגע — לא הייתה נשלחת הודעה';
 }
@@ -4062,7 +4064,7 @@ async function sendSlaDigestTestNow(){
   if(!cfg.recipients.length){ showAlert('יש לבחור לפחות נמען אחד לפני שליחת בדיקה','error'); return; }
   showAlert('בודק חריגות ושולח...','success');
   await loadMonitorData();
-  const msg=buildSlaDigestMessage(cfg.tpl);
+  const msg=buildSlaDigestMessage(cfg.tpl,cfg.files);
   if(!msg){ showAlert('אין חריגות פתוחות כרגע — לא נשלחה הודעה','success'); return; }
   for(const r of cfg.recipients){
     try{
@@ -4084,6 +4086,16 @@ function renderSlaDigestSection(){
       <input type="checkbox" data-sdg-recipient="${esc(m.email)}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:#25d366;cursor:pointer">
       <span style="font-weight:600">${esc(m.name)}</span>
       <span dir="ltr" style="color:var(--text3);font-size:11px">${esc(m.phone)}</span>
+    </label>`;
+  }).join('');
+  const slaFiles=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId);
+  const slaFileRows=slaFiles.map(f=>{
+    const o=DB.orgs.find(x=>x.id===f.org_id);
+    const checked=(cfg.files||[]).includes(f.id);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid ${checked?'#25d366':'var(--border)'};border-radius:8px;cursor:pointer;background:${checked?'#f0fdf4':'var(--surface2)'};margin-bottom:5px;font-size:13px">
+      <input type="checkbox" data-sdg-file="${f.id}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:#25d366;cursor:pointer">
+      <span style="font-weight:600">${esc(f.name)}</span>
+      <span style="color:var(--text3);font-size:11px">· ${esc(o?o.name:'')}</span>
     </label>`;
   }).join('');
 
@@ -4121,6 +4133,7 @@ function renderSlaDigestSection(){
 
         <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
           שם איש הקשר שמוצג בסוגריים ליד כל ארגון נקבע בעריכת הארגון עצמו (טאב "ארגונים").
+          אם לא מסמנים אף טופס ברשימה מימין — הדוח כולל את כל הטפסים עם מעקב SLA.
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4133,8 +4146,12 @@ function renderSlaDigestSection(){
 
       <div>
         <label class="form-label" style="margin-bottom:8px;display:block">נמענים</label>
-        <div style="max-height:280px;overflow-y:auto;padding-left:2px">
+        <div style="max-height:180px;overflow-y:auto;padding-left:2px;margin-bottom:14px">
           ${recipientRows||'<div class="empty" style="padding:10px"><p>אין מנהלים עם מספר טלפון</p></div>'}
+        </div>
+        <label class="form-label" style="margin-bottom:8px;display:block">טפסים לכלול בדוח (ריק = הכל)</label>
+        <div style="max-height:180px;overflow-y:auto;padding-left:2px">
+          ${slaFileRows||'<div class="empty" style="padding:10px"><p>אין טפסים עם מעקב SLA</p></div>'}
         </div>
       </div>
     </div>
