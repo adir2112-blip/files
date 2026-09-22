@@ -467,7 +467,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.106'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.107'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2106,7 +2106,7 @@ function canSeeAdminTab(key){
 function renderAdmin(){
   if(!S.adminLoggedIn) return `<div class="empty"><i class="ti ti-lock"></i><p>אין גישה</p></div>`;
   let tab=S.adminTab;
-  const gateable={dashboard:1,trends:1,perf:1,orgs:1,agents:1};
+  const gateable={dashboard:1,trends:1,perf:1,orgs:1,agents:1,monitor:1};
   if(gateable[tab] && !canSeeAdminTab(tab)){ tab='files'; S.adminTab='files'; }
   return `<div class="card">
     <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
@@ -2122,7 +2122,7 @@ function renderAdmin(){
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='weekly'?'active':''}" onclick="loadWeeklyReportTab()"><i class="ti ti-calendar-week" style="font-size:12px"></i> דוח שבועי</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="loadBackupTab()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
-      ${currentUser?.email==='adirlev@targetcall.co.il'?`<button class="nav-tab ${tab==='monitor'?'active':''}" onclick="loadMonitorTab()"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> מוניטור חריגה</button>`:''}
+      ${canSeeAdminTab('monitor')?`<button class="nav-tab ${tab==='monitor'?'active':''}" onclick="loadMonitorTab()"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> מוניטור חריגה</button>`:''}
       ${currentUser?.email==='adirlev@targetcall.co.il'?`<button class="nav-tab ${tab==='usage'?'active':''}" onclick="loadUsageTab()"><i class="ti ti-gauge" style="font-size:12px;color:#0891b2"></i> ניצול נתונים</button>`:''}
 
     </div>
@@ -2130,7 +2130,7 @@ function renderAdmin(){
   </div>`;
 }
 
-// ══ MONITOR (אדיר בלבד) ══
+// ══ MONITOR (נגיש למנהלים לפי tab_permissions.monitor; מסונן לפי allowed_orgs/allowed_files) ══
 let _monitorTimer=null;
 let _monitorData=[];
 
@@ -2171,10 +2171,9 @@ function renderMonitor(){
   const totalPending=data.reduce((s,d)=>s+d.pending,0);
   const maxOldest=data.reduce((m,d)=>Math.max(m,d.oldestDays||0),0);
 
-  const cards=data.map(d=>{
+  const fileCardHTML=d=>{
     const sev=d.breached===0?'ok':d.breached>=10?'high':d.breached>=3?'med':'low';
     const sevColor={ok:'#16a34a',low:'#d97706',med:'#ea580c',high:'#dc2626'}[sev];
-    const sevBg={ok:'var(--green-light)',low:'var(--amber-light)',med:'#ffedd5',high:'var(--red-light)'}[sev];
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden;cursor:pointer;box-shadow:var(--shadow)" onclick="adminViewFileRecords('${d.file.id}')">
       <div style="position:absolute;top:0;right:0;left:0;height:4px;background:${sevColor}"></div>
       <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(d.file.name)}">${esc(d.file.name)}</div>
@@ -2186,6 +2185,33 @@ function renderMonitor(){
         <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="font-size:12px"></i> ${d.oldestDays!==null?d.oldestDays+' ימים — הוותיקה ביותר':'—'}</span>
         <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-inbox" style="font-size:12px"></i> ${d.pending} ממתינים סה"כ</span>
       </div>
+    </div>`;
+  };
+
+  // קיבוץ לפי ארגון — כל ארגון עם כותרת משלו, ומתחתיו הקבצים/חריגות שלו בלבד
+  const orgGroups={};
+  data.forEach(d=>{
+    const oid=d.file.org_id;
+    (orgGroups[oid]=orgGroups[oid]||[]).push(d);
+  });
+  const orgIds=Object.keys(orgGroups).sort((a,b)=>{
+    const sumA=orgGroups[a].reduce((s,d)=>s+d.breached,0);
+    const sumB=orgGroups[b].reduce((s,d)=>s+d.breached,0);
+    return sumB-sumA;
+  });
+  const sections=orgIds.map(oid=>{
+    const org=DB.orgs.find(o=>o.id===oid);
+    const orgName=org?org.name:'ארגון לא ידוע';
+    const files=orgGroups[oid];
+    const orgBreached=files.reduce((s,d)=>s+d.breached,0);
+    return `<div style="margin-bottom:26px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border)">
+        <span style="font-size:15px;font-weight:800;color:var(--text)">${esc(orgName)}</span>
+        ${orgBreached>0
+          ?`<span style="background:var(--red-light);color:#dc2626;font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px">${orgBreached} בחריגה</span>`
+          :`<span style="background:var(--green-light);color:#16a34a;font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px">תקין</span>`}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">${files.map(fileCardHTML).join('')}</div>
     </div>`;
   }).join('');
 
@@ -2210,8 +2236,7 @@ function renderMonitor(){
         <div style="font-size:11px;color:#1d4ed8;margin-top:4px;font-weight:600">ימים — החריגה הוותיקה ביותר</div>
       </div>
     </div>
-    ${data.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">${cards}</div>`
-      :'<div class="empty"><i class="ti ti-mood-check"></i><p>אין קבצים עם מעקב SLA</p></div>'}
+    ${data.length?sections:'<div class="empty"><i class="ti ti-mood-check"></i><p>אין קבצים עם מעקב SLA</p></div>'}
     <div style="text-align:center;color:var(--text3);font-size:11px;margin-top:20px">מתעדכן אוטומטית כל דקה</div>
   </div>`;
 }
@@ -4154,7 +4179,7 @@ function renderAdminManagers(){
       </tbody></table></div>`}`;
 }
 
-const MGR_TAB_DEFS=[['dashboard','דשבורד'],['trends','גרף מגמה'],['perf','ביצועי נציגים'],['orgs','ארגונים'],['agents','נציגים']];
+const MGR_TAB_DEFS=[['dashboard','דשבורד'],['trends','גרף מגמה'],['perf','ביצועי נציגים'],['orgs','ארגונים'],['agents','נציגים'],['monitor','מוניטור חריגה']];
 function mgrTabChecklistHTML(tp){
   tp=tp||{};
   return MGR_TAB_DEFS.map(([k,l])=>{
