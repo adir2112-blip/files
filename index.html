@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.116'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.117'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -5624,7 +5624,10 @@ function fileModalHTML(f,mode,id=''){
     </div>
     <div class="form-row"><label class="form-label">שדות טופס (נציג ממלא)</label><div id="field-list">${fieldRows}</div><button class="btn btn-sm mt-1" type="button" onclick="addField('f')"><i class="ti ti-plus"></i> הוסף שדה</button></div>
     <div class="section-divider"><i class="ti ti-shield-check"></i> שדות ניהוליים (מנהל ממלא)</div>
-    <div class="form-row"><div id="admin-field-list">${adminRows}</div><button class="btn btn-sm btn-purple mt-1" type="button" onclick="addField('a')"><i class="ti ti-plus"></i> הוסף שדה ניהולי</button></div>
+    <div class="form-row"><div id="admin-field-list">${adminRows}</div>
+      <button class="btn btn-sm btn-purple mt-1" type="button" onclick="addField('a')"><i class="ti ti-plus"></i> הוסף שדה ניהולי</button>
+      <button class="btn btn-sm mt-1" type="button" style="background:#15803d;border-color:#15803d;color:#fff" onclick="addAhmashPmFieldPair()"><i class="ti ti-bolt"></i> הוסף שדות אחמ"ש + מנהל פרויקט</button>
+    </div>
     <div id="pending-rules-section">${pendingHTML}</div>
     <div class="section-divider" style="color:#c2410c"><i class="ti ti-bell-ringing"></i> הגדרת התראה אוטומטית</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px">התראה תופיע למנהל כשרשומה עומדת בתנאי — badge כתום על הקובץ ובמסך הבית</div>
@@ -5901,6 +5904,36 @@ function addField(p){
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
   arr.push({id:genId(),label:'',type:'text',options:'',required:false});
   refreshFields(p);
+}
+// זוג שדות קבוע בלחיצה אחת: אחמ"ש/בכיר (תפריט) + מנהל פרויקט (תלוי בו, "מאושר"),
+// עם כלל ה-SLA של הקובץ מוגדר אוטומטית להצביע על שדה האחמ"ש — כדי שלא יקרה שוב
+// המצב שבו כלל ה-SLA מצביע בטעות על שדה לא נכון (ראו תיקון "החזר מטבעות")
+function addAhmashPmFieldPair(){
+  saveFieldsFromDOM('a');
+  const ahmashId=genId(), pmId=genId();
+  _tmpAdminFields.push({
+    id:ahmashId,label:'תשובת אחמ"ש / בכיר',type:'select',options:'לא מאושר,מאושר',required:false,
+    dependsOn:'',dependsOnValue:'',bulkEnabled:true,chatEnabled:false,noteEnabled:false,agentEditable:false,
+    projectManagerOnly:false,escalationAlertDays:null,assignedManagerEmail:''
+  });
+  _tmpAdminFields.push({
+    id:pmId,label:'תשובת מנהל פרויקט',type:'text',options:'',required:false,
+    dependsOn:ahmashId,dependsOnValue:'מאושר',bulkEnabled:true,chatEnabled:true,noteEnabled:false,agentEditable:false,
+    projectManagerOnly:false,escalationAlertDays:2,assignedManagerEmail:''
+  });
+  refreshFields('a');
+  const enabledCb=document.getElementById('ar-enabled');
+  if(enabledCb) enabledCb.checked=true;
+  refreshAlertModal();
+  const fieldSel=document.getElementById('ar-field');
+  if(fieldSel) fieldSel.value=ahmashId;
+  const condSel=document.getElementById('ar-condition');
+  if(condSel) condSel.value='empty';
+  const daysInput=document.getElementById('ar-days');
+  if(daysInput) daysInput.value=2;
+  const body=document.getElementById('ar-body');
+  if(body){ body.style.opacity='1'; body.style.pointerEvents=''; }
+  showAlert('נוספו שני השדות (מקושרים) — אפשר לערוך את ימי ה-SLA/ההסלמה של כל אחד בנפרד אם צריך','success');
 }
 function removeField(p,i){
   saveFieldsFromDOM(p);
