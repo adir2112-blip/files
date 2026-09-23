@@ -449,7 +449,8 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
       <span class="agent-chip" id="agent-chip"></span>
       <button class="btn btn-ghost btn-sm" id="home-btn" style="display:none" onclick="goOrgs()"><i class="ti ti-home"></i> ראשי</button>
       <button class="btn btn-ghost btn-sm" id="dashboard-btn" style="display:none" onclick="gotoDashboard()"><i class="ti ti-layout-dashboard"></i> דשבורד</button>
-      <button class="btn btn-sm" id="monitor-btn" style="display:none;position:relative;background:#dc2626;border-color:#dc2626;color:#fff" onclick="gotoMonitor()"><i class="ti ti-activity-heartbeat"></i> מוניטור חריגה<span id="monitor-badge" style="display:none;position:absolute;top:-7px;right:-7px;background:#111;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;line-height:18px;border-radius:9px;text-align:center;padding:0 4px;border:2px solid var(--surface)"></span></button>
+      <button class="btn btn-sm" id="monitor-btn" style="display:none;position:relative;background:#dc2626;border-color:#dc2626;color:#fff" onclick="gotoMonitor()"><i class="ti ti-activity-heartbeat"></i> מוניטור — אחמ"ש<span id="monitor-badge" style="display:none;position:absolute;top:-7px;right:-7px;background:#111;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;line-height:18px;border-radius:9px;text-align:center;padding:0 4px;border:2px solid var(--surface)"></span></button>
+      <button class="btn btn-sm" id="monitor-pm-btn" style="display:none;position:relative;background:#15803d;border-color:#15803d;color:#fff" onclick="gotoMonitorPm()"><i class="ti ti-crown"></i> מוניטור — מנהלים<span id="monitor-pm-badge" style="display:none;position:absolute;top:-7px;right:-7px;background:#111;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;line-height:18px;border-radius:9px;text-align:center;padding:0 4px;border:2px solid var(--surface)"></span></button>
       <button class="btn btn-ghost btn-sm" id="admin-btn" style="display:none" onclick="gotoAdmin()"><i class="ti ti-settings"></i> מנהל</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()"><i class="ti ti-logout"></i> יציאה</button>
     </div>
@@ -468,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.114'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.115'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -682,6 +683,7 @@ function enterApp(user){
   document.getElementById('admin-btn').style.display=user.role==='manager'?'':'none';
   document.getElementById('dashboard-btn').style.display=user.role==='manager'?'':'none';
   document.getElementById('monitor-btn').style.display=(user.role==='manager'&&canSeeAdminTab('monitor'))?'':'none';
+  document.getElementById('monitor-pm-btn').style.display=(user.role==='manager'&&canSeeAdminTab('monitor_pm'))?'':'none';
   S.adminLoggedIn=user.role==='manager';
   _agentName=user.name;
   if(user.role==='manager'){
@@ -697,6 +699,11 @@ function enterApp(user){
         loadMonitorData();
         clearInterval(_monitorBadgeTimer);
         _monitorBadgeTimer=setInterval(loadMonitorData,120000);
+      }
+      if(canSeeAdminTab('monitor_pm')){
+        loadMonitorPmData();
+        clearInterval(_monitorPmBadgeTimer);
+        _monitorPmBadgeTimer=setInterval(loadMonitorPmData,120000);
       }
     });
   } else {
@@ -2184,6 +2191,7 @@ function updateMonitorBadge(){
 }
 
 let _monitorBadgeTimer=null;
+let _monitorPmBadgeTimer=null;
 
 // ══ MONITOR — מנהלים (הסלמה לשדות "מנהל פעילות" וכדומה: projectManagerOnly+dependsOn+escalationAlertDays) ══
 // נגיש למנהלים לפי tab_permissions.monitor_pm או is_project_manager; מסונן לפי allowed_orgs/allowed_files
@@ -4668,6 +4676,7 @@ async function confirmDeleteManager(email){
 function gotoAdmin(){S.view='admin';render();}
 function gotoDashboard(){S.view='admin';loadDashboardTab();}
 function gotoMonitor(){S.view='admin';loadMonitorTab();}
+function gotoMonitorPm(){S.view='admin';loadMonitorPmTab();}
 function toggleSort(col){if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;}render();}
 function setChatFilter(val){ S.chatFilter=val||''; render(); }
 function setPmFilter(val){ S.pmFilter=val||''; render(); }
