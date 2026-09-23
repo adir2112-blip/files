@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.118'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.119'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2035,34 +2035,44 @@ async function openQuickFieldSettings(fileId,fieldId){
     <div id="qfs-value-wrap">${quickDependsOnValueHTML(f,af)}</div>
 
     <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border2)">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px"><i class="ti ti-activity-heartbeat" style="color:#ef4444"></i> מעקב במוניטור — אחמ"ש</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">מעקב מוניטור לשדה זה</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-        עצמאי לגמרי מ"כלל ה-SLA" של הטופס — כל שדה עם מספר ימים כאן ייספר במוניטור "אחמ"ש",
-        לא משנה איך נוצר או מה שמו. עובד גם על שדה שלא תלוי בכלום.
+        עצמאי לגמרי מ"כלל ה-SLA" של הטופס ומהרשאת העריכה למטה. בוחרים סוג אחד — לא משנה
+        איך השדה נוצר או מה שמו, ולא חייב להיות תלוי בשדה אחר.
       </div>
-      <div class="form-row">
-        <label class="form-label">ימי עסקים עד חריגה <span style="color:var(--text3);font-weight:400">(ריק = לא נספר במוניטור אחמ"ש)</span></label>
-        <input type="number" min="0" step="0.5" class="form-input" id="qfs-ahmash-days" value="${af.ahmashAlertDays||''}" placeholder="—">
+      <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600">
+          <input type="radio" name="qfs-montype" id="qfs-montype-none" ${(!af.ahmashAlertDays&&!af.escalationAlertDays)?'checked':''} onchange="onQfsMonitorTypeChange('')" style="cursor:pointer">
+          ללא
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:#ef4444">
+          <input type="radio" name="qfs-montype" id="qfs-montype-ahmash" ${af.ahmashAlertDays?'checked':''} onchange="onQfsMonitorTypeChange('ahmash')" style="cursor:pointer">
+          <i class="ti ti-activity-heartbeat"></i> אחמ"ש
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:#15803d">
+          <input type="radio" name="qfs-montype" id="qfs-montype-pm" ${af.escalationAlertDays?'checked':''} onchange="onQfsMonitorTypeChange('pm')" style="cursor:pointer">
+          <i class="ti ti-crown"></i> מנהל פרויקט
+        </label>
       </div>
-    </div>
-
-    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border2)">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px"><i class="ti ti-activity-heartbeat" style="color:#15803d"></i> מעקב הסלמה למנהל פרויקט (מוניטור + התראת וואטסאפ)</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-        עצמאי לגמרי מהרשאת העריכה למטה — כל שדה תלוי עם מספר ימים כאן ייספר במוניטור "מנהלים",
-        גם אם כל מנהל (לא רק מנהל פרויקט) יכול לערוך אותו.
+      <div id="qfs-ahmash-wrap" style="display:${af.ahmashAlertDays?'block':'none'}">
+        <div class="form-row">
+          <label class="form-label">ימי עסקים עד חריגה (השדה ריק)</label>
+          <input type="number" min="0" step="0.5" class="form-input" id="qfs-ahmash-days" value="${af.ahmashAlertDays||''}" placeholder="—">
+        </div>
       </div>
-      <div class="form-row">
-        <label class="form-label">מנהל פרויקט לעדכון <span style="color:var(--text3);font-weight:400">(ריק = כל מנהלי הפרויקט)</span></label>
-        <select class="form-input" id="qfs-assigned">
-          <option value="">— כל מנהלי הפרויקט —</option>
-          ${pmList.map(m=>`<option value="${esc(m.email)}" ${af.assignedManagerEmail===m.email?'selected':''}>${esc(m.name||m.email)}</option>`).join('')}
-        </select>
-        ${!pmList.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px">אין עדיין מנהלים מסומנים כ"מנהל פרויקט" — אפשר להגדיר בניהול > מנהלים.</div>`:''}
-      </div>
-      <div class="form-row">
-        <label class="form-label">ימי עסקים עד חריגה <span style="color:var(--text3);font-weight:400">(ריק = לא נספר במעקב הסלמה בכלל)</span></label>
-        <input type="number" min="0" step="0.5" class="form-input" id="qfs-days" value="${af.escalationAlertDays||''}" placeholder="—">
+      <div id="qfs-pm-wrap" style="display:${af.escalationAlertDays?'block':'none'}">
+        <div class="form-row">
+          <label class="form-label">מנהל פרויקט לעדכון <span style="color:var(--text3);font-weight:400">(ריק = כל מנהלי הפרויקט)</span></label>
+          <select class="form-input" id="qfs-assigned">
+            <option value="">— כל מנהלי הפרויקט —</option>
+            ${pmList.map(m=>`<option value="${esc(m.email)}" ${af.assignedManagerEmail===m.email?'selected':''}>${esc(m.name||m.email)}</option>`).join('')}
+          </select>
+          ${!pmList.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px">אין עדיין מנהלים מסומנים כ"מנהל פרויקט" — אפשר להגדיר בניהול > מנהלים.</div>`:''}
+        </div>
+        <div class="form-row">
+          <label class="form-label">ימי עסקים מרגע ההעברה למנהל פרויקט</label>
+          <input type="number" min="0" step="0.5" class="form-input" id="qfs-days" value="${af.escalationAlertDays||''}" placeholder="—">
+        </div>
       </div>
     </div>
 
@@ -2071,10 +2081,18 @@ async function openQuickFieldSettings(fileId,fieldId){
         <input type="checkbox" id="qfs-pm" ${af.projectManagerOnly?'checked':''} style="width:16px;height:16px;accent-color:#7c3aed;cursor:pointer">
         <i class="ti ti-lock"></i> להגביל את עריכת השדה למנהל פרויקט בלבד
       </label>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">נוגע רק להרשאת עריכה — לא קשור למעקב ההסלמה למעלה.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">נוגע רק להרשאת עריכה — לא קשור למעקב למעלה.</div>
     </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveQuickFieldSettings('${fileId}','${fieldId}')"><i class="ti ti-check"></i> שמור</button></div>
   `);
+}
+function onQfsMonitorTypeChange(type){
+  const ahmashWrap=document.getElementById('qfs-ahmash-wrap');
+  const pmWrap=document.getElementById('qfs-pm-wrap');
+  if(ahmashWrap) ahmashWrap.style.display=type==='ahmash'?'block':'none';
+  if(pmWrap) pmWrap.style.display=type==='pm'?'block':'none';
+  if(type!=='ahmash'){ const el=document.getElementById('qfs-ahmash-days'); if(el) el.value=''; }
+  if(type!=='pm'){ const el=document.getElementById('qfs-days'); if(el) el.value=''; }
 }
 function quickDependsOnValueHTML(f,af){
   const parent=(f.admin_fields||[]).find(x=>x.id===af.dependsOn);
@@ -5796,29 +5814,57 @@ function fieldDependsOnHTML(ef,i,p){
     : `<div style="font-size:12px;color:var(--text3);margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius-xs)">
         אין עדיין שדה אחר מסוג תפריט/תיבת סימון עם שם — כדי שהשדה הזה יוכל להיות תלוי בשדה אחר, קודם צריך שדה כזה עם שם שמור ברשימה.
       </div>`;
-  const pmOnlyHTML=p==='a'?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <i class="ti ti-activity-heartbeat" style="font-size:13px;color:#ef4444"></i>
-      <span style="font-size:12px;color:var(--text2)">מעקב במוניטור אחמ"ש — עבר</span>
-      <input type="number" min="0" step="0.5" data-fahmashd="${p}_${i}" value="${ef.ahmashAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
-      <span style="font-size:12px;color:var(--text2)">ימי עסקים והשדה עדיין ריק (ריק = לא נספר)</span>
-    </div>
-    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <i class="ti ti-clock-alert" style="font-size:13px;color:#15803d"></i>
-      <span style="font-size:12px;color:var(--text2)">מעקב הסלמה למנהל פרויקט (מוניטור + וואטסאפ) — עבר</span>
-      <input type="number" min="0" step="0.5" data-fpmd="${p}_${i}" value="${ef.escalationAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
-      <span style="font-size:12px;color:var(--text2)">ימי עסקים מרגע ההעברה, בלי שסגר את הרשומה (ריק = לא נספר)</span>
-    </div>
-    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:#7c3aed;margin-top:8px">
-      <input type="checkbox" data-fpm="${p}_${i}" ${ef.projectManagerOnly?'checked':''} style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer">
-      <i class="ti ti-lock" style="font-size:13px"></i> להגביל את עריכת השדה למנהל פרויקט בלבד (לא קשור למעקב למעלה)
-    </label>`:'';
   return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--purple)">
       <i class="ti ti-git-branch" style="font-size:13px"></i> שדה תלוי — מוצג רק בתנאי
     </label>
     ${dependsOnBody}
-    ${pmOnlyHTML}
   </div>`;
+}
+// מעקב מוניטור (אחמ"ש/מנהל פרויקט) + הגבלת עריכה — עצמאי לגמרי מ"שדה תלוי", מוצג
+// תמיד על כל שדה ניהולי (גם שדה עצמאי כמו "תשובת אחמ"ש" עצמו, לא רק שדה תלוי).
+// שדה אחד עוקב אחרי סוג אחד בלבד (רדיו) — כדי לא להציג על שדה מנהל פרויקט אופציה
+// לא-רלוונטית של אחמ"ש ולהפך.
+function fieldMonitorTrackingHTML(ef,i,p){
+  if(p!=='a') return '';
+  const monType=ef.ahmashAlertDays?'ahmash':(ef.escalationAlertDays?'pm':'');
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
+    <label class="form-label" style="margin-bottom:6px;display:block">מעקב מוניטור לשדה זה</label>
+    <div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:600">
+        <input type="radio" name="fmontype-${p}-${i}" ${monType===''?'checked':''} onchange="onFieldMonitorTypeChange('${p}',${i},'')" style="cursor:pointer">
+        ללא
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:600;color:#ef4444">
+        <input type="radio" name="fmontype-${p}-${i}" ${monType==='ahmash'?'checked':''} onchange="onFieldMonitorTypeChange('${p}',${i},'ahmash')" style="cursor:pointer">
+        <i class="ti ti-activity-heartbeat" style="font-size:13px"></i> אחמ"ש
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:600;color:#15803d">
+        <input type="radio" name="fmontype-${p}-${i}" ${monType==='pm'?'checked':''} onchange="onFieldMonitorTypeChange('${p}',${i},'pm')" style="cursor:pointer">
+        <i class="ti ti-crown" style="font-size:13px"></i> מנהל פרויקט
+      </label>
+    </div>
+    <div id="fmon-ahmash-wrap-${p}-${i}" style="display:${monType==='ahmash'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text2)">ימי עסקים עד חריגה (השדה ריק)</span>
+      <input type="number" min="0" step="0.5" data-fahmashd="${p}_${i}" value="${ef.ahmashAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
+    </div>
+    <div id="fmon-pm-wrap-${p}-${i}" style="display:${monType==='pm'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text2)">ימי עסקים מרגע ההעברה למנהל פרויקט</span>
+      <input type="number" min="0" step="0.5" data-fpmd="${p}_${i}" value="${ef.escalationAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:#7c3aed;margin-top:8px">
+      <input type="checkbox" data-fpm="${p}_${i}" ${ef.projectManagerOnly?'checked':''} style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer">
+      <i class="ti ti-lock" style="font-size:13px"></i> להגביל את עריכת השדה למנהל פרויקט בלבד (לא קשור למעקב למעלה)
+    </label>
+  </div>`;
+}
+function onFieldMonitorTypeChange(p,i,type){
+  const ahmashWrap=document.getElementById(`fmon-ahmash-wrap-${p}-${i}`);
+  const pmWrap=document.getElementById(`fmon-pm-wrap-${p}-${i}`);
+  if(ahmashWrap) ahmashWrap.style.display=type==='ahmash'?'flex':'none';
+  if(pmWrap) pmWrap.style.display=type==='pm'?'flex':'none';
+  if(type!=='ahmash'){ const el=document.querySelector(`[data-fahmashd="${p}_${i}"]`); if(el) el.value=''; }
+  if(type!=='pm'){ const el=document.querySelector(`[data-fpmd="${p}_${i}"]`); if(el) el.value=''; }
 }
 function fieldRowHTML(ef,i,p){
   const FIELD_TYPE_LABELS={text:'טקסט',number:'מספר',select:'תפריט',checkbox:'תיבת סימון',link:'קישור (URL)',attachment:'קובץ אסמכתא (תמונה/PDF)',date:'תאריך'};
@@ -5866,6 +5912,7 @@ function fieldRowHTML(ef,i,p){
     <div id="field-dep-wrap-${p}-${i}" style="display:${(ef.dependsOn||ef._depUiOpen)?'block':'none'}">
       ${fieldDependsOnHTML(ef,i,p)}
     </div>
+    ${fieldMonitorTrackingHTML(ef,i,p)}
   </div>`;
 }
 function toggleFieldNote(p,i,checked){
