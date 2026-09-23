@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.125'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.126'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4077,20 +4077,23 @@ let _waSubTab='pm';
 function setWaSubTab(t){ _waSubTab=t; render(); loadWALog(); }
 let _pmDigestCfg=null;
 let _ahmashDigestCfg=null;
-function defaultDigestScheduleCfg(){ return {enabled:true,hour:12,days:[0,1,2,3,4]}; }
+function defaultDigestScheduleCfg(){ return {enabled:true,hour:12,days:[0,1,2,3,4],tpl:defaultSlaDigestTpl()}; }
 async function loadDigestScheduleConfig(key){
   try{
     const rows=await GET('app_settings',`?key=eq.${key}&select=value`);
     const v=rows?.[0]?.value;
     const parsed=v?(typeof v==='string'?JSON.parse(v):v):{};
-    return {...defaultDigestScheduleCfg(),...parsed};
+    return {...defaultDigestScheduleCfg(),...parsed,tpl:{...defaultSlaDigestTpl(),...(parsed.tpl||{})}};
   }catch(e){ return defaultDigestScheduleCfg(); }
 }
-async function saveDigestScheduleConfig(key,prefix){
+// extraFn (אופציונלי): פונקציה שמחזירה שדות נוספים למיזוג לתוך ה-cfg לפני השמירה
+// (למשל managerFiles בדוח מנהלי הפרויקטים)
+async function saveDigestScheduleConfig(key,prefix,extraFn){
   const enabled=document.getElementById(`${prefix}-enabled`)?.checked??true;
   const hour=parseInt(document.getElementById(`${prefix}-hour`)?.value||12);
   const days=[0,1,2,3,4].filter(i=>document.querySelector(`[data-${prefix}-day="${i}"]`)?.checked);
-  const cfg={enabled,hour,days};
+  const tpl=collectDigestTpl(prefix);
+  const cfg={enabled,hour,days,tpl,...(extraFn?extraFn():{})};
   try{
     const exists=await GET('app_settings',`?key=eq.${key}&select=key`);
     if(exists?.length) await PATCH('app_settings',{value:JSON.stringify(cfg)},`?key=eq.${key}`);
@@ -4099,6 +4102,16 @@ async function saveDigestScheduleConfig(key,prefix){
     if(key==='pm_digest') _pmDigestCfg=cfg; else _ahmashDigestCfg=cfg;
     render();
   }catch(e){ showAlert('שגיאה בשמירה: '+e.message,'error'); }
+}
+function collectPmManagerFiles(){
+  const map={};
+  document.querySelectorAll('[data-pmf-mgr]').forEach(el=>{
+    if(el.checked){
+      const email=el.dataset.pmfMgr, fileId=el.dataset.pmfFile;
+      (map[email]=map[email]||[]).push(fileId);
+    }
+  });
+  return map;
 }
 
 async function loadWAAlertsTab(){
@@ -4238,6 +4251,72 @@ function buildSlaDigestMessage(tplOverride,fileIdsOverride){
   const header=fillSlaTpl(tpl.header,{date:dateStr});
   const footer=fillSlaTpl(tpl.footer,{total:totalBreached});
   return `${header}\n\n${sections}\n\n${footer}`;
+}
+
+// גרסה כללית של buildSlaDigestMessage: בונה הודעה מקובצת לפי ארגון מתוך רשימת שורות
+// שרירותית (למשל: רק הקבצים שהוקצו למנהל פרויקט ספציפי, או רק לאיש קשר ספציפי) —
+// באותו טמפלט/ניסוח כמו דוח ה-SLA של אדיר וליאת, כדי שכל דוח יומי ייראה אותו הדבר
+function buildOrgGroupedMessage(tpl,lines){
+  if(!lines||!lines.length) return null;
+  const byOrg={};
+  lines.forEach(l=>(byOrg[l.orgId]=byOrg[l.orgId]||[]).push(l));
+  const orgIds=Object.keys(byOrg).sort((a,b)=>
+    byOrg[b].reduce((s,x)=>s+x.count,0) - byOrg[a].reduce((s,x)=>s+x.count,0)
+  );
+  const total=orgIds.reduce((s,oid)=>s+byOrg[oid].reduce((s2,x)=>s2+x.count,0),0);
+  if(!total) return null;
+  const dateStr=new Date().toLocaleDateString('he-IL');
+  const sections=orgIds.map(oid=>{
+    const org=DB.orgs.find(o=>o.id===oid);
+    const orgName=org?org.name:'ארגון לא ידוע';
+    const contact=org?.sla_contact_name?` (${org.sla_contact_name})`:'';
+    const filesStr=byOrg[oid].map(l=>fillSlaTpl(tpl.fileLine,{file:l.name,count:l.count,days:l.oldestDays})).join('\n');
+    return fillSlaTpl(tpl.orgBlock,{org:orgName,contact,files:filesStr});
+  }).join('\n\n');
+  const header=fillSlaTpl(tpl.header,{date:dateStr});
+  const footer=fillSlaTpl(tpl.footer,{total});
+  return `${header}\n\n${sections}\n\n${footer}`;
+}
+// עורך טמפלט משותף לדוחות מנהלי-הפרויקטים/אחמ"שים — אותם שדות בדיוק כמו דוח ה-SLA
+function digestTplEditorHTML(tpl,prefix){
+  const d=defaultSlaDigestTpl();
+  return `
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px">✏️ טמפלט ההודעה</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.7">
+        אותו טמפלט שמשמש את דוח החריגות של אדיר וליאת — ניתן לעריכה בנפרד. שדות בסוגריים
+        מסולסלות מתמלאים אוטומטית: <code>{date}</code> תאריך,
+        <code>{org}</code>/<code>{contact}</code>/<code>{files}</code> בכותרת הארגון (חובה שיישאר <code>{files}</code>),
+        <code>{file}</code>/<code>{count}</code>/<code>{days}</code> בשורת קובץ בודד, <code>{total}</code> בשורת הסיכום.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">כותרת ההודעה</label>
+          <input class="form-input" id="${prefix}-tpl-header" style="font-family:inherit" value="${esc(tpl?.header||d.header)}">
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">שורת סיכום (בסוף)</label>
+          <input class="form-input" id="${prefix}-tpl-footer" style="font-family:inherit" value="${esc(tpl?.footer||d.footer)}">
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">כותרת ארגון (לכל ארגון)</label>
+          <textarea class="form-input" id="${prefix}-tpl-org" rows="2" style="font-family:inherit;resize:vertical">${esc(tpl?.orgBlock||d.orgBlock)}</textarea>
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">שורת קובץ (לכל קובץ בחריגה)</label>
+          <textarea class="form-input" id="${prefix}-tpl-file" rows="2" style="font-family:inherit;resize:vertical">${esc(tpl?.fileLine||d.fileLine)}</textarea>
+        </div>
+      </div>
+    </div>`;
+}
+function collectDigestTpl(prefix){
+  const d=defaultSlaDigestTpl();
+  return {
+    header: document.getElementById(`${prefix}-tpl-header`)?.value || d.header,
+    orgBlock: document.getElementById(`${prefix}-tpl-org`)?.value || d.orgBlock,
+    fileLine: document.getElementById(`${prefix}-tpl-file`)?.value || d.fileLine,
+    footer: document.getElementById(`${prefix}-tpl-footer`)?.value || d.footer,
+  };
 }
 
 function collectSlaDigestForm(){
@@ -4443,59 +4522,94 @@ function digestScheduleHTML(cfg,prefix,color){
 
 function renderWaSubTabPM(){
   const cfg=_pmDigestCfg||defaultDigestScheduleCfg();
-  const escFields=[];
-  DB.files.forEach(f=>(f.admin_fields||[]).forEach(af=>{
-    if(af.escalationAlertDays) escFields.push({file:f,af});
-  }));
-  const byManager={};
-  const unassigned=[];
-  escFields.forEach(({file,af})=>{
-    if(af.assignedManagerEmail) (byManager[af.assignedManagerEmail]=byManager[af.assignedManagerEmail]||[]).push(file.name);
-    else unassigned.push(`${file.name} (${esc(af.label)})`);
-  });
-  const managerNames={};
-  (S._managers||[]).forEach(m=>managerNames[m.email]=m.name);
+  const pmFiles=DB.files.filter(f=>(f.admin_fields||[]).some(af=>af.escalationAlertDays));
+  const pmManagers=(S._managers||[]).filter(m=>m.is_project_manager&&m.active);
+  const managerFiles=cfg.managerFiles||{};
+  const hasAnyAssignment=Object.keys(managerFiles).length>0;
+  // ברירת מחדל להצגה ראשונית (לפני שנשמר managerFiles פעם אחת): לפי assignedManagerEmail
+  // שכבר הוגדר בעבר על השדה עצמו — כדי לא להתחיל מריק אם כבר קיים שיוך
+  const fileDefaultMgr=(f)=>{
+    const af=(f.admin_fields||[]).find(x=>x.escalationAlertDays&&x.assignedManagerEmail);
+    return af?af.assignedManagerEmail:null;
+  };
+  const isChecked=(email,f)=> hasAnyAssignment ? (managerFiles[email]||[]).includes(f.id) : fileDefaultMgr(f)===email;
+  const orgsById={}; DB.orgs.forEach(o=>orgsById[o.id]=o);
+
+  const managerBlocksHTML = pmManagers.length ? pmManagers.map(m=>{
+    const rows=pmFiles.map(f=>{
+      const org=orgsById[f.org_id];
+      const checked=isChecked(m.email,f);
+      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1.5px solid ${checked?'#15803d':'var(--border)'};border-radius:8px;cursor:pointer;background:${checked?'#f0fdf4':'var(--surface2)'};margin-bottom:4px;font-size:12px">
+        <input type="checkbox" data-pmf-mgr="${esc(m.email)}" data-pmf-file="${f.id}" ${checked?'checked':''} style="width:14px;height:14px;accent-color:#15803d;cursor:pointer">
+        <span style="font-weight:600">${esc(f.name)}</span>
+        <span style="color:var(--text3)">· ${esc(org?org.name:'')}</span>
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:14px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">${esc(m.name)} <span style="font-size:11px;color:var(--text3);font-weight:400">${m.phone?esc(m.phone):'ללא טלפון'}</span></div>
+      <div style="max-height:160px;overflow-y:auto">${rows||'<div style="font-size:12px;color:var(--text3)">אין טפסים עם מעקב מנהל פרויקט</div>'}</div>
+    </div>`;
+  }).join('') : `<div class="empty" style="padding:12px"><p>אין מנהלים המסומנים כ"מנהל פרויקט" (סמן בעריכת מנהל)</p></div>`;
+
+  const unassignedFiles=pmFiles.filter(f=>!pmManagers.some(m=>isChecked(m.email,f)));
+  const previewOptions=pmManagers.map(m=>`<option value="${esc(m.email)}">${esc(m.name)}</option>`).join('');
 
   return `
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
     <div class="card-title" style="margin-bottom:16px;color:#15803d"><i class="ti ti-crown"></i> דוח יומי — מנהלי פרויקטים</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:14px">
-      כל מנהל פרויקט מקבל הודעה אחת מרוכזת ליום, רק על השדות שהוקצו אליו (נקבע בעריכת
-      השדה עצמו, בטאב "מעקב הסלמה למנהל פרויקט" → "מנהל פרויקט לעדכון").
+      כל מנהל פרויקט מקבל הודעה אחת מרוכזת ליום, באותו נוסח של דוח החריגות של אדיר וליאת
+      (מקובץ לפי ארגון), רק על הקבצים שסימנת לו למטה כ"שלו".
     </div>
     ${digestScheduleHTML(cfg,'pmdg','#15803d')}
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">אילו קבצים שייכים לכל מנהל</div>
+    ${managerBlocksHTML}
+    ${unassignedFiles.length?`<div style="margin-bottom:14px;padding:8px 12px;background:var(--amber-light);border:1px solid #fcd34d;border-radius:var(--radius-sm);font-size:12px;color:#92400e">
+      <i class="ti ti-alert-triangle"></i> טפסים עם מעקב מנהל פרויקט שלא סומנו לאף מנהל (לא יישלחו): ${unassignedFiles.map(f=>esc(f.name)).join(' · ')}
+    </div>`:''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-      <button class="btn btn-success" onclick="saveDigestScheduleConfig('pm_digest','pmdg')"><i class="ti ti-check"></i> שמור</button>
+      <button class="btn btn-success" onclick="saveDigestScheduleConfig('pm_digest','pmdg',()=>({managerFiles:collectPmManagerFiles()}))"><i class="ti ti-check"></i> שמור</button>
       <button class="btn btn-sm" style="background:#15803d;border-color:#15803d;color:#fff" onclick="sendPmDigestTestNow()"><i class="ti ti-send"></i> שלח בדיקה עכשיו</button>
     </div>
-    <div style="font-weight:700;font-size:13px;margin-bottom:8px">מי אחראי על מה</div>
-    ${Object.keys(byManager).length?Object.entries(byManager).map(([email,files])=>`
-      <div style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;font-size:13px">
-        <strong>${esc(managerNames[email]||email)}</strong> <span style="color:var(--text3);font-size:11px">(${files.length} שדות)</span>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px">${files.map(esc).join(' · ')}</div>
-      </div>`).join(''):'<div class="empty" style="padding:12px"><p>אין שדות מוקצים עדיין</p></div>'}
-    ${unassigned.length?`<div style="margin-top:10px;padding:8px 12px;background:var(--amber-light);border:1px solid #fcd34d;border-radius:var(--radius-sm);font-size:12px;color:#92400e">
-      <i class="ti ti-alert-triangle"></i> שדות בלי מנהל מוקצה (לא יישלחו לאף אחד): ${unassigned.map(esc).join(' · ')}
-    </div>`:''}
+    ${digestTplEditorHTML(cfg.tpl,'pmdg')}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <select class="form-input" id="pmdg-preview-mgr" style="max-width:220px">${previewOptions||'<option value="">אין מנהלים</option>'}</select>
+      <button class="btn btn-sm" onclick="previewPmDigest()"><i class="ti ti-eye"></i> תצוגה מקדימה (לפי חריגות אמיתיות עכשיו)</button>
+    </div>
+    <pre id="pmdg-preview" style="white-space:pre-wrap;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:10px;font-family:inherit;font-size:13px;min-height:20px"></pre>
   </div>`;
 }
 
 function renderWaSubTabAhmash(){
   const cfg=_ahmashDigestCfg||defaultDigestScheduleCfg();
   const waFiles = DB.files.filter(f=>(f.wa_contacts||[]).length>0||f.wa_notify_group===true);
+  const seenPhones=new Set();
+  const contactOptions=[];
+  waFiles.forEach(f=>(f.wa_contacts||[]).forEach(c=>{
+    const key=formatWAPhone(c.phone);
+    if(!seenPhones.has(key)){ seenPhones.add(key); contactOptions.push({phone:c.phone,name:c.name}); }
+  }));
+  const previewOptions=contactOptions.map(c=>`<option value="${esc(c.phone)}">${esc(c.name)}</option>`).join('')
+    + (waFiles.some(f=>f.wa_notify_group===true)?`<option value="__group__">קבוצת מנהל ובכירי אדיר</option>`:'');
   return `
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
     <div class="card-title" style="margin-bottom:16px;color:#ef4444"><i class="ti ti-activity-heartbeat"></i> דוח יומי — אחמ"שים</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:14px">
-      כל איש קשר (מוגדר בעריכת קובץ → התראות וואטסאפ) מקבל הודעה אחת מרוכזת ליום, על כל
-      הקבצים שהוא רשום עליהם — במקום התראה נפרדת על כל קובץ בנפרד.
+      כל איש קשר (מוגדר בעריכת קובץ → התראות וואטסאפ) מקבל הודעה אחת מרוכזת ליום, מקובצת
+      לפי ארגון, על כל הקבצים שהוא רשום עליהם — באותו נוסח של דוח החריגות של אדיר וליאת.
     </div>
     ${digestScheduleHTML(cfg,'ahdg','#ef4444')}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn btn-success" onclick="saveDigestScheduleConfig('ahmash_digest','ahdg')"><i class="ti ti-check"></i> שמור</button>
       <button class="btn btn-sm" style="background:#ef4444;border-color:#ef4444;color:#fff" onclick="sendAhmashDigestTestNow()"><i class="ti ti-send"></i> שלח בדיקה עכשיו</button>
     </div>
-    <div style="font-weight:700;font-size:13px;margin-bottom:8px">קבצים עם אנשי קשר</div>
+    ${digestTplEditorHTML(cfg.tpl,'ahdg')}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <select class="form-input" id="ahdg-preview-contact" style="max-width:220px">${previewOptions||'<option value="">אין אנשי קשר</option>'}</select>
+      <button class="btn btn-sm" onclick="previewAhmashDigest()"><i class="ti ti-eye"></i> תצוגה מקדימה (לפי חריגות אמיתיות עכשיו)</button>
+    </div>
+    <pre id="ahdg-preview" style="white-space:pre-wrap;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:10px;font-family:inherit;font-size:13px;min-height:20px"></pre>
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">קבצים עם אנשי קשר</div>
     ${waFiles.length
       ? waFiles.map(f=>{
           const o=DB.orgs.find(x=>x.id===f.org_id);
@@ -4515,78 +4629,116 @@ function renderWaSubTabAhmash(){
   </div>`;
 }
 
-async function sendPmDigestTestNow(){
-  showAlert('בודק חריגות ושולח...','success');
-  const escFields=[];
-  DB.files.forEach(f=>(f.admin_fields||[]).forEach(af=>{ if(af.escalationAlertDays&&af.assignedManagerEmail) escFields.push({file:f,af}); }));
-  if(!escFields.length){ showAlert('אין שדות מוקצים למנהל פרויקט','error'); return; }
-  const byManager={};
-  for(const {file,af} of escFields){
+// אוסף שורות חריגה (מקובצות אח"כ לפי ארגון) עבור קבוצת קבצים נתונה — משמש גם לתצוגה
+// מקדימה וגם לשליחת בדיקה עבור מנהל פרויקט ספציפי
+async function computePmManagerLines(fileIds){
+  const lines=[];
+  for(const fid of (fileIds||[])){
+    const file=DB.files.find(f=>f.id===fid);
+    if(!file) continue;
+    const escFields=(file.admin_fields||[]).filter(af=>af.escalationAlertDays);
+    if(!escFields.length) continue;
     let recs=[];
     try{ recs=await GET('records',`?file_id=eq.${file.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`); }catch(e){ continue; }
-    const breached=recs.filter(r=>recordEscalationBreached(r,af,file));
+    let breached=[];
+    for(const af of escFields) breached=breached.concat(recs.filter(r=>recordEscalationBreached(r,af,file)));
     if(!breached.length) continue;
     const refDate=r=>r.escalated_at||r.created_at;
     const oldest=breached.reduce((min,r)=>refDate(r)<refDate(min)?r:min,breached[0]);
     const oldestDays=Math.floor((Date.now()-new Date(refDate(oldest)).getTime())/86400000);
-    (byManager[af.assignedManagerEmail]=byManager[af.assignedManagerEmail]||[]).push({name:file.name,count:breached.length,oldestDays});
+    lines.push({orgId:file.org_id,name:file.name,count:breached.length,oldestDays});
   }
-  const emails=Object.keys(byManager);
-  if(!emails.length){ showAlert('אין כרגע חריגות אצל אף מנהל פרויקט — לא נשלח כלום','success'); return; }
+  return lines;
+}
+async function previewPmDigest(){
+  const email=document.getElementById('pmdg-preview-mgr')?.value;
+  const box=document.getElementById('pmdg-preview');
+  if(!email){ if(box) box.textContent='אין מנהל לתצוגה מקדימה'; return; }
+  const managerFiles=collectPmManagerFiles();
+  const tpl=collectDigestTpl('pmdg');
+  showAlert('בודק חריגות...','success');
+  const lines=await computePmManagerLines(managerFiles[email]||[]);
+  const msg=buildOrgGroupedMessage(tpl,lines);
+  if(box) box.textContent = msg || 'אין חריגות פתוחות כרגע אצל מנהל זה — לא הייתה נשלחת הודעה';
+}
+async function sendPmDigestTestNow(){
+  const managerFiles=collectPmManagerFiles();
+  const emails=Object.keys(managerFiles).filter(e=>managerFiles[e]?.length);
+  if(!emails.length){ showAlert('לא סימנת קבצים לאף מנהל פרויקט','error'); return; }
+  const tpl=collectDigestTpl('pmdg');
+  showAlert('בודק חריגות ושולח...','success');
   let sentCount=0;
   for(const email of emails){
     const mgr=(S._managers||[]).find(m=>m.email===email);
     if(!mgr?.phone) continue;
-    const lines=byManager[email];
-    const total=lines.reduce((s,l)=>s+l.count,0);
-    const dateStr=new Date().toLocaleDateString('he-IL');
-    const fileLines=lines.map(l=>`• ${l.name}\n  ${l.count} פניות ממתינות · ⏱ ישנה ביותר: ${l.oldestDays} ימים`).join('\n');
-    const msg=`📊 *הדוח היומי שלך — ${dateStr}*\n\n${fileLines}\n\n📌 סה"כ: ${total} פניות ממתינות לך\n\nלכניסה: https://adir2112-blip.github.io/files/`;
-    await sendWA(formatWAPhone(mgr.phone),msg);
+    const lines=await computePmManagerLines(managerFiles[email]);
+    const msg=buildOrgGroupedMessage(tpl,lines);
+    if(!msg) continue;
+    try{ await sendWA(formatWAPhone(mgr.phone),msg); }catch(e){}
     await POST('wa_log',{recipient_name:mgr.name,recipient_phone:mgr.phone,file_name:lines.map(l=>l.name).join(', '),msg_type:'PM_DIGEST_TEST',ok:true}).catch(()=>{});
     sentCount++;
   }
-  showAlert(sentCount?`✓ נשלחה הודעת בדיקה ל-${sentCount} מנהלים`:'לאף מנהל מוקצה אין מספר טלפון','success');
+  showAlert(sentCount?`✓ נשלחה הודעת בדיקה ל-${sentCount} מנהלים`:'אין כרגע חריגות אצל אף מנהל מוקצה (או שאין לו טלפון) — לא נשלח כלום','success');
   if(S.adminTab==='wa_alerts') loadWALog();
 }
 
-async function sendAhmashDigestTestNow(){
-  showAlert('בודק חריגות ושולח...','success');
+// target: מספר טלפון מפורמט (formatWAPhone), או '__group__' עבור קבוצת מנהל ובכירים
+async function computeAhmashContactLines(target){
   const filesWithAlerts=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&((f.wa_contacts||[]).length>0||f.wa_notify_group===true));
-  if(!filesWithAlerts.length){ showAlert('אין קבצים עם אנשי קשר WA מוגדרים','error'); return; }
-  const byPhone={};
-  let groupLines=[];
+  const lines=[];
   for(const f of filesWithAlerts){
+    const relevant = target==='__group__' ? f.wa_notify_group===true : (f.wa_contacts||[]).some(c=>formatWAPhone(c.phone)===target);
+    if(!relevant) continue;
     let recs=[];
     try{ recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,extra,admin_data,closed_at,field_comments`); }catch(e){ continue; }
     const breached=recs.filter(r=>recordMatchesAlert(r,f));
     if(!breached.length) continue;
-    for(const c of (f.wa_contacts||[])){
-      const key=formatWAPhone(c.phone);
-      if(!byPhone[key]) byPhone[key]={name:c.name,phone:c.phone,lines:[]};
-      byPhone[key].lines.push({name:f.name,count:breached.length});
-    }
-    if(f.wa_notify_group===true) groupLines.push({name:f.name,count:breached.length});
+    const oldest=breached.reduce((min,r)=>r.created_at<min.created_at?r:min,breached[0]);
+    const oldestDays=Math.floor((Date.now()-new Date(oldest.created_at).getTime())/86400000);
+    lines.push({orgId:f.org_id,name:f.name,count:breached.length,oldestDays});
   }
-  const phones=Object.keys(byPhone);
-  if(!phones.length&&!groupLines.length){ showAlert('אין כרגע חריגות באף קובץ עם אנשי קשר — לא נשלח כלום','success'); return; }
-  const dateStr=new Date().toLocaleDateString('he-IL');
-  for(const key of phones){
-    const {name,phone,lines}=byPhone[key];
-    const total=lines.reduce((s,l)=>s+l.count,0);
-    const fileLines=lines.map(l=>`• ${l.name}\n  ${l.count} פניות ממתינות לטיפול`).join('\n');
-    const msg=`📊 *הדוח היומי שלך — ${dateStr}*\n\n${fileLines}\n\n📌 סה"כ: ${total} פניות ממתינות\n\nלכניסה: https://adir2112-blip.github.io/files/`;
-    await sendWA(formatWAPhone(phone),msg);
+  return lines;
+}
+async function previewAhmashDigest(){
+  const target=document.getElementById('ahdg-preview-contact')?.value;
+  const box=document.getElementById('ahdg-preview');
+  if(!target){ if(box) box.textContent='אין איש קשר לתצוגה מקדימה'; return; }
+  const tpl=collectDigestTpl('ahdg');
+  showAlert('בודק חריגות...','success');
+  const lines=await computeAhmashContactLines(target);
+  const msg=buildOrgGroupedMessage(tpl,lines);
+  if(box) box.textContent = msg || 'אין חריגות פתוחות כרגע אצל איש קשר זה — לא הייתה נשלחת הודעה';
+}
+async function sendAhmashDigestTestNow(){
+  const filesWithAlerts=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&((f.wa_contacts||[]).length>0||f.wa_notify_group===true));
+  if(!filesWithAlerts.length){ showAlert('אין קבצים עם אנשי קשר WA מוגדרים','error'); return; }
+  const tpl=collectDigestTpl('ahdg');
+  showAlert('בודק חריגות ושולח...','success');
+  const contactsByPhone={};
+  let hasGroup=false;
+  filesWithAlerts.forEach(f=>{
+    (f.wa_contacts||[]).forEach(c=>{ contactsByPhone[formatWAPhone(c.phone)]={name:c.name,phone:c.phone}; });
+    if(f.wa_notify_group===true) hasGroup=true;
+  });
+  let sentCount=0;
+  for(const [phoneKey,{name,phone}] of Object.entries(contactsByPhone)){
+    const lines=await computeAhmashContactLines(phoneKey);
+    const msg=buildOrgGroupedMessage(tpl,lines);
+    if(!msg) continue;
+    try{ await sendWA(formatWAPhone(phone),msg); }catch(e){}
     await POST('wa_log',{recipient_name:name,recipient_phone:phone,file_name:lines.map(l=>l.name).join(', '),msg_type:'AHMASH_DIGEST_TEST',ok:true}).catch(()=>{});
+    sentCount++;
   }
-  if(groupLines.length){
-    const total=groupLines.reduce((s,l)=>s+l.count,0);
-    const fileLines=groupLines.map(l=>`• ${l.name}\n  ${l.count} פניות ממתינות לטיפול`).join('\n');
-    const msg=`📊 *דוח יומי — קבוצת מנהל ובכירים — ${dateStr}*\n\n${fileLines}\n\n📌 סה"כ: ${total} פניות ממתינות`;
-    await sendWA('120363429161263528@g.us',msg);
-    await POST('wa_log',{recipient_name:'קבוצת מנהל ובכירי אדיר',recipient_phone:'120363429161263528@g.us',file_name:groupLines.map(l=>l.name).join(', '),msg_type:'AHMASH_DIGEST_TEST',ok:true}).catch(()=>{});
+  if(hasGroup){
+    const lines=await computeAhmashContactLines('__group__');
+    const msg=buildOrgGroupedMessage(tpl,lines);
+    if(msg){
+      try{ await sendWA('120363429161263528@g.us',msg); }catch(e){}
+      await POST('wa_log',{recipient_name:'קבוצת מנהל ובכירי אדיר',recipient_phone:'120363429161263528@g.us',file_name:lines.map(l=>l.name).join(', '),msg_type:'AHMASH_DIGEST_TEST',ok:true}).catch(()=>{});
+      sentCount++;
+    }
   }
-  showAlert(`✓ נשלחה הודעת בדיקה ל-${phones.length+(groupLines.length?1:0)} נמענים`,'success');
+  showAlert(sentCount?`✓ נשלחה הודעת בדיקה ל-${sentCount} נמענים`:'אין כרגע חריגות באף קובץ עם אנשי קשר — לא נשלח כלום','success');
   if(S.adminTab==='wa_alerts') loadWALog();
 }
 
