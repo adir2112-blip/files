@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.117'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.118'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2035,6 +2035,18 @@ async function openQuickFieldSettings(fileId,fieldId){
     <div id="qfs-value-wrap">${quickDependsOnValueHTML(f,af)}</div>
 
     <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border2)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px"><i class="ti ti-activity-heartbeat" style="color:#ef4444"></i> מעקב במוניטור — אחמ"ש</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+        עצמאי לגמרי מ"כלל ה-SLA" של הטופס — כל שדה עם מספר ימים כאן ייספר במוניטור "אחמ"ש",
+        לא משנה איך נוצר או מה שמו. עובד גם על שדה שלא תלוי בכלום.
+      </div>
+      <div class="form-row">
+        <label class="form-label">ימי עסקים עד חריגה <span style="color:var(--text3);font-weight:400">(ריק = לא נספר במוניטור אחמ"ש)</span></label>
+        <input type="number" min="0" step="0.5" class="form-input" id="qfs-ahmash-days" value="${af.ahmashAlertDays||''}" placeholder="—">
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border2)">
       <div style="font-weight:700;font-size:13px;margin-bottom:8px"><i class="ti ti-activity-heartbeat" style="color:#15803d"></i> מעקב הסלמה למנהל פרויקט (מוניטור + התראת וואטסאפ)</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
         עצמאי לגמרי מהרשאת העריכה למטה — כל שדה תלוי עם מספר ימים כאן ייספר במוניטור "מנהלים",
@@ -2087,6 +2099,8 @@ async function saveQuickFieldSettings(fileId,fieldId){
   af.assignedManagerEmail=document.getElementById('qfs-assigned')?.value||'';
   const daysVal=document.getElementById('qfs-days')?.value;
   af.escalationAlertDays=daysVal?parseFloat(daysVal):null;
+  const ahmashDaysVal=document.getElementById('qfs-ahmash-days')?.value;
+  af.ahmashAlertDays=ahmashDaysVal?parseFloat(ahmashDaysVal):null;
   try{
     await PATCH('files',{admin_fields:f.admin_fields},`?id=eq.${fileId}`);
     closeModal(); await loadAll(); render();
@@ -2175,6 +2189,21 @@ async function loadMonitorTab(){
   },60000);
 }
 
+// שדה שמסומן ישירות "עקוב במוניטור אחמ"ש" (ahmashAlertDays) — עצמאי מ"כלל ה-SLA"
+// הכללי של הקובץ. תנאי קבוע: השדה ריק. שעון: אם השדה תלוי בשדה אחר — מרגע שהתנאי
+// התקיים (escalated_at); אחרת מרגע יצירת הרשומה.
+function recordMatchesAhmashField(record,af,file){
+  if(!af.ahmashAlertDays) return false;
+  const val=((record.admin_data||{})[af.id]||'').toString();
+  if(val.trim()!=='') return false;
+  if(af.dependsOn){
+    if(!recordMatchesEscalationField(record,af,file)||!record.escalated_at) return false;
+    return businessDaysBetween(new Date(record.escalated_at),new Date())>=parseFloat(af.ahmashAlertDays);
+  }
+  if(!record.created_at) return false;
+  return businessDaysBetween(new Date(record.created_at),new Date())>=parseFloat(af.ahmashAlertDays);
+}
+
 async function loadMonitorData(){
   const filesWithSLA=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false);
   const results=await Promise.all(filesWithSLA.map(async f=>{
@@ -2190,7 +2219,33 @@ async function loadMonitorData(){
       return {file:f,breached:breached.length,pending:pending.length,oldestDays};
     }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
   }));
-  _monitorData=results.sort((a,b)=>b.breached-a.breached);
+
+  // קבצים בלי "כלל SLA" כללי מופעל, אבל עם שדה אחד או יותר שסומן ישירות למוניטור —
+  // כדי לא לספור פעמיים קובץ שכבר מוגדר דרך כלל ה-SLA
+  const filesWithAhmashFields=DB.files.filter(f=>
+    !(f.alert_rule?.enabled&&f.alert_rule?.fieldId)&&
+    canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false&&
+    (f.admin_fields||[]).some(af=>af.ahmashAlertDays)
+  );
+  const fieldResults=await Promise.all(filesWithAhmashFields.map(async f=>{
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`);
+      const ahmashFields=(f.admin_fields||[]).filter(af=>af.ahmashAlertDays);
+      let breached=[];
+      ahmashFields.forEach(af=>{
+        breached=breached.concat((recs||[]).filter(r=>!r.closed_at&&recordMatchesAhmashField(r,af,f)));
+      });
+      let oldestDays=null;
+      if(breached.length){
+        const refDate=r=>r.escalated_at||r.created_at;
+        const oldest=breached.reduce((min,r)=>refDate(r)<refDate(min)?r:min,breached[0]);
+        oldestDays=Math.floor((Date.now()-new Date(refDate(oldest)).getTime())/86400000);
+      }
+      return {file:f,breached:breached.length,pending:0,oldestDays};
+    }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
+  }));
+
+  _monitorData=[...results,...fieldResults].sort((a,b)=>b.breached-a.breached);
   updateMonitorBadge();
 }
 
@@ -5742,6 +5797,12 @@ function fieldDependsOnHTML(ef,i,p){
         אין עדיין שדה אחר מסוג תפריט/תיבת סימון עם שם — כדי שהשדה הזה יוכל להיות תלוי בשדה אחר, קודם צריך שדה כזה עם שם שמור ברשימה.
       </div>`;
   const pmOnlyHTML=p==='a'?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <i class="ti ti-activity-heartbeat" style="font-size:13px;color:#ef4444"></i>
+      <span style="font-size:12px;color:var(--text2)">מעקב במוניטור אחמ"ש — עבר</span>
+      <input type="number" min="0" step="0.5" data-fahmashd="${p}_${i}" value="${ef.ahmashAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
+      <span style="font-size:12px;color:var(--text2)">ימי עסקים והשדה עדיין ריק (ריק = לא נספר)</span>
+    </div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <i class="ti ti-clock-alert" style="font-size:13px;color:#15803d"></i>
       <span style="font-size:12px;color:var(--text2)">מעקב הסלמה למנהל פרויקט (מוניטור + וואטסאפ) — עבר</span>
       <input type="number" min="0" step="0.5" data-fpmd="${p}_${i}" value="${ef.escalationAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
@@ -5749,7 +5810,7 @@ function fieldDependsOnHTML(ef,i,p){
     </div>
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:#7c3aed;margin-top:8px">
       <input type="checkbox" data-fpm="${p}_${i}" ${ef.projectManagerOnly?'checked':''} style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer">
-      <i class="ti ti-lock" style="font-size:13px"></i> להגביל את עריכת השדה למנהל פרויקט בלבד (לא קשור למעקב ההסלמה למעלה)
+      <i class="ti ti-lock" style="font-size:13px"></i> להגביל את עריכת השדה למנהל פרויקט בלבד (לא קשור למעקב למעלה)
     </label>`:'';
   return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--purple)">
@@ -5854,6 +5915,8 @@ function saveFieldsFromDOM(p){
     if(fpm) ef.projectManagerOnly=fpm.checked;
     const fpmd=document.querySelector('[data-fpmd="'+p+'_'+i+'"]');
     if(fpmd) ef.escalationAlertDays=fpmd.value?parseFloat(fpmd.value):null;
+    const fahmashd=document.querySelector('[data-fahmashd="'+p+'_'+i+'"]');
+    if(fahmashd) ef.ahmashAlertDays=fahmashd.value?parseFloat(fahmashd.value):null;
   });
 }
 function onTypeChange(p,i,val){
@@ -5914,7 +5977,7 @@ function addAhmashPmFieldPair(){
   _tmpAdminFields.push({
     id:ahmashId,label:'תשובת אחמ"ש / בכיר',type:'select',options:'לא מאושר,מאושר',required:false,
     dependsOn:'',dependsOnValue:'',bulkEnabled:true,chatEnabled:false,noteEnabled:false,agentEditable:false,
-    projectManagerOnly:false,escalationAlertDays:null,assignedManagerEmail:''
+    projectManagerOnly:false,escalationAlertDays:null,ahmashAlertDays:2,assignedManagerEmail:''
   });
   _tmpAdminFields.push({
     id:pmId,label:'תשובת מנהל פרויקט',type:'text',options:'',required:false,
@@ -5990,7 +6053,8 @@ const fdo=document.querySelector(`[data-fdo="${p}_${i}"]`);
 const fdv=document.querySelector(`[data-fdv="${p}_${i}"]`);
 const fpm=document.querySelector(`[data-fpm="${p}_${i}"]`);
 const fpmd=document.querySelector(`[data-fpmd="${p}_${i}"]`);
-return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled,agentEditable:a2?a2.checked:!!ef.agentEditable,dependsOn:fdo?fdo.value:(ef.dependsOn||''),dependsOnValue:fdv?fdv.value:(ef.dependsOnValue||''),projectManagerOnly:fpm?fpm.checked:!!ef.projectManagerOnly,escalationAlertDays:fpmd?(fpmd.value?parseFloat(fpmd.value):null):(ef.escalationAlertDays??null),assignedManagerEmail:ef.assignedManagerEmail||''};}).filter(ef=>ef.label);}
+const fahmashd=document.querySelector(`[data-fahmashd="${p}_${i}"]`);
+return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled,agentEditable:a2?a2.checked:!!ef.agentEditable,dependsOn:fdo?fdo.value:(ef.dependsOn||''),dependsOnValue:fdv?fdv.value:(ef.dependsOnValue||''),projectManagerOnly:fpm?fpm.checked:!!ef.projectManagerOnly,escalationAlertDays:fpmd?(fpmd.value?parseFloat(fpmd.value):null):(ef.escalationAlertDays??null),ahmashAlertDays:fahmashd?(fahmashd.value?parseFloat(fahmashd.value):null):(ef.ahmashAlertDays??null),assignedManagerEmail:ef.assignedManagerEmail||''};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
 function collectAlertEmails(){
   return [0,1,2,3].map(i=>document.getElementById(`email-alert-${i}`)?.value.trim()||'').filter(Boolean);
