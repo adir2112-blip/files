@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.123'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.124'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4074,7 +4074,7 @@ async function syncAllSettingsToServer(){
 const WA_POLICY_KEY = 'wa_policy';
 
 let _waSubTab='pm';
-function setWaSubTab(t){ _waSubTab=t; render(); }
+function setWaSubTab(t){ _waSubTab=t; render(); loadWALog(); }
 let _pmDigestCfg=null;
 let _ahmashDigestCfg=null;
 function defaultDigestScheduleCfg(){ return {enabled:true,hour:12,days:[0,1,2,3,4]}; }
@@ -4135,6 +4135,15 @@ function waLogPeriodRange(key){
   if(key==='month'){ const m=new Date(now); m.setMonth(m.getMonth()-1); return {from:m, to:null}; }
   return {from:null, to:null};
 }
+// לכל לשונית ב"התראות WA" מתאימה קבוצת msg_type — כדי שהיסטוריית השליחה
+// למטה תציג רק את מה שרלוונטי ללשונית הנבחרת (למשל "אדיר, ליאת וכו'" יראה
+// רק הודעות SLA_DIGEST/DAILY_REPORT, לא הודעות שנשלחו למנהלי פרויקטים)
+const WA_TAB_MSG_TYPES={
+  pm:['PM_DIGEST','PM_DIGEST_TEST'],
+  ahmash:['AHMASH_DIGEST','AHMASH_DIGEST_GROUP','AHMASH_DIGEST_TEST','INACTIVITY','INACTIVITY_GROUP'],
+  digest:['SLA_DIGEST','SLA_DIGEST_TEST','DAILY_REPORT'],
+};
+const WA_TAB_LABELS={pm:'מנהלי פרויקטים', ahmash:'אחמ"שים', digest:'אדיר, ליאת וכו\''};
 async function loadWALog(){
   S._waLogFilter = S._waLogFilter || {period:'today', recipient:''};
   const {from,to} = waLogPeriodRange(S._waLogFilter.period);
@@ -4142,6 +4151,8 @@ async function loadWALog(){
   if(from) params += `&sent_at=gte.${encodeURIComponent(from.toISOString())}`;
   if(to) params += `&sent_at=lt.${encodeURIComponent(to.toISOString())}`;
   if(S._waLogFilter.recipient) params += `&recipient_name=eq.${encodeURIComponent(S._waLogFilter.recipient)}`;
+  const tabTypes=WA_TAB_MSG_TYPES[_waSubTab];
+  if(tabTypes) params += `&msg_type=in.(${tabTypes.join(',')})`;
   try{ S._waLogResults = await GET('wa_log', params); }catch(e){ S._waLogResults=[]; }
   render();
 }
@@ -4594,7 +4605,7 @@ function renderWALogSection(){
   const results=S._waLogResults||[];
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-        <div class="card-title" style="margin-bottom:0"><i class="ti ti-history" style="color:#25d366"></i> היסטוריית שליחה</div>
+        <div class="card-title" style="margin-bottom:0"><i class="ti ti-history" style="color:#25d366"></i> היסטוריית שליחה — ${WA_TAB_LABELS[_waSubTab]||''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select class="form-input" style="font-size:12px;padding:6px 10px" onchange="setWALogPeriod(this.value)">
             ${WA_LOG_PERIODS.map(p=>`<option value="${p.key}" ${filter.period===p.key?'selected':''}>${p.label}</option>`).join('')}
