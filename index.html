@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.129'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.130'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4215,6 +4215,34 @@ function collectPmManagerFiles(){
   return map;
 }
 
+// אם pm_digest.managerFiles מעולם לא נשמר (המסך נבנה ב-2026-09-23 אבל אף אחד עוד לא
+// לחץ "שמור" בו בפועל) — משבצים אוטומטית ברירת מחדל לפי assignedManagerEmail הישן שכבר
+// מוגדר על השדות עצמם ושומרים אותה, כדי שהדוח האמיתי באמת יתחיל להישלח וכדי ש"בריאות
+// המערכת" לא ידווח בטעות "לא משויך" על קבצים שבפועל כן משויכים (רק שזה מעולם לא נשמר).
+// לא דורס שיוך קיים — פועל רק פעם אחת, כשה-managerFiles עדיין ריק/לא קיים.
+async function ensurePmDigestSeeded(){
+  if(!_pmDigestCfg) _pmDigestCfg=await loadDigestScheduleConfig('pm_digest');
+  if(_pmDigestCfg.managerFiles && Object.keys(_pmDigestCfg.managerFiles).length) return;
+  if(!S._managers){
+    try{ S._managers=await GET('app_managers','?order=created_at.asc'); }catch(e){ S._managers=[]; }
+  }
+  const pmManagerEmails=new Set((S._managers||[]).filter(m=>m.is_project_manager&&m.active).map(m=>m.email));
+  const seeded={};
+  DB.files.forEach(f=>{
+    if(f.active===false) return;
+    const af=(f.admin_fields||[]).find(x=>x.escalationAlertDays&&x.assignedManagerEmail&&pmManagerEmails.has(x.assignedManagerEmail));
+    if(af) (seeded[af.assignedManagerEmail]=seeded[af.assignedManagerEmail]||[]).push(f.id);
+  });
+  if(!Object.keys(seeded).length) return;
+  const cfg={...(_pmDigestCfg||defaultDigestScheduleCfg()), managerFiles:seeded};
+  try{
+    const exists=await GET('app_settings','?key=eq.pm_digest&select=key');
+    if(exists?.length) await PATCH('app_settings',{value:JSON.stringify(cfg)},'?key=eq.pm_digest');
+    else await POST('app_settings',{key:'pm_digest',value:JSON.stringify(cfg)});
+    _pmDigestCfg=cfg;
+  }catch(e){}
+}
+
 async function loadWAAlertsTab(){
   S.adminTab='wa_alerts'; render();
   // load policy from Supabase app_settings if exists, else use localStorage fallback
@@ -4224,13 +4252,13 @@ async function loadWAAlertsTab(){
   }catch(e){ _waPolicy = defaultWAPolicy(); }
   await loadWALog();
   await loadSlaDigestConfig();
-  _pmDigestCfg=await loadDigestScheduleConfig('pm_digest');
   _ahmashDigestCfg=await loadDigestScheduleConfig('ahmash_digest');
   // טאב "מנהלי פרויקטים" צריך את רשימת המנהלים (כדי להציג צ'קליסט שיוך קבצים) —
   // לא ניתן להניח שהיא כבר נטענה, כי היא נטענת אחרת רק בטאב "מנהלים" עצמו
   if(!S._managers){
     try{ S._managers=await GET('app_managers','?order=created_at.asc'); }catch(e){ S._managers=[]; }
   }
+  await ensurePmDigestSeeded();
   render();
 }
 
@@ -7043,7 +7071,7 @@ function computeSystemHealth(){
 async function loadHealthTab(){
   S.adminTab='health'; render();
   if(!S._managers){ try{ S._managers=await GET('app_managers','?order=created_at.asc'); }catch(e){ S._managers=[]; } }
-  if(!_pmDigestCfg) _pmDigestCfg=await loadDigestScheduleConfig('pm_digest');
+  await ensurePmDigestSeeded();
   render();
 }
 function renderSystemHealth(){
