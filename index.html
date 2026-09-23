@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.119'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.120'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2223,7 +2223,14 @@ function recordMatchesAhmashField(record,af,file){
 }
 
 async function loadMonitorData(){
-  const filesWithSLA=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false);
+  // כלל SLA שמצביע על שדה שכבר מתויג "מנהל פרויקט" (escalationAlertDays) שייך בפועל
+  // למוניטור מנהלים, לא לאחמ"ש — נמנע מכפל-ספירה/סיווג שגוי (השדה עצמו כבר נספר שם)
+  const filesWithSLA=DB.files.filter(f=>{
+    if(!(f.alert_rule?.enabled&&f.alert_rule?.fieldId)) return false;
+    const targetField=(f.admin_fields||[]).find(af=>af.id===f.alert_rule.fieldId);
+    if(targetField?.escalationAlertDays) return false;
+    return canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false;
+  });
   const results=await Promise.all(filesWithSLA.map(async f=>{
     try{
       const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,extra,admin_data,closed_at,field_comments`);
@@ -2295,8 +2302,10 @@ async function loadMonitorPmTab(){
   },60000);
 }
 
-// גרסה קלה של recordCurrentlyEscalated (מהשרת) — בודקת אם תנאי התלות של שדה הסלמה ספציפי מתקיים על רשומה
+// בודק אם תנאי התלות של שדה הסלמה ספציפי מתקיים על רשומה. שדה עצמאי (בלי dependsOn,
+// כמו "תשובת מנהל פעילות" בטופס חד-שלבי בלי אחמ"ש) נחשב "תמיד רלוונטי" — אין תנאי הפעלה
 function recordMatchesEscalationField(record,af,file){
+  if(!af.dependsOn) return true;
   const adminFields=file.admin_fields||[];
   const parentField=adminFields.find(x=>x.id===af.dependsOn);
   const adminData=record.admin_data||{};
@@ -2306,28 +2315,39 @@ function recordMatchesEscalationField(record,af,file){
     : String(parentVal||'')===(af.dependsOnValue||'');
 }
 
+// שדה מסומן "מנהל פרויקט" — חורג אם עדיין פתוח (לא נסגר) מעל X ימים. בשונה ממעקב אחמ"ש,
+// כאן לא בודקים אם השדה עצמו ריק — "טופל" נקבע ע"י סגירת הרשומה (closed_at), לא ע"י
+// מילוי טקסט בשדה (מנהל פרויקט יכול לרשום הערות חלקיות בלי שזה אומר שהטיפול הסתיים).
+// שעון: אם תלוי בשדה אחר — מרגע שהתנאי התקיים (escalated_at); אחרת (שדה עצמאי, כמו
+// טופס חד-שלבי בלי אחמ"ש) מרגע יצירת הרשומה.
+function recordEscalationBreached(record,af,file){
+  if(!af.escalationAlertDays||record.closed_at) return false;
+  if(af.dependsOn){
+    if(!recordMatchesEscalationField(record,af,file)||!record.escalated_at) return false;
+    return businessDaysBetween(new Date(record.escalated_at),new Date())>=parseFloat(af.escalationAlertDays);
+  }
+  if(!record.created_at) return false;
+  return businessDaysBetween(new Date(record.created_at),new Date())>=parseFloat(af.escalationAlertDays);
+}
+
 async function loadMonitorPmData(){
   const filesWithEscalation=DB.files.filter(f=>
     canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false&&
-    (f.admin_fields||[]).some(af=>af.dependsOn&&af.escalationAlertDays)
+    (f.admin_fields||[]).some(af=>af.escalationAlertDays)
   );
   const results=await Promise.all(filesWithEscalation.map(async f=>{
     try{
-      const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,escalated_at,closed_at,admin_data`);
-      const escalationFields=(f.admin_fields||[]).filter(af=>af.dependsOn&&af.escalationAlertDays);
+      const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`);
+      const escalationFields=(f.admin_fields||[]).filter(af=>af.escalationAlertDays);
       let breached=[];
       escalationFields.forEach(af=>{
-        const matches=(recs||[]).filter(r=>
-          !r.closed_at && r.escalated_at &&
-          recordMatchesEscalationField(r,af,f) &&
-          businessDaysBetween(new Date(r.escalated_at),new Date())>=parseFloat(af.escalationAlertDays)
-        );
-        breached=breached.concat(matches);
+        breached=breached.concat((recs||[]).filter(r=>recordEscalationBreached(r,af,f)));
       });
       let oldestDays=null;
       if(breached.length){
-        const oldest=breached.reduce((min,r)=>r.escalated_at<min.escalated_at?r:min,breached[0]);
-        oldestDays=Math.floor((Date.now()-new Date(oldest.escalated_at).getTime())/86400000);
+        const refDate=r=>r.escalated_at||r.created_at;
+        const oldest=breached.reduce((min,r)=>refDate(r)<refDate(min)?r:min,breached[0]);
+        oldestDays=Math.floor((Date.now()-new Date(refDate(oldest)).getTime())/86400000);
       }
       return {file:f,breached:breached.length,pending:0,oldestDays};
     }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
