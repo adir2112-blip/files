@@ -468,7 +468,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.113'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.114'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -574,7 +574,7 @@ async function initLogin(){
     if(mgr){
       // load all agents for admin management
       allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
-      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]});
+      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,is_ahmash_senior:!!mgr.is_ahmash_senior,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]});
       PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
       return;
     }
@@ -668,7 +668,7 @@ async function loginManager(){
   if(error){showLoginErr('mgr-err','mgr-err-msg','מייל או סיסמה שגויים');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
   const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',email).eq('active',true).single();
   if(!mgr){await sbClient.auth.signOut();showLoginErr('mgr-err','mgr-err-msg','אין הרשאת מנהל');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
-  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]});
+  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,is_ahmash_senior:!!mgr.is_ahmash_senior,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]});
   // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
   PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
 }
@@ -2108,12 +2108,14 @@ async function saveFilterSettings(fileId){
 }
 function canSeeAdminTab(key){
   if(currentUser?.is_super_admin) return true;
+  if(key==='monitor') return !!currentUser?.is_ahmash_senior || (currentUser?.tab_permissions||{})['monitor']===true;
+  if(key==='monitor_pm') return !!currentUser?.is_project_manager || (currentUser?.tab_permissions||{})['monitor_pm']===true;
   return (currentUser?.tab_permissions||{})[key]!==false;
 }
 function renderAdmin(){
   if(!S.adminLoggedIn) return `<div class="empty"><i class="ti ti-lock"></i><p>אין גישה</p></div>`;
   let tab=S.adminTab;
-  const gateable={dashboard:1,trends:1,perf:1,orgs:1,agents:1,monitor:1};
+  const gateable={dashboard:1,trends:1,perf:1,orgs:1,agents:1,monitor:1,monitor_pm:1};
   if(gateable[tab] && !canSeeAdminTab(tab)){ tab='files'; S.adminTab='files'; }
   return `<div class="card">
     <div class="card-title"><i class="ti ti-settings"></i> ממשק מנהל</div>
@@ -2129,11 +2131,12 @@ function renderAdmin(){
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='weekly'?'active':''}" onclick="loadWeeklyReportTab()"><i class="ti ti-calendar-week" style="font-size:12px"></i> דוח שבועי</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="loadBackupTab()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
-      ${canSeeAdminTab('monitor')?`<button class="nav-tab ${tab==='monitor'?'active':''}" onclick="loadMonitorTab()"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> מוניטור חריגה</button>`:''}
+      ${canSeeAdminTab('monitor')?`<button class="nav-tab ${tab==='monitor'?'active':''}" onclick="loadMonitorTab()"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> מוניטור — אחמ"ש</button>`:''}
+      ${canSeeAdminTab('monitor_pm')?`<button class="nav-tab ${tab==='monitor_pm'?'active':''}" onclick="loadMonitorPmTab()"><i class="ti ti-crown" style="font-size:12px;color:#15803d"></i> מוניטור — מנהלים</button>`:''}
       ${currentUser?.email==='adirlev@targetcall.co.il'?`<button class="nav-tab ${tab==='usage'?'active':''}" onclick="loadUsageTab()"><i class="ti ti-gauge" style="font-size:12px;color:#0891b2"></i> ניצול נתונים</button>`:''}
 
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='weekly'?renderWeeklyReport():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():tab==='monitor'?renderMonitor():tab==='usage'?renderUsageScreen():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='weekly'?renderWeeklyReport():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():tab==='monitor'?renderMonitor():tab==='monitor_pm'?renderMonitorPm():tab==='usage'?renderUsageScreen():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -2182,9 +2185,74 @@ function updateMonitorBadge(){
 
 let _monitorBadgeTimer=null;
 
-function renderMonitor(){
-  if(S._monitorLoading) return `<div class="loading"><div class="spinner"></div><p>טוען מוניטור...</p></div>`;
-  const data=_monitorData||[];
+// ══ MONITOR — מנהלים (הסלמה לשדות "מנהל פעילות" וכדומה: projectManagerOnly+dependsOn+escalationAlertDays) ══
+// נגיש למנהלים לפי tab_permissions.monitor_pm או is_project_manager; מסונן לפי allowed_orgs/allowed_files
+let _monitorPmTimer=null;
+let _monitorPmData=[];
+
+async function loadMonitorPmTab(){
+  S.adminTab='monitor_pm'; S._monitorPmLoading=true; render();
+  await loadMonitorPmData();
+  S._monitorPmLoading=false; render();
+  clearInterval(_monitorPmTimer);
+  _monitorPmTimer=setInterval(async()=>{
+    if(S.adminTab!=='monitor_pm'){ clearInterval(_monitorPmTimer); return; }
+    await loadMonitorPmData();
+    render();
+  },60000);
+}
+
+// גרסה קלה של recordCurrentlyEscalated (מהשרת) — בודקת אם תנאי התלות של שדה הסלמה ספציפי מתקיים על רשומה
+function recordMatchesEscalationField(record,af,file){
+  const adminFields=file.admin_fields||[];
+  const parentField=adminFields.find(x=>x.id===af.dependsOn);
+  const adminData=record.admin_data||{};
+  const parentVal=adminData[af.dependsOn];
+  return parentField?.type==='checkbox'
+    ? String(!!parentVal)===af.dependsOnValue
+    : String(parentVal||'')===(af.dependsOnValue||'');
+}
+
+async function loadMonitorPmData(){
+  const filesWithEscalation=DB.files.filter(f=>
+    canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false&&
+    (f.admin_fields||[]).some(af=>af.projectManagerOnly&&af.dependsOn&&af.escalationAlertDays)
+  );
+  const results=await Promise.all(filesWithEscalation.map(async f=>{
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,escalated_at,closed_at,admin_data`);
+      const escalationFields=(f.admin_fields||[]).filter(af=>af.projectManagerOnly&&af.dependsOn&&af.escalationAlertDays);
+      let breached=[];
+      escalationFields.forEach(af=>{
+        const matches=(recs||[]).filter(r=>
+          !r.closed_at && r.escalated_at &&
+          recordMatchesEscalationField(r,af,f) &&
+          businessDaysBetween(new Date(r.escalated_at),new Date())>=parseFloat(af.escalationAlertDays)
+        );
+        breached=breached.concat(matches);
+      });
+      let oldestDays=null;
+      if(breached.length){
+        const oldest=breached.reduce((min,r)=>r.escalated_at<min.escalated_at?r:min,breached[0]);
+        oldestDays=Math.floor((Date.now()-new Date(oldest.escalated_at).getTime())/86400000);
+      }
+      return {file:f,breached:breached.length,pending:0,oldestDays};
+    }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
+  }));
+  _monitorPmData=results.sort((a,b)=>b.breached-a.breached);
+  updateMonitorPmBadge();
+}
+
+function updateMonitorPmBadge(){
+  const el=document.getElementById('monitor-pm-badge');
+  if(!el) return;
+  const total=(_monitorPmData||[]).reduce((s,d)=>s+d.breached,0);
+  el.textContent=total>99?'99+':total;
+  el.style.display=total>0?'block':'none';
+}
+
+// מנוע רינדור משותף לשני מסכי המוניטור (אחמ"ש/מנהלים) — אותה תצוגת קוביות מקובצות לפי ארגון
+function renderMonitorGeneric(data,opts){
   const totalBreached=data.reduce((s,d)=>s+d.breached,0);
   const totalPending=data.reduce((s,d)=>s+d.pending,0);
   const maxOldest=data.reduce((m,d)=>Math.max(m,d.oldestDays||0),0);
@@ -2201,7 +2269,7 @@ function renderMonitor(){
       </div>
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:10px">
         <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="font-size:12px"></i> ${d.oldestDays!==null?d.oldestDays+' ימים — הוותיקה ביותר':'—'}</span>
-        <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-inbox" style="font-size:12px"></i> ${d.pending} ממתינים סה"כ</span>
+        ${opts.showPending?`<span style="display:flex;align-items:center;gap:4px"><i class="ti ti-inbox" style="font-size:12px"></i> ${d.pending} ממתינים סה"כ</span>`:''}
       </div>
     </div>`;
   };
@@ -2236,27 +2304,43 @@ function renderMonitor(){
   return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:24px;margin:-6px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <div style="display:flex;align-items:center;gap:10px;color:var(--text);font-size:18px;font-weight:800">
-        <i class="ti ti-activity-heartbeat" style="color:#dc2626"></i> מוניטור חריגה
+        <i class="ti ${opts.icon}" style="color:${opts.iconColor}"></i> ${opts.title}
       </div>
-      <button class="btn btn-sm" onclick="loadMonitorTab()"><i class="ti ti-refresh"></i> רענן</button>
+      <button class="btn btn-sm" onclick="${opts.reloadFn}()"><i class="ti ti-refresh"></i> רענן</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px">
       <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:30px;font-weight:900;color:#7f1d1d">${totalBreached}</div>
         <div style="font-size:11px;color:#b91c1c;margin-top:4px;font-weight:600">סה"כ חריגות</div>
       </div>
-      <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:12px;padding:16px;text-align:center">
+      ${opts.showPending?`<div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:30px;font-weight:900;color:#78350f">${totalPending}</div>
         <div style="font-size:11px;color:#92400e;margin-top:4px;font-weight:600">ממתינים למענה בסה"כ</div>
-      </div>
+      </div>`:''}
       <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:30px;font-weight:900;color:#1e3a8a">${maxOldest}</div>
         <div style="font-size:11px;color:#1d4ed8;margin-top:4px;font-weight:600">ימים — החריגה הוותיקה ביותר</div>
       </div>
     </div>
-    ${data.length?sections:'<div class="empty"><i class="ti ti-mood-check"></i><p>אין קבצים עם מעקב SLA</p></div>'}
+    ${data.length?sections:`<div class="empty"><i class="ti ti-mood-check"></i><p>${opts.emptyMsg}</p></div>`}
     <div style="text-align:center;color:var(--text3);font-size:11px;margin-top:20px">מתעדכן אוטומטית כל דקה</div>
   </div>`;
+}
+
+function renderMonitorPm(){
+  if(S._monitorPmLoading) return `<div class="loading"><div class="spinner"></div><p>טוען מוניטור...</p></div>`;
+  return renderMonitorGeneric(_monitorPmData||[], {
+    title:'מוניטור חריגה — מנהלים', icon:'ti-crown', iconColor:'#15803d',
+    reloadFn:'loadMonitorPmTab', showPending:false, emptyMsg:'אין שדות הסלמה עם חריגה'
+  });
+}
+
+function renderMonitor(){
+  if(S._monitorLoading) return `<div class="loading"><div class="spinner"></div><p>טוען מוניטור...</p></div>`;
+  return renderMonitorGeneric(_monitorData||[], {
+    title:'מוניטור חריגה — אחמ"ש', icon:'ti-activity-heartbeat', iconColor:'#ef4444',
+    reloadFn:'loadMonitorTab', showPending:true, emptyMsg:'אין קבצים עם מעקב SLA'
+  });
 }
 
 // ══ ניצול נתונים (אדיר בלבד) — מדדים אמיתיים מ-Supabase, לא הערכה ══
@@ -4406,7 +4490,7 @@ function renderAdminManagers(){
     </div>
     ${!managers.length
       ?`<div class="empty"><i class="ti ti-shield-off"></i><p>אין מנהלים מוגדרים</p></div>`
-      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>קבצים</th><th>סופר מנהל</th><th>מנהל פרויקט</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
+      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>קבצים</th><th>סופר מנהל</th><th>מנהל פרויקט</th><th>בכיר אחמ"ש</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
       ${managers.map(m=>`<tr>
         <td dir="ltr" style="font-size:13px">${esc(m.email)}</td>
         <td><div style="display:flex;align-items:center;gap:8px">
@@ -4418,6 +4502,7 @@ function renderAdminManagers(){
         <td style="font-size:12px">${(m.allowed_files||[]).length?`<span class="badge badge-info"><i class="ti ti-files"></i> ${(m.allowed_files||[]).length} קבצים</span>`:'<span style="color:var(--text3)">הכל</span>'}</td>
         <td>${m.is_super_admin?'<span class="badge badge-purple"><i class="ti ti-star"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
         <td>${m.is_project_manager?'<span class="badge" style="background:#dcfce7;color:#15803d"><i class="ti ti-crown"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
+        <td>${m.is_ahmash_senior?'<span class="badge" style="background:#fee2e2;color:#dc2626"><i class="ti ti-activity-heartbeat"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
         <td style="font-size:12px;color:var(--text2);white-space:nowrap">${m.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(m.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
         <td><div class="flex-gap">
           <button class="btn btn-xs" onclick="openEditManagerById('${escJs(m.email)}')"><i class="ti ti-edit"></i></button>
@@ -4427,11 +4512,14 @@ function renderAdminManagers(){
       </tbody></table></div>`}`;
 }
 
-const MGR_TAB_DEFS=[['dashboard','דשבורד'],['trends','גרף מגמה'],['perf','ביצועי נציגים'],['orgs','ארגונים'],['agents','נציגים'],['monitor','מוניטור חריגה']];
+const MGR_TAB_DEFS=[['dashboard','דשבורד'],['trends','גרף מגמה'],['perf','ביצועי נציגים'],['orgs','ארגונים'],['agents','נציגים'],['monitor','מוניטור — אחמ"ש'],['monitor_pm','מוניטור — מנהלים']];
+// monitor/monitor_pm הם opt-in (מוסתרים כברירת מחדל, גלויים רק למי שמסומן בתפקיד המתאים
+// או שסומן לו הצ'קבוקס במפורש) — בשונה משאר הטאבים כאן שהם opt-out (מוצגים כברירת מחדל)
+const MGR_TAB_OPT_IN=new Set(['monitor','monitor_pm']);
 function mgrTabChecklistHTML(tp){
   tp=tp||{};
   return MGR_TAB_DEFS.map(([k,l])=>{
-    const isSel=tp[k]!==false;
+    const isSel=MGR_TAB_OPT_IN.has(k)?tp[k]===true:tp[k]!==false;
     return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid ${isSel?'var(--green)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;background:${isSel?'#f0fdf4':'var(--surface2)'}">
       <input type="checkbox" data-tab="${k}" ${isSel?'checked':''} style="accent-color:var(--green);cursor:pointer"> ${l}
     </label>`;
@@ -4472,7 +4560,13 @@ function openNewManager(){
     <div class="form-row">
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#15803d">
         <input type="checkbox" id="mgr-new-pm" style="width:16px;height:16px;accent-color:#15803d;cursor:pointer">
-        <i class="ti ti-crown" style="font-size:15px"></i> מנהל פרויקט — רואה ומטפל בשדות שהועברו אליו
+        <i class="ti ti-crown" style="font-size:15px"></i> מנהל פרויקט — רואה ומטפל בשדות שהועברו אליו, ורואה מוניטור חריגה — מנהלים
+      </label>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#ef4444">
+        <input type="checkbox" id="mgr-new-ahmash" style="width:16px;height:16px;accent-color:#ef4444;cursor:pointer">
+        <i class="ti ti-activity-heartbeat" style="font-size:15px"></i> בכיר אחמ"ש — רואה מוניטור חריגה — אחמ"ש
       </label>
     </div>
     <div class="form-row">
@@ -4489,10 +4583,10 @@ function openNewManager(){
 function openEditManagerById(email){
   const m=(S._managers||[]).find(x=>x.email===email);
   if(!m) return;
-  openEditManager(m.email,m.name||'',m.phone||'',m.active,!!m.is_super_admin,m.allowed_files||[],m.tab_permissions||{},!!m.is_project_manager);
+  openEditManager(m.email,m.name||'',m.phone||'',m.active,!!m.is_super_admin,m.allowed_files||[],m.tab_permissions||{},!!m.is_project_manager,!!m.is_ahmash_senior);
 }
 
-function openEditManager(email,name,phone,active,isSuper,allowedFiles=[],tabPerms={},isPM=false){
+function openEditManager(email,name,phone,active,isSuper,allowedFiles=[],tabPerms={},isPM=false,isAhmash=false){
   showModal(`<div class="modal-title"><i class="ti ti-edit" style="color:var(--purple)"></i> עריכת מנהל</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm)" dir="ltr">${esc(email)}</div>
     <div class="form-row"><label class="form-label">שם *</label><input class="form-input" id="mgr-edit-name" value="${esc(name)}"></div>
@@ -4502,7 +4596,13 @@ function openEditManager(email,name,phone,active,isSuper,allowedFiles=[],tabPerm
     <div class="form-row">
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#15803d">
         <input type="checkbox" id="mgr-edit-pm" ${isPM?'checked':''} style="width:16px;height:16px;accent-color:#15803d;cursor:pointer">
-        <i class="ti ti-crown" style="font-size:15px"></i> מנהל פרויקט — רואה ומטפל בשדות שהועברו אליו
+        <i class="ti ti-crown" style="font-size:15px"></i> מנהל פרויקט — רואה ומטפל בשדות שהועברו אליו, ורואה מוניטור חריגה — מנהלים
+      </label>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#ef4444">
+        <input type="checkbox" id="mgr-edit-ahmash" ${isAhmash?'checked':''} style="width:16px;height:16px;accent-color:#ef4444;cursor:pointer">
+        <i class="ti ti-activity-heartbeat" style="font-size:15px"></i> בכיר אחמ"ש — רואה מוניטור חריגה — אחמ"ש
       </label>
     </div>
     <div class="form-row">
@@ -4528,11 +4628,12 @@ async function saveNewManager(){
   const phone=document.getElementById('mgr-new-phone').value.trim();
   const isSuper=document.getElementById('mgr-new-super').value==='true';
   const isPM=document.getElementById('mgr-new-pm')?.checked||false;
+  const isAhmash=document.getElementById('mgr-new-ahmash')?.checked||false;
   const allowedFiles=[...document.querySelectorAll('#mgr-new-files input[type=checkbox]:checked')].map(el=>el.dataset.file);
   const tabPerms=collectMgrTabPerms('mgr-new-tabs');
   if(!email||!name){showAlert('יש למלא מייל ושם','error');return;}
   try{
-    await POST('app_managers',{email,name,phone,active:true,is_super_admin:isSuper,is_project_manager:isPM,allowed_files:allowedFiles,tab_permissions:tabPerms});
+    await POST('app_managers',{email,name,phone,active:true,is_super_admin:isSuper,is_project_manager:isPM,is_ahmash_senior:isAhmash,allowed_files:allowedFiles,tab_permissions:tabPerms});
     await loadManagersTab(); closeModal(); showAlert('המנהל נוסף בהצלחה','success');
   }catch(e){
     showAlert(e.message.includes('duplicate')||e.message.includes('unique')?'מייל זה כבר קיים':'שגיאה: '+e.message,'error');
@@ -4545,11 +4646,12 @@ async function saveEditManager(email){
   const active=document.getElementById('mgr-edit-active').value==='true';
   const isSuper=document.getElementById('mgr-edit-super').value==='true';
   const isPM=document.getElementById('mgr-edit-pm')?.checked||false;
+  const isAhmash=document.getElementById('mgr-edit-ahmash')?.checked||false;
   const allowedFiles=[...document.querySelectorAll('#mgr-edit-files input[type=checkbox]:checked')].map(el=>el.dataset.file);
   const tabPerms=collectMgrTabPerms('mgr-edit-tabs');
   if(!name){showAlert('יש להזין שם','error');return;}
   try{
-    await PATCH('app_managers',{name,phone,active,is_super_admin:isSuper,is_project_manager:isPM,allowed_files:allowedFiles,tab_permissions:tabPerms},`?email=eq.${encodeURIComponent(email)}`);
+    await PATCH('app_managers',{name,phone,active,is_super_admin:isSuper,is_project_manager:isPM,is_ahmash_senior:isAhmash,allowed_files:allowedFiles,tab_permissions:tabPerms},`?email=eq.${encodeURIComponent(email)}`);
     await loadManagersTab(); closeModal(); showAlert('המנהל עודכן','success');
   }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
 }
