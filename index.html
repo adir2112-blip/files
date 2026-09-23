@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.122'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.123'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1025,7 +1025,7 @@ function renderOrgs(){
         ${rule.days?`<span style="font-size:10px;opacity:.7">מעל ${rule.days} ימים</span>`:''}
       </div>`;
     }).join('')}
-    <button onclick="checkAndSendWAAlerts(false)" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:#25d366;border:none;border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">
+    <button onclick="sendAhmashDigestTestNow()" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:#25d366;border:none;border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">
       <i class="ti ti-brand-whatsapp"></i> שלח WA
     </button>
     </div></div>`:'';
@@ -3289,7 +3289,7 @@ function renderAdminDashboard(){
         </div>
         <button class="btn btn-sm" onclick="openDashboardSettings()" title="התאם דשבורד"><i class="ti ti-adjustments"></i> התאם דשבורד</button>
         <button class="btn btn-sm" onclick="loadDashboardTab()"><i class="ti ti-refresh"></i> רענן</button>
-        <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="checkAndSendWAAlerts(false)" title="שלח התראות וואטסאפ לאנשי קשר">
+        <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="sendAhmashDigestTestNow()" title="שלח דוח אחמ&quot;ש מרוכז עכשיו">
           <i class="ti ti-brand-whatsapp"></i> שלח התראות WA
         </button>
       </div>    </div>
@@ -4073,6 +4073,34 @@ async function syncAllSettingsToServer(){
 
 const WA_POLICY_KEY = 'wa_policy';
 
+let _waSubTab='pm';
+function setWaSubTab(t){ _waSubTab=t; render(); }
+let _pmDigestCfg=null;
+let _ahmashDigestCfg=null;
+function defaultDigestScheduleCfg(){ return {enabled:true,hour:12,days:[0,1,2,3,4]}; }
+async function loadDigestScheduleConfig(key){
+  try{
+    const rows=await GET('app_settings',`?key=eq.${key}&select=value`);
+    const v=rows?.[0]?.value;
+    const parsed=v?(typeof v==='string'?JSON.parse(v):v):{};
+    return {...defaultDigestScheduleCfg(),...parsed};
+  }catch(e){ return defaultDigestScheduleCfg(); }
+}
+async function saveDigestScheduleConfig(key,prefix){
+  const enabled=document.getElementById(`${prefix}-enabled`)?.checked??true;
+  const hour=parseInt(document.getElementById(`${prefix}-hour`)?.value||12);
+  const days=[0,1,2,3,4].filter(i=>document.querySelector(`[data-${prefix}-day="${i}"]`)?.checked);
+  const cfg={enabled,hour,days};
+  try{
+    const exists=await GET('app_settings',`?key=eq.${key}&select=key`);
+    if(exists?.length) await PATCH('app_settings',{value:JSON.stringify(cfg)},`?key=eq.${key}`);
+    else await POST('app_settings',{key,value:JSON.stringify(cfg)});
+    showAlert('✓ ההגדרות נשמרו','success');
+    if(key==='pm_digest') _pmDigestCfg=cfg; else _ahmashDigestCfg=cfg;
+    render();
+  }catch(e){ showAlert('שגיאה בשמירה: '+e.message,'error'); }
+}
+
 async function loadWAAlertsTab(){
   S.adminTab='wa_alerts'; render();
   // load policy from Supabase app_settings if exists, else use localStorage fallback
@@ -4082,6 +4110,8 @@ async function loadWAAlertsTab(){
   }catch(e){ _waPolicy = defaultWAPolicy(); }
   await loadWALog();
   await loadSlaDigestConfig();
+  _pmDigestCfg=await loadDigestScheduleConfig('pm_digest');
+  _ahmashDigestCfg=await loadDigestScheduleConfig('ahmash_digest');
   render();
 }
 
@@ -4139,48 +4169,6 @@ function defaultWAPolicy(){
     blockedDays: [5,6],      // 5=שישי, 6=שבת
     onlyNewBreaches: false,  // לשלוח רק על חריגות חדשות
   };
-}
-
-async function saveWAPolicy(){
-  const p = collectWAPolicy();
-  localStorage.setItem('moked_wa_policy', JSON.stringify(p));
-  _waPolicy = p;
-  // sync to Supabase so Edge Function respects it
-  try{
-    await PATCH('app_settings', {value: JSON.stringify(p.enabled)}, `?key=eq.wa_enabled`);
-  }catch(e){
-    // if row doesn't exist yet, insert it
-    try{ await POST('app_settings', {key:'wa_enabled', value: JSON.stringify(p.enabled)}); }catch(e2){}
-  }
-  startWAAutoCheckWithPolicy();
-  showAlert(p.enabled ? '✅ התראות WA פעילות' : '⏸ התראות WA מושהות', 'success');
-}
-
-function collectWAPolicy(){
-  return {
-    enabled: document.getElementById('wap-enabled')?.value === 'true',
-    intervalHours: parseFloat(document.getElementById('wap-interval')?.value||2),
-    startHour: parseInt(document.getElementById('wap-start')?.value||8),
-    endHour: parseInt(document.getElementById('wap-end')?.value||20),
-    // convert active days to blocked days
-    blockedDays: [0,1,2,3,4,5,6].filter(i=>{
-      const cb=document.querySelector(`[data-waday="${i}"]`);
-      return cb && !cb.checked; // not checked = blocked
-    }),
-    onlyNewBreaches: document.getElementById('wap-new-only')?.checked ?? false,
-  };
-}
-
-function isWASendAllowed(policy){
-  if(!policy?.enabled) return false;
-  const now = new Date();
-  const day = now.getDay();
-  // תמיד חוסם שישי/שבת — ללא קשר להגדרות
-  if(day===5||day===6) return false;
-  if((policy.blockedDays||[]).includes(day)) return false;
-  const hour = now.getHours();
-  if(hour < policy.startHour || hour >= policy.endHour) return false;
-  return true;
 }
 
 // ══ SLA BREACH DIGEST (מקובץ לפי ארגון, לנמענים נבחרים) ══
@@ -4408,99 +4396,196 @@ function renderSlaDigestSection(){
   </div>`;
 }
 
-function renderWAAlerts(){
-  const p = _waPolicy || defaultWAPolicy();
-  const days = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
-  const intervals = [
-    {v:0.5,l:'כל חצי שעה'},{v:1,l:'כל שעה'},{v:2,l:'כל שעתיים'},
-    {v:3,l:'כל 3 שעות'},{v:5,l:'כל 5 שעות'},{v:8,l:'כל 8 שעות'},
-    {v:12,l:'פעמיים ביום'},{v:24,l:'פעם ביום'},
-  ];
-  const hours = Array.from({length:24},(_,i)=>i);
+// שכפול מזערי של timesheet-style בורר שעה/ימים, משותף לשני דוחות ה-digest החדשים
+function digestScheduleHTML(cfg,prefix,color){
+  const days=['ראשון','שני','שלישי','רביעי','חמישי'];
+  const hours=Array.from({length:24},(_,i)=>i);
+  return `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:${cfg.enabled?'#f0fdf4':'var(--surface2)'};border:1px solid ${cfg.enabled?'#86efac':'var(--border)'};border-radius:var(--radius-sm)">
+      <input type="checkbox" id="${prefix}-enabled" ${cfg.enabled?'checked':''} style="width:18px;height:18px;accent-color:${color};cursor:pointer">
+      <label for="${prefix}-enabled" style="font-weight:700;font-size:14px;cursor:pointer">שלח דוח יומי</label>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="form-row" style="margin-bottom:0">
+        <label class="form-label">שעת שליחה</label>
+        <select class="form-input" id="${prefix}-hour">
+          ${hours.map(h=>`<option value="${h}" ${cfg.hour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row" style="margin-bottom:0">
+        <label class="form-label">ימי שליחה</label>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">
+          ${days.map((d,i)=>{
+            const isActive=(cfg.days||[0,1,2,3,4]).includes(i);
+            return `<label style="display:flex;align-items:center;gap:3px;padding:4px 8px;border:1.5px solid ${isActive?color:'var(--border2)'};border-radius:7px;cursor:pointer;background:${isActive?'var(--surface2)':'var(--surface2)'};font-size:12px;font-weight:600">
+              <input type="checkbox" data-${prefix}-day="${i}" ${isActive?'checked':''} style="width:13px;height:13px;accent-color:${color};cursor:pointer">
+              ${d}
+            </label>`;
+          }).join('')}
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">שישי-שבת לא זמינים</div>
+      </div>
+    </div>`;
+}
 
-  // files with WA contacts
-  const waFiles = DB.files.filter(f=>(f.wa_contacts||[]).length>0);
+function renderWaSubTabPM(){
+  const cfg=_pmDigestCfg||defaultDigestScheduleCfg();
+  const escFields=[];
+  DB.files.forEach(f=>(f.admin_fields||[]).forEach(af=>{
+    if(af.escalationAlertDays) escFields.push({file:f,af});
+  }));
+  const byManager={};
+  const unassigned=[];
+  escFields.forEach(({file,af})=>{
+    if(af.assignedManagerEmail) (byManager[af.assignedManagerEmail]=byManager[af.assignedManagerEmail]||[]).push(file.name);
+    else unassigned.push(`${file.name} (${esc(af.label)})`);
+  });
+  const managerNames={};
+  (S._managers||[]).forEach(m=>managerNames[m.email]=m.name);
 
   return `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-
-      <!-- POLICY CARD -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
-        <div class="card-title" style="margin-bottom:16px;color:#25d366"><i class="ti ti-settings" style="color:#25d366"></i> מדיניות שליחה</div>
-
-        <div class="form-row">
-          <label class="form-label">שליחת התראות</label>
-          <select class="form-input" id="wap-enabled" style="font-weight:700;font-size:14px;border:2px solid ${p.enabled?'#22c55e':'#ef4444'};color:${p.enabled?'var(--green)':'var(--red)'}">
-            <option value="true"  ${p.enabled?'selected':''}>✅ מאושר — שולח התראות</option>
-            <option value="false" ${!p.enabled?'selected':''}>🚫 חסום — לא שולח</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <select class="form-input" id="wap-interval">
-            ${intervals.map(i=>`<option value="${i.v}" ${p.intervalHours===i.v?'selected':''}>${i.l}</option>`).join('')}
-          </select>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-          <div class="form-row" style="margin-bottom:0">
-            <label class="form-label">שעת התחלה</label>
-            <select class="form-input" id="wap-start">
-              ${hours.map(h=>`<option value="${h}" ${p.startHour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-row" style="margin-bottom:0">
-            <label class="form-label">שעת סיום</label>
-            <select class="form-input" id="wap-end">
-              ${hours.map(h=>`<option value="${h}" ${p.endHour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
-            </select>
-          </div>
-        </div>
-
-        <div style="margin-bottom:16px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)">
-          <input type="checkbox" id="wap-new-only" ${p.onlyNewBreaches?'checked':''} style="width:16px;height:16px;accent-color:var(--blue);cursor:pointer">
-          <label for="wap-new-only" style="font-size:13px;cursor:pointer">שלח רק על חריגות חדשות (לא חוזר על אותה רשומה)</label>
-        </div>
-
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-success" onclick="saveWAPolicy()"><i class="ti ti-check"></i> שמור מדיניות</button>
-          <button class="btn" style="background:#0891b2;border-color:#0891b2;color:#fff" onclick="syncAllSettingsToServer()">
-            <i class="ti ti-cloud-upload"></i> שמור לשרת
-          </button>
-          <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="checkAndSendWAAlerts(false)">
-            <i class="ti ti-brand-whatsapp"></i> שלח עכשיו
-          </button>
-        </div>
-      </div>
-
-      <!-- FILES WITH WA -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
-        <div class="card-title" style="margin-bottom:16px"><i class="ti ti-folder" style="color:var(--blue)"></i> קבצים עם התראות WA</div>
-        ${waFiles.length
-          ? waFiles.map(f=>{
-              const o=DB.orgs.find(x=>x.id===f.org_id);
-              const rule=f.alert_rule||{};
-              return `<div style="padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px">
-                <div style="font-weight:700;font-size:13px;margin-bottom:6px"><i class="ti ${f.icon||'ti-file'}" style="color:var(--blue)"></i> ${esc(f.name)} <span style="color:var(--text3);font-weight:400">· ${esc(o?o.name:'')}</span></div>
-                ${(f.wa_contacts||[]).map(c=>`<div style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:3px">
-                  <i class="ti ti-brand-whatsapp" style="color:#25d366"></i> ${esc(c.name)} <span dir="ltr" style="color:var(--text3)">${esc(c.phone)}</span>
-                </div>`).join('')}
-                ${rule.enabled?`<div style="font-size:11px;color:var(--amber);margin-top:4px"><i class="ti ti-clock"></i> SLA: ${rule.days||0} ימים</div>`:'<div style="font-size:11px;color:var(--text3);margin-top:4px">⚠️ אין תנאי SLA מוגדר</div>'}
-                <div style="font-size:11px;margin-top:2px;color:${f.wa_notify_group?'#25d366':'var(--text3)'}"><i class="ti ${f.wa_notify_group?'ti-users':'ti-user-x'}"></i> ${f.wa_notify_group?'שולח גם לקבוצה':'לא שולח לקבוצה'}</div>
-                <button class="btn btn-xs" style="margin-top:6px" onclick="openEditFile('${f.id}')"><i class="ti ti-edit"></i> ערוך</button>
-              </div>`;
-            }).join('')
-          : `<div class="empty"><i class="ti ti-brand-whatsapp" style="color:#25d366"></i><p>אין קבצים עם אנשי קשר WA<br><span style="font-size:12px">הוסף בעריכת קובץ → התראות וואטסאפ</span></p></div>`
-        }
-      </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:16px;color:#15803d"><i class="ti ti-crown"></i> דוח יומי — מנהלי פרויקטים</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">
+      כל מנהל פרויקט מקבל הודעה אחת מרוכזת ליום, רק על השדות שהוקצו אליו (נקבע בעריכת
+      השדה עצמו, בטאב "מעקב הסלמה למנהל פרויקט" → "מנהל פרויקט לעדכון").
     </div>
+    ${digestScheduleHTML(cfg,'pmdg','#15803d')}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn btn-success" onclick="saveDigestScheduleConfig('pm_digest','pmdg')"><i class="ti ti-check"></i> שמור</button>
+      <button class="btn btn-sm" style="background:#15803d;border-color:#15803d;color:#fff" onclick="sendPmDigestTestNow()"><i class="ti ti-send"></i> שלח בדיקה עכשיו</button>
+    </div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">מי אחראי על מה</div>
+    ${Object.keys(byManager).length?Object.entries(byManager).map(([email,files])=>`
+      <div style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;font-size:13px">
+        <strong>${esc(managerNames[email]||email)}</strong> <span style="color:var(--text3);font-size:11px">(${files.length} שדות)</span>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${files.map(esc).join(' · ')}</div>
+      </div>`).join(''):'<div class="empty" style="padding:12px"><p>אין שדות מוקצים עדיין</p></div>'}
+    ${unassigned.length?`<div style="margin-top:10px;padding:8px 12px;background:var(--amber-light);border:1px solid #fcd34d;border-radius:var(--radius-sm);font-size:12px;color:#92400e">
+      <i class="ti ti-alert-triangle"></i> שדות בלי מנהל מוקצה (לא יישלחו לאף אחד): ${unassigned.map(esc).join(' · ')}
+    </div>`:''}
+  </div>`;
+}
 
-    <!-- SLA DIGEST -->
-    ${renderSlaDigestSection()}
+function renderWaSubTabAhmash(){
+  const cfg=_ahmashDigestCfg||defaultDigestScheduleCfg();
+  const waFiles = DB.files.filter(f=>(f.wa_contacts||[]).length>0||f.wa_notify_group===true);
+  return `
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:16px;color:#ef4444"><i class="ti ti-activity-heartbeat"></i> דוח יומי — אחמ"שים</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">
+      כל איש קשר (מוגדר בעריכת קובץ → התראות וואטסאפ) מקבל הודעה אחת מרוכזת ליום, על כל
+      הקבצים שהוא רשום עליהם — במקום התראה נפרדת על כל קובץ בנפרד.
+    </div>
+    ${digestScheduleHTML(cfg,'ahdg','#ef4444')}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn btn-success" onclick="saveDigestScheduleConfig('ahmash_digest','ahdg')"><i class="ti ti-check"></i> שמור</button>
+      <button class="btn btn-sm" style="background:#ef4444;border-color:#ef4444;color:#fff" onclick="sendAhmashDigestTestNow()"><i class="ti ti-send"></i> שלח בדיקה עכשיו</button>
+    </div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">קבצים עם אנשי קשר</div>
+    ${waFiles.length
+      ? waFiles.map(f=>{
+          const o=DB.orgs.find(x=>x.id===f.org_id);
+          const rule=f.alert_rule||{};
+          return `<div style="padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:6px"><i class="ti ${f.icon||'ti-file'}" style="color:var(--blue)"></i> ${esc(f.name)} <span style="color:var(--text3);font-weight:400">· ${esc(o?o.name:'')}</span></div>
+            ${(f.wa_contacts||[]).map(c=>`<div style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:3px">
+              <i class="ti ti-brand-whatsapp" style="color:#25d366"></i> ${esc(c.name)} <span dir="ltr" style="color:var(--text3)">${esc(c.phone)}</span>
+            </div>`).join('')}
+            ${rule.enabled?`<div style="font-size:11px;color:var(--amber);margin-top:4px"><i class="ti ti-clock"></i> SLA: ${rule.days||0} ימים</div>`:'<div style="font-size:11px;color:var(--text3);margin-top:4px">⚠️ אין תנאי SLA מוגדר</div>'}
+            <div style="font-size:11px;margin-top:2px;color:${f.wa_notify_group?'#25d366':'var(--text3)'}"><i class="ti ${f.wa_notify_group?'ti-users':'ti-user-x'}"></i> ${f.wa_notify_group?'שולח גם לקבוצה':'לא שולח לקבוצה'}</div>
+            <button class="btn btn-xs" style="margin-top:6px" onclick="openEditFile('${f.id}')"><i class="ti ti-edit"></i> ערוך</button>
+          </div>`;
+        }).join('')
+      : `<div class="empty"><i class="ti ti-brand-whatsapp" style="color:#25d366"></i><p>אין קבצים עם אנשי קשר WA<br><span style="font-size:12px">הוסף בעריכת קובץ → התראות וואטסאפ</span></p></div>`
+    }
+  </div>`;
+}
 
-    <!-- DAILY REPORT -->
-    ${renderDailyReportSection()}
+async function sendPmDigestTestNow(){
+  showAlert('בודק חריגות ושולח...','success');
+  const escFields=[];
+  DB.files.forEach(f=>(f.admin_fields||[]).forEach(af=>{ if(af.escalationAlertDays&&af.assignedManagerEmail) escFields.push({file:f,af}); }));
+  if(!escFields.length){ showAlert('אין שדות מוקצים למנהל פרויקט','error'); return; }
+  const byManager={};
+  for(const {file,af} of escFields){
+    let recs=[];
+    try{ recs=await GET('records',`?file_id=eq.${file.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`); }catch(e){ continue; }
+    const breached=recs.filter(r=>recordEscalationBreached(r,af,file));
+    if(!breached.length) continue;
+    const refDate=r=>r.escalated_at||r.created_at;
+    const oldest=breached.reduce((min,r)=>refDate(r)<refDate(min)?r:min,breached[0]);
+    const oldestDays=Math.floor((Date.now()-new Date(refDate(oldest)).getTime())/86400000);
+    (byManager[af.assignedManagerEmail]=byManager[af.assignedManagerEmail]||[]).push({name:file.name,count:breached.length,oldestDays});
+  }
+  const emails=Object.keys(byManager);
+  if(!emails.length){ showAlert('אין כרגע חריגות אצל אף מנהל פרויקט — לא נשלח כלום','success'); return; }
+  let sentCount=0;
+  for(const email of emails){
+    const mgr=(S._managers||[]).find(m=>m.email===email);
+    if(!mgr?.phone) continue;
+    const lines=byManager[email];
+    const total=lines.reduce((s,l)=>s+l.count,0);
+    const dateStr=new Date().toLocaleDateString('he-IL');
+    const fileLines=lines.map(l=>`• ${l.name}\n  ${l.count} פניות ממתינות · ⏱ ישנה ביותר: ${l.oldestDays} ימים`).join('\n');
+    const msg=`📊 *הדוח היומי שלך — ${dateStr}*\n\n${fileLines}\n\n📌 סה"כ: ${total} פניות ממתינות לך\n\nלכניסה: https://adir2112-blip.github.io/files/`;
+    await sendWA(formatWAPhone(mgr.phone),msg);
+    await POST('wa_log',{recipient_name:mgr.name,recipient_phone:mgr.phone,file_name:lines.map(l=>l.name).join(', '),msg_type:'PM_DIGEST_TEST',ok:true}).catch(()=>{});
+    sentCount++;
+  }
+  showAlert(sentCount?`✓ נשלחה הודעת בדיקה ל-${sentCount} מנהלים`:'לאף מנהל מוקצה אין מספר טלפון','success');
+  if(S.adminTab==='wa_alerts') loadWALog();
+}
 
+async function sendAhmashDigestTestNow(){
+  showAlert('בודק חריגות ושולח...','success');
+  const filesWithAlerts=DB.files.filter(f=>f.alert_rule?.enabled&&f.alert_rule?.fieldId&&((f.wa_contacts||[]).length>0||f.wa_notify_group===true));
+  if(!filesWithAlerts.length){ showAlert('אין קבצים עם אנשי קשר WA מוגדרים','error'); return; }
+  const byPhone={};
+  let groupLines=[];
+  for(const f of filesWithAlerts){
+    let recs=[];
+    try{ recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,extra,admin_data,closed_at,field_comments`); }catch(e){ continue; }
+    const breached=recs.filter(r=>recordMatchesAlert(r,f));
+    if(!breached.length) continue;
+    for(const c of (f.wa_contacts||[])){
+      const key=formatWAPhone(c.phone);
+      if(!byPhone[key]) byPhone[key]={name:c.name,phone:c.phone,lines:[]};
+      byPhone[key].lines.push({name:f.name,count:breached.length});
+    }
+    if(f.wa_notify_group===true) groupLines.push({name:f.name,count:breached.length});
+  }
+  const phones=Object.keys(byPhone);
+  if(!phones.length&&!groupLines.length){ showAlert('אין כרגע חריגות באף קובץ עם אנשי קשר — לא נשלח כלום','success'); return; }
+  const dateStr=new Date().toLocaleDateString('he-IL');
+  for(const key of phones){
+    const {name,phone,lines}=byPhone[key];
+    const total=lines.reduce((s,l)=>s+l.count,0);
+    const fileLines=lines.map(l=>`• ${l.name}\n  ${l.count} פניות ממתינות לטיפול`).join('\n');
+    const msg=`📊 *הדוח היומי שלך — ${dateStr}*\n\n${fileLines}\n\n📌 סה"כ: ${total} פניות ממתינות\n\nלכניסה: https://adir2112-blip.github.io/files/`;
+    await sendWA(formatWAPhone(phone),msg);
+    await POST('wa_log',{recipient_name:name,recipient_phone:phone,file_name:lines.map(l=>l.name).join(', '),msg_type:'AHMASH_DIGEST_TEST',ok:true}).catch(()=>{});
+  }
+  if(groupLines.length){
+    const total=groupLines.reduce((s,l)=>s+l.count,0);
+    const fileLines=groupLines.map(l=>`• ${l.name}\n  ${l.count} פניות ממתינות לטיפול`).join('\n');
+    const msg=`📊 *דוח יומי — קבוצת מנהל ובכירים — ${dateStr}*\n\n${fileLines}\n\n📌 סה"כ: ${total} פניות ממתינות`;
+    await sendWA('120363429161263528@g.us',msg);
+    await POST('wa_log',{recipient_name:'קבוצת מנהל ובכירי אדיר',recipient_phone:'120363429161263528@g.us',file_name:groupLines.map(l=>l.name).join(', '),msg_type:'AHMASH_DIGEST_TEST',ok:true}).catch(()=>{});
+  }
+  showAlert(`✓ נשלחה הודעת בדיקה ל-${phones.length+(groupLines.length?1:0)} נמענים`,'success');
+  if(S.adminTab==='wa_alerts') loadWALog();
+}
+
+function renderWAAlerts(){
+  const tab=_waSubTab;
+  return `
+    <div class="nav-tabs" style="margin-bottom:16px">
+      <button class="nav-tab ${tab==='pm'?'active':''}" onclick="setWaSubTab('pm')"><i class="ti ti-crown" style="font-size:12px;color:#15803d"></i> מנהלי פרויקטים</button>
+      <button class="nav-tab ${tab==='ahmash'?'active':''}" onclick="setWaSubTab('ahmash')"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> אחמ"שים</button>
+      <button class="nav-tab ${tab==='digest'?'active':''}" onclick="setWaSubTab('digest')"><i class="ti ti-users" style="font-size:12px;color:#0891b2"></i> אדיר, ליאת וכו'</button>
+    </div>
+    ${tab==='pm'?renderWaSubTabPM():tab==='ahmash'?renderWaSubTabAhmash():`${renderSlaDigestSection()}${renderDailyReportSection()}`}
     <!-- HISTORY -->
     ${renderWALogSection()}`;
 }
@@ -4537,59 +4622,6 @@ function renderWALogSection(){
           </tbody></table></div>`
       }
     </div>`;
-}
-
-// Override checkAndSendWAAlerts to respect policy and log history
-const _origCheckAndSend = checkAndSendWAAlerts;
-async function checkAndSendWAAlerts(silent=false){
-  const policy = _waPolicy || defaultWAPolicy();
-  // ALWAYS check day/time — even in silent mode
-  if(!isWASendAllowed(policy)){
-    if(!silent){
-      const now=new Date();
-      const day=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'][now.getDay()];
-      showAlert(`לא ניתן לשלוח כעת — ${day} ${now.getHours()}:00 מחוץ לחלון ההתראות`,'error');
-    }
-    return; // block both silent and non-silent
-  }
-
-  const filesWithAlerts=DB.files.filter(f=>canManagerAccessFile(f)&&f.active!==false&&f.alert_rule?.enabled&&f.alert_rule?.fieldId&&(f.wa_contacts||[]).length>0);
-  if(!filesWithAlerts.length){if(!silent)showAlert('אין קבצים עם התראות WA מוגדרות','error');return;}
-
-  let totalSent=0,totalBreached=0;const msgs=[];const logEntries=[];
-
-  await Promise.all(filesWithAlerts.map(async f=>{
-    try{
-      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,field_comments`);
-      const breached=recs.filter(r=>recordMatchesAlert(r,f));
-      if(!breached.length) return;
-      totalBreached+=breached.length;
-      const dateStr=new Date().toLocaleDateString('he-IL');
-      const msg=`מובמנט | ${dateStr}\n\n${f.name}: ${breached.length} פניות ממתינות לטיפול\n\nלכניסה: https://adir2112-blip.github.io/files/`;
-      for(const contact of (f.wa_contacts||[])){
-        const phone=formatWAPhone(contact.phone);
-        let ok=true;
-        try{ await sendWA(phone,msg); }catch(e){ ok=false; }
-        totalSent++; msgs.push(`${contact.name} (${f.name})`);
-        logEntries.push({recipient_name:contact.name,recipient_phone:phone,file_name:f.name,msg_type:'SLA',ok});
-      }
-      // שליחה לקבוצה — רק אם הקובץ סומן לכך במפורש
-      if(f.wa_notify_group===true){
-        let ok=true;
-        try{
-          await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({phone:'120363429161263528@g.us',message:msg,source:'מערכת קבצים'})});
-        }catch(e){ ok=false; }
-        logEntries.push({recipient_name:'קבוצת מנהל ובכירי אדיר',recipient_phone:'120363429161263528@g.us',file_name:f.name,msg_type:'SLA_GROUP',ok});
-      }
-    }catch(e){}
-  }));
-
-  if(logEntries.length){ try{ await POST('wa_log',logEntries); }catch(e){} if(S.adminTab==='wa_alerts') loadWALog(); }
-  if(!silent){
-    if(totalSent>0) showAlert(`✓ נשלחו ${totalSent} הודעות WA על ${totalBreached} חריגות`,'success');
-    else showAlert('אין חריגות כרגע','success');
-  }
 }
 
 function startWAAutoCheckWithPolicy(){
