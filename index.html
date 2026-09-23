@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.120'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.121'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -3160,6 +3160,13 @@ async function saveDashboardSettings(){
     showAlert('הדשבורד עודכן','success');
   }catch(e){ showAlert('שגיאה בשמירה: '+e.message,'error'); }
 }
+let _dashSearchQ='';
+let _dashSearchTimer=null;
+function setDashSearch(val){
+  _dashSearchQ=val||'';
+  clearTimeout(_dashSearchTimer);
+  _dashSearchTimer=setTimeout(()=>render(),300);
+}
 function renderAdminDashboard(){
   if(S._dashLoading) return `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`;
   const data = S._dashboardData||[];
@@ -3167,12 +3174,14 @@ function renderAdminDashboard(){
 
   // sort: most breached first
   const sorted = [...data].sort((a,b)=>b.breached-a.breached);
+  const q=_dashSearchQ.trim().toLowerCase();
+  const filtered = q ? sorted.filter(d=>d.file.name.toLowerCase().includes(q)) : sorted;
   const totalBreached = sorted.reduce((s,d)=>s+d.breached,0);
   const totalRecords = sorted.reduce((s,d)=>s+d.total,0);
   const totalEscalatedOpen = sorted.reduce((s,d)=>s+(d.escalatedOpen||0),0);
   const enabledWidgets=new Set(currentUser?.dashboard_widgets||[]);
 
-  const rows = sorted.map(d=>{
+  const rows = filtered.map(d=>{
     const o = DB.orgs.find(x=>x.id===d.file.org_id);
     const rule = d.file.alert_rule||{};
     const hasRule = rule.enabled && rule.fieldId;
@@ -3249,15 +3258,20 @@ function renderAdminDashboard(){
         <div style="font-size:11px;color:#047857;opacity:.7;margin-top:2px">ממתין לתגובה, לא נסגר</div>
       </div>`:''}
     </div>
-    <div class="flex-between" style="margin-bottom:12px">
+    <div class="flex-between" style="margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <span style="font-size:13px;color:var(--text2);font-weight:600">ריכוז חריגות לפי קובץ — <span style="color:var(--blue)">${DASH_PERIODS.find(p=>p.key===_dashPeriod)?.label||'הכל'}</span></span>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <div style="position:relative">
+          <i class="ti ti-search" style="position:absolute;top:50%;right:10px;transform:translateY(-50%);font-size:14px;color:var(--text3)"></i>
+          <input class="form-input" style="padding-right:32px;font-size:13px;width:200px" placeholder="חיפוש קובץ..." value="${esc(_dashSearchQ)}" oninput="setDashSearch(this.value)">
+        </div>
         <button class="btn btn-sm" onclick="openDashboardSettings()" title="התאם דשבורד"><i class="ti ti-adjustments"></i> התאם דשבורד</button>
         <button class="btn btn-sm" onclick="loadDashboardTab()"><i class="ti ti-refresh"></i> רענן</button>
         <button class="btn btn-sm" style="background:#25d366;border-color:#25d366;color:#fff" onclick="checkAndSendWAAlerts(false)" title="שלח התראות וואטסאפ לאנשי קשר">
           <i class="ti ti-brand-whatsapp"></i> שלח התראות WA
         </button>
       </div>    </div>
+    ${q&&!rows.length?`<div class="empty" style="padding:20px"><p>אין קבצים שתואמים לחיפוש "${esc(_dashSearchQ)}"</p></div>`:`
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -3271,7 +3285,7 @@ function renderAdminDashboard(){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-    </div>`;
+    </div>`}`;
 }
 
 // ══ TRENDS TAB ══
