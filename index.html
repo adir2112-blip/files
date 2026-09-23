@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.121'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.122'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -3161,11 +3161,81 @@ async function saveDashboardSettings(){
   }catch(e){ showAlert('שגיאה בשמירה: '+e.message,'error'); }
 }
 let _dashSearchQ='';
-let _dashSearchTimer=null;
+// מעדכן רק את תוכן טבלת הקבצים (בלי render() מלא) כדי שתיבת החיפוש לא תאבד פוקוס
+// בכל תו — בדיוק כמו populateAgents למסך הכניסה, לא כמו debounceSearch הרגיל
 function setDashSearch(val){
   _dashSearchQ=val||'';
-  clearTimeout(_dashSearchTimer);
-  _dashSearchTimer=setTimeout(()=>render(),300);
+  const el=document.getElementById('dash-table-container');
+  if(!el) return;
+  const enabledWidgets=new Set(currentUser?.dashboard_widgets||[]);
+  const sorted=[...(S._dashboardData||[])].sort((a,b)=>b.breached-a.breached);
+  const q=_dashSearchQ.trim().toLowerCase();
+  const filtered=q?sorted.filter(d=>d.file.name.toLowerCase().includes(q)):sorted;
+  el.innerHTML=dashTableHTML(filtered,enabledWidgets,q);
+}
+function dashRowHTML(d,enabledWidgets){
+  const o = DB.orgs.find(x=>x.id===d.file.org_id);
+  const rule = d.file.alert_rule||{};
+  const hasRule = rule.enabled && rule.fieldId;
+  const pct = d.total>0 ? Math.round((d.breached/d.total)*100) : 0;
+  const severity = d.breached===0 ? 'ok' : pct>50 ? 'high' : pct>20 ? 'med' : 'low';
+  const sevColor = {ok:'#16a34a',low:'#d97706',med:'#ea580c',high:'#dc2626'}[severity];
+  const sevBg    = {ok:'var(--green-light)',low:'var(--amber-light)',med:'#ffedd5',high:'var(--red-light)'}[severity];
+
+  return `<tr style="cursor:pointer" onclick="adminViewFileRecords('${d.file.id}')">
+    <td>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:38px;height:38px;border-radius:10px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="ti ${d.file.icon||'ti-file'}" style="color:var(--blue);font-size:18px"></i>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--text)">${esc(d.file.name)}</div>
+          <div style="font-size:11px;color:var(--text3)">${esc(o?o.name:'—')}</div>
+        </div>
+      </div>
+    </td>
+    <td style="text-align:center">
+      ${hasRule
+        ? `<div style="display:inline-flex;align-items:center;gap:8px">
+             <span style="background:${sevBg};color:${sevColor};font-weight:800;font-size:18px;border-radius:10px;padding:6px 16px;min-width:50px;display:inline-block;text-align:center">${d.breached}</span>
+             ${d.breached>0?`<span style="font-size:11px;color:${sevColor};font-weight:600">${pct}%</span>`:''}
+           </div>`
+        : `<span style="font-size:12px;color:var(--text3);font-style:italic">לא הוגדר SLA</span>`
+      }
+    </td>
+    <td style="text-align:center;color:var(--text2);font-size:13px">${d.total}</td>
+    <td style="font-size:12px;color:var(--text3)">
+      ${hasRule
+        ? `<i class="ti ti-clock" style="font-size:11px"></i> מעל ${rule.days||0} ימים${rule.fieldId?` · ${esc((([...d.file.extra_fields||[],...d.file.admin_fields||[]]).find(x=>x.id===rule.fieldId)||{}).label||'')}`:''}`
+        : '—'
+      }
+    </td>
+    ${enabledWidgets.has('escalated_open')?`<td style="text-align:center">${d.escalatedOpen>0?`<span style="background:#d1fae5;color:#047857;font-weight:800;border-radius:20px;padding:3px 12px;font-size:13px">${d.escalatedOpen}</span>`:`<span style="color:var(--text3)">—</span>`}</td>`:''}
+    <td style="text-align:center" onclick="event.stopPropagation()">
+      <button class="btn btn-xs" style="background:var(--purple-light);border-color:#c4b5fd;color:var(--purple)"
+        onclick="openPieChart('${d.file.id}')" title="פילוח שדה ניהולי">
+        <i class="ti ti-chart-pie"></i>
+      </button>
+    </td>
+    <td style="text-align:left"><i class="ti ti-chevron-left" style="color:var(--text3)"></i></td>
+  </tr>`;
+}
+function dashTableHTML(filtered,enabledWidgets,q){
+  if(q&&!filtered.length) return `<div class="empty" style="padding:20px"><p>אין קבצים שתואמים לחיפוש "${esc(_dashSearchQ)}"</p></div>`;
+  return `<div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>קובץ / ארגון</th>
+        <th style="text-align:center">חריגות SLA</th>
+        <th style="text-align:center">סה"כ רשומות</th>
+        <th>תנאי SLA</th>
+        ${enabledWidgets.has('escalated_open')?'<th style="text-align:center;color:#047857"><i class="ti ti-crown"></i> הועבר למנהל פרויקט</th>':''}
+        <th style="text-align:center"><i class="ti ti-chart-pie" style="color:var(--purple)"></i></th>
+        <th></th>
+      </tr></thead>
+      <tbody>${filtered.map(d=>dashRowHTML(d,enabledWidgets)).join('')}</tbody>
+    </table>
+  </div>`;
 }
 function renderAdminDashboard(){
   if(S._dashLoading) return `<div class="loading"><div class="spinner"></div><p>טוען נתונים...</p></div>`;
@@ -3180,54 +3250,6 @@ function renderAdminDashboard(){
   const totalRecords = sorted.reduce((s,d)=>s+d.total,0);
   const totalEscalatedOpen = sorted.reduce((s,d)=>s+(d.escalatedOpen||0),0);
   const enabledWidgets=new Set(currentUser?.dashboard_widgets||[]);
-
-  const rows = filtered.map(d=>{
-    const o = DB.orgs.find(x=>x.id===d.file.org_id);
-    const rule = d.file.alert_rule||{};
-    const hasRule = rule.enabled && rule.fieldId;
-    const pct = d.total>0 ? Math.round((d.breached/d.total)*100) : 0;
-    const severity = d.breached===0 ? 'ok' : pct>50 ? 'high' : pct>20 ? 'med' : 'low';
-    const sevColor = {ok:'#16a34a',low:'#d97706',med:'#ea580c',high:'#dc2626'}[severity];
-    const sevBg    = {ok:'var(--green-light)',low:'var(--amber-light)',med:'#ffedd5',high:'var(--red-light)'}[severity];
-
-    return `<tr style="cursor:pointer" onclick="adminViewFileRecords('${d.file.id}')">
-      <td>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:38px;height:38px;border-radius:10px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <i class="ti ${d.file.icon||'ti-file'}" style="color:var(--blue);font-size:18px"></i>
-          </div>
-          <div>
-            <div style="font-weight:700;font-size:14px;color:var(--text)">${esc(d.file.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${esc(o?o.name:'—')}</div>
-          </div>
-        </div>
-      </td>
-      <td style="text-align:center">
-        ${hasRule
-          ? `<div style="display:inline-flex;align-items:center;gap:8px">
-               <span style="background:${sevBg};color:${sevColor};font-weight:800;font-size:18px;border-radius:10px;padding:6px 16px;min-width:50px;display:inline-block;text-align:center">${d.breached}</span>
-               ${d.breached>0?`<span style="font-size:11px;color:${sevColor};font-weight:600">${pct}%</span>`:''}
-             </div>`
-          : `<span style="font-size:12px;color:var(--text3);font-style:italic">לא הוגדר SLA</span>`
-        }
-      </td>
-      <td style="text-align:center;color:var(--text2);font-size:13px">${d.total}</td>
-      <td style="font-size:12px;color:var(--text3)">
-        ${hasRule
-          ? `<i class="ti ti-clock" style="font-size:11px"></i> מעל ${rule.days||0} ימים${rule.fieldId?` · ${esc((([...d.file.extra_fields||[],...d.file.admin_fields||[]]).find(x=>x.id===rule.fieldId)||{}).label||'')}`:''}`
-          : '—'
-        }
-      </td>
-      ${enabledWidgets.has('escalated_open')?`<td style="text-align:center">${d.escalatedOpen>0?`<span style="background:#d1fae5;color:#047857;font-weight:800;border-radius:20px;padding:3px 12px;font-size:13px">${d.escalatedOpen}</span>`:`<span style="color:var(--text3)">—</span>`}</td>`:''}
-      <td style="text-align:center" onclick="event.stopPropagation()">
-        <button class="btn btn-xs" style="background:var(--purple-light);border-color:#c4b5fd;color:var(--purple)"
-          onclick="openPieChart('${d.file.id}')" title="פילוח שדה ניהולי">
-          <i class="ti ti-chart-pie"></i>
-        </button>
-      </td>
-      <td style="text-align:left"><i class="ti ti-chevron-left" style="color:var(--text3)"></i></td>
-    </tr>`;
-  }).join('');
 
   return `
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
@@ -3271,21 +3293,7 @@ function renderAdminDashboard(){
           <i class="ti ti-brand-whatsapp"></i> שלח התראות WA
         </button>
       </div>    </div>
-    ${q&&!rows.length?`<div class="empty" style="padding:20px"><p>אין קבצים שתואמים לחיפוש "${esc(_dashSearchQ)}"</p></div>`:`
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>קובץ / ארגון</th>
-          <th style="text-align:center">חריגות SLA</th>
-          <th style="text-align:center">סה"כ רשומות</th>
-          <th>תנאי SLA</th>
-          ${enabledWidgets.has('escalated_open')?'<th style="text-align:center;color:#047857"><i class="ti ti-crown"></i> הועבר למנהל פרויקט</th>':''}
-          <th style="text-align:center"><i class="ti ti-chart-pie" style="color:var(--purple)"></i></th>
-          <th></th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`}`;
+    <div id="dash-table-container">${dashTableHTML(filtered,enabledWidgets,q)}</div>`;
 }
 
 // ══ TRENDS TAB ══
