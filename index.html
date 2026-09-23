@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.126'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.127'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4125,6 +4125,11 @@ async function loadWAAlertsTab(){
   await loadSlaDigestConfig();
   _pmDigestCfg=await loadDigestScheduleConfig('pm_digest');
   _ahmashDigestCfg=await loadDigestScheduleConfig('ahmash_digest');
+  // טאב "מנהלי פרויקטים" צריך את רשימת המנהלים (כדי להציג צ'קליסט שיוך קבצים) —
+  // לא ניתן להניח שהיא כבר נטענה, כי היא נטענת אחרת רק בטאב "מנהלים" עצמו
+  if(!S._managers){
+    try{ S._managers=await GET('app_managers','?order=created_at.asc'); }catch(e){ S._managers=[]; }
+  }
   render();
 }
 
@@ -4652,13 +4657,12 @@ async function computePmManagerLines(fileIds){
 }
 async function previewPmDigest(){
   const email=document.getElementById('pmdg-preview-mgr')?.value;
-  const box=document.getElementById('pmdg-preview');
-  if(!email){ if(box) box.textContent='אין מנהל לתצוגה מקדימה'; return; }
+  if(!email){ const box=document.getElementById('pmdg-preview'); if(box) box.textContent='אין מנהל לתצוגה מקדימה'; return; }
   const managerFiles=collectPmManagerFiles();
   const tpl=collectDigestTpl('pmdg');
-  showAlert('בודק חריגות...','success');
   const lines=await computePmManagerLines(managerFiles[email]||[]);
   const msg=buildOrgGroupedMessage(tpl,lines);
+  const box=document.getElementById('pmdg-preview');
   if(box) box.textContent = msg || 'אין חריגות פתוחות כרגע אצל מנהל זה — לא הייתה נשלחת הודעה';
 }
 async function sendPmDigestTestNow(){
@@ -4701,12 +4705,11 @@ async function computeAhmashContactLines(target){
 }
 async function previewAhmashDigest(){
   const target=document.getElementById('ahdg-preview-contact')?.value;
-  const box=document.getElementById('ahdg-preview');
-  if(!target){ if(box) box.textContent='אין איש קשר לתצוגה מקדימה'; return; }
+  if(!target){ const box=document.getElementById('ahdg-preview'); if(box) box.textContent='אין איש קשר לתצוגה מקדימה'; return; }
   const tpl=collectDigestTpl('ahdg');
-  showAlert('בודק חריגות...','success');
   const lines=await computeAhmashContactLines(target);
   const msg=buildOrgGroupedMessage(tpl,lines);
+  const box=document.getElementById('ahdg-preview');
   if(box) box.textContent = msg || 'אין חריגות פתוחות כרגע אצל איש קשר זה — לא הייתה נשלחת הודעה';
 }
 async function sendAhmashDigestTestNow(){
