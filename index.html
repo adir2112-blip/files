@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.127'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.128'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2182,12 +2182,13 @@ function renderAdmin(){
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='weekly'?'active':''}" onclick="loadWeeklyReportTab()"><i class="ti ti-calendar-week" style="font-size:12px"></i> דוח שבועי</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='wa_alerts'?'active':''}" onclick="loadWAAlertsTab()"><i class="ti ti-brand-whatsapp" style="font-size:12px;color:#25d366"></i> התראות WA</button>`:''}
       ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='backup'?'active':''}" onclick="loadBackupTab()"><i class="ti ti-cloud-upload" style="font-size:12px;color:var(--blue)"></i> גיבוי</button>`:''}
+      ${currentUser?.is_super_admin?`<button class="nav-tab ${tab==='health'?'active':''}" onclick="loadHealthTab()"><i class="ti ti-heart-rate-monitor" style="font-size:12px;color:#0891b2"></i> בריאות המערכת</button>`:''}
       ${canSeeAdminTab('monitor')?`<button class="nav-tab ${tab==='monitor'?'active':''}" onclick="loadMonitorTab()"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> מוניטור — אחמ"ש</button>`:''}
       ${canSeeAdminTab('monitor_pm')?`<button class="nav-tab ${tab==='monitor_pm'?'active':''}" onclick="loadMonitorPmTab()"><i class="ti ti-crown" style="font-size:12px;color:#15803d"></i> מוניטור — מנהלים</button>`:''}
       ${currentUser?.email==='adirlev@targetcall.co.il'?`<button class="nav-tab ${tab==='usage'?'active':''}" onclick="loadUsageTab()"><i class="ti ti-gauge" style="font-size:12px;color:#0891b2"></i> ניצול נתונים</button>`:''}
 
     </div>
-    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='weekly'?renderWeeklyReport():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():tab==='monitor'?renderMonitor():tab==='monitor_pm'?renderMonitorPm():tab==='usage'?renderUsageScreen():renderAdminAllRecords()}
+    ${tab==='dashboard'?renderAdminDashboard():tab==='trends'?renderAdminTrends():tab==='perf'?renderAdminPerformance():tab==='weekly'?renderWeeklyReport():tab==='orgs'?renderAdminOrgs():tab==='files'?renderAdminFiles():tab==='agents'?renderAdminAgents():tab==='managers'?renderAdminManagers():tab==='wa_alerts'?renderWAAlerts():tab==='backup'?renderAdminBackup():tab==='health'?renderSystemHealth():tab==='monitor'?renderMonitor():tab==='monitor_pm'?renderMonitorPm():tab==='usage'?renderUsageScreen():renderAdminAllRecords()}
   </div>`;
 }
 
@@ -2222,6 +2223,28 @@ function recordMatchesAhmashField(record,af,file){
   return businessDaysBetween(new Date(record.created_at),new Date())>=parseFloat(af.ahmashAlertDays);
 }
 
+// גרסת "טרם חרג" של recordMatchesAhmashField/recordAlertPending/recordEscalationPending —
+// אותו תנאי בדיוק כמו הפונקציה המקבילה, רק שעוד לא עברו מספיק ימים. משמשות ל"ממתין
+// (טרם חרג)" — תור העבודה הפרואקטיבי במוניטורים (ראו renderMonitorGeneric, mode='pending')
+function recordAhmashPending(record,af,file){
+  if(!af.ahmashAlertDays) return false;
+  const val=((record.admin_data||{})[af.id]||'').toString();
+  if(val.trim()!=='') return false;
+  let refDate;
+  if(af.dependsOn){
+    if(!recordMatchesEscalationField(record,af,file)||!record.escalated_at) return false;
+    refDate=record.escalated_at;
+  }else{
+    if(!record.created_at) return false;
+    refDate=record.created_at;
+  }
+  return businessDaysBetween(new Date(refDate),new Date())<parseFloat(af.ahmashAlertDays);
+}
+function recordAlertPending(record,file){
+  if(!recordFieldPending(record,file)) return false;
+  return !recordMatchesAlert(record,file);
+}
+
 async function loadMonitorData(){
   // כלל SLA שמצביע על שדה שכבר מתויג "מנהל פרויקט" (escalationAlertDays) שייך בפועל
   // למוניטור מנהלים, לא לאחמ"ש — נמנע מכפל-ספירה/סיווג שגוי (השדה עצמו כבר נספר שם)
@@ -2236,13 +2259,20 @@ async function loadMonitorData(){
       const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,extra,admin_data,closed_at,field_comments`);
       const breached=recs.filter(r=>recordMatchesAlert(r,f));
       const pending=recs.filter(r=>recordFieldPending(r,f));
+      const pendingNotBreached=recs.filter(r=>recordAlertPending(r,f));
       let oldestDays=null;
       if(breached.length){
         const oldest=breached.reduce((min,r)=>r.created_at<min.created_at?r:min,breached[0]);
         oldestDays=Math.floor((Date.now()-new Date(oldest.created_at).getTime())/86400000);
       }
-      return {file:f,breached:breached.length,pending:pending.length,oldestDays};
-    }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
+      let nextDueDays=null;
+      if(pendingNotBreached.length&&f.alert_rule?.days){
+        const days=parseFloat(f.alert_rule.days);
+        const soonest=Math.min(...pendingNotBreached.map(r=>days-businessDaysBetween(new Date(r.created_at),new Date())));
+        nextDueDays=Math.max(0,Math.ceil(soonest));
+      }
+      return {file:f,breached:breached.length,pending:pending.length,pendingNotBreached:pendingNotBreached.length,oldestDays,nextDueDays};
+    }catch(e){ return {file:f,breached:0,pending:0,pendingNotBreached:0,oldestDays:null,nextDueDays:null}; }
   }));
 
   // קבצים בלי "כלל SLA" כללי מופעל, אבל עם שדה אחד או יותר שסומן ישירות למוניטור —
@@ -2256,9 +2286,10 @@ async function loadMonitorData(){
     try{
       const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`);
       const ahmashFields=(f.admin_fields||[]).filter(af=>af.ahmashAlertDays);
-      let breached=[];
+      let breached=[]; let pendingPairs=[];
       ahmashFields.forEach(af=>{
         breached=breached.concat((recs||[]).filter(r=>!r.closed_at&&recordMatchesAhmashField(r,af,f)));
+        pendingPairs=pendingPairs.concat((recs||[]).filter(r=>!r.closed_at&&recordAhmashPending(r,af,f)).map(r=>({r,af})));
       });
       let oldestDays=null;
       if(breached.length){
@@ -2266,8 +2297,16 @@ async function loadMonitorData(){
         const oldest=breached.reduce((min,r)=>refDate(r)<refDate(min)?r:min,breached[0]);
         oldestDays=Math.floor((Date.now()-new Date(refDate(oldest)).getTime())/86400000);
       }
-      return {file:f,breached:breached.length,pending:0,oldestDays};
-    }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
+      let nextDueDays=null;
+      if(pendingPairs.length){
+        const remain=pendingPairs.map(({r,af})=>{
+          const refDate=af.dependsOn?r.escalated_at:r.created_at;
+          return parseFloat(af.ahmashAlertDays)-businessDaysBetween(new Date(refDate),new Date());
+        });
+        nextDueDays=Math.max(0,Math.ceil(Math.min(...remain)));
+      }
+      return {file:f,breached:breached.length,pending:0,pendingNotBreached:pendingPairs.length,oldestDays,nextDueDays};
+    }catch(e){ return {file:f,breached:0,pending:0,pendingNotBreached:0,oldestDays:null,nextDueDays:null}; }
   }));
 
   _monitorData=[...results,...fieldResults].sort((a,b)=>b.breached-a.breached);
@@ -2329,6 +2368,19 @@ function recordEscalationBreached(record,af,file){
   if(!record.created_at) return false;
   return businessDaysBetween(new Date(record.created_at),new Date())>=parseFloat(af.escalationAlertDays);
 }
+// גרסת "טרם חרג" — ראו הערה מקבילה ליד recordAhmashPending
+function recordEscalationPending(record,af,file){
+  if(!af.escalationAlertDays||record.closed_at) return false;
+  let refDate;
+  if(af.dependsOn){
+    if(!recordMatchesEscalationField(record,af,file)||!record.escalated_at) return false;
+    refDate=record.escalated_at;
+  }else{
+    if(!record.created_at) return false;
+    refDate=record.created_at;
+  }
+  return businessDaysBetween(new Date(refDate),new Date())<parseFloat(af.escalationAlertDays);
+}
 
 async function loadMonitorPmData(){
   const filesWithEscalation=DB.files.filter(f=>
@@ -2339,9 +2391,10 @@ async function loadMonitorPmData(){
     try{
       const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`);
       const escalationFields=(f.admin_fields||[]).filter(af=>af.escalationAlertDays);
-      let breached=[];
+      let breached=[]; let pendingPairs=[];
       escalationFields.forEach(af=>{
         breached=breached.concat((recs||[]).filter(r=>recordEscalationBreached(r,af,f)));
+        pendingPairs=pendingPairs.concat((recs||[]).filter(r=>recordEscalationPending(r,af,f)).map(r=>({r,af})));
       });
       let oldestDays=null;
       if(breached.length){
@@ -2349,8 +2402,16 @@ async function loadMonitorPmData(){
         const oldest=breached.reduce((min,r)=>refDate(r)<refDate(min)?r:min,breached[0]);
         oldestDays=Math.floor((Date.now()-new Date(refDate(oldest)).getTime())/86400000);
       }
-      return {file:f,breached:breached.length,pending:0,oldestDays};
-    }catch(e){ return {file:f,breached:0,pending:0,oldestDays:null}; }
+      let nextDueDays=null;
+      if(pendingPairs.length){
+        const remain=pendingPairs.map(({r,af})=>{
+          const refDate=af.dependsOn?r.escalated_at:r.created_at;
+          return parseFloat(af.escalationAlertDays)-businessDaysBetween(new Date(refDate),new Date());
+        });
+        nextDueDays=Math.max(0,Math.ceil(Math.min(...remain)));
+      }
+      return {file:f,breached:breached.length,pending:0,pendingNotBreached:pendingPairs.length,oldestDays,nextDueDays};
+    }catch(e){ return {file:f,breached:0,pending:0,pendingNotBreached:0,oldestDays:null,nextDueDays:null}; }
   }));
   _monitorPmData=results.sort((a,b)=>b.breached-a.breached);
   updateMonitorPmBadge();
@@ -2365,24 +2426,44 @@ function updateMonitorPmBadge(){
 }
 
 // מנוע רינדור משותף לשני מסכי המוניטור (אחמ"ש/מנהלים) — אותה תצוגת קוביות מקובצות לפי ארגון
+// מצב תצוגה לכל מוניטור בנפרד: 'breached' (ברירת מחדל, כמו קודם) או 'pending' — תור
+// "מה מחכה לי היום": פניות שכבר תואמות את התנאי (שדה ריק / עדיין פתוח) אבל עוד לא
+// עברו את סף הימים, כדי לאפשר טיפול יזום לפני שזה הופך לחריגה בפועל.
+let _monitorViewMode='breached';
+let _monitorPmViewMode='breached';
+function setMonitorViewMode(viewKey,mode){
+  if(viewKey==='monitor') _monitorViewMode=mode; else _monitorPmViewMode=mode;
+  render();
+}
+
 function renderMonitorGeneric(data,opts){
+  const mode=opts.mode||'breached';
+  const isPending=mode==='pending';
   const totalBreached=data.reduce((s,d)=>s+d.breached,0);
   const totalPending=data.reduce((s,d)=>s+d.pending,0);
+  const totalPendingNotBreached=data.reduce((s,d)=>s+(d.pendingNotBreached||0),0);
   const maxOldest=data.reduce((m,d)=>Math.max(m,d.oldestDays||0),0);
+  const dueSoonList=data.filter(d=>d.pendingNotBreached>0&&d.nextDueDays!==null).map(d=>d.nextDueDays);
+  const minNextDue=dueSoonList.length?Math.min(...dueSoonList):null;
+  const bigNum=d=>isPending?(d.pendingNotBreached||0):d.breached;
 
   const fileCardHTML=d=>{
-    const sev=d.breached===0?'ok':d.breached>=10?'high':d.breached>=3?'med':'low';
-    const sevColor={ok:'#16a34a',low:'#d97706',med:'#ea580c',high:'#dc2626'}[sev];
+    const n=bigNum(d);
+    const sevColor=isPending
+      ?(n===0?'#16a34a':'#2563eb')
+      :(n===0?'#16a34a':n>=10?'#dc2626':n>=3?'#ea580c':'#d97706');
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden;cursor:pointer;box-shadow:var(--shadow)" onclick="adminViewFileRecords('${d.file.id}')">
       <div style="position:absolute;top:0;right:0;left:0;height:4px;background:${sevColor}"></div>
       <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(d.file.name)}">${esc(d.file.name)}</div>
       <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:12px">
-        <span style="font-size:38px;font-weight:900;color:${sevColor};line-height:1">${d.breached}</span>
-        <span style="font-size:12px;color:var(--text3);font-weight:600">בחריגה</span>
+        <span style="font-size:38px;font-weight:900;color:${sevColor};line-height:1">${n}</span>
+        <span style="font-size:12px;color:var(--text3);font-weight:600">${isPending?'ממתין (טרם חרג)':'בחריגה'}</span>
       </div>
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:10px">
-        <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="font-size:12px"></i> ${d.oldestDays!==null?d.oldestDays+' ימים — הוותיקה ביותר':'—'}</span>
-        ${opts.showPending?`<span style="display:flex;align-items:center;gap:4px"><i class="ti ti-inbox" style="font-size:12px"></i> ${d.pending} ממתינים סה"כ</span>`:''}
+        ${isPending
+          ?`<span style="display:flex;align-items:center;gap:4px"><i class="ti ti-hourglass" style="font-size:12px"></i> ${d.nextDueDays!==null?'בעוד '+d.nextDueDays+' ימים חורגת הקרובה':'—'}</span>`
+          :`<span style="display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="font-size:12px"></i> ${d.oldestDays!==null?d.oldestDays+' ימים — הוותיקה ביותר':'—'}</span>
+            ${opts.showPending?`<span style="display:flex;align-items:center;gap:4px"><i class="ti ti-inbox" style="font-size:12px"></i> ${d.pending} ממתינים סה"כ</span>`:''}`}
       </div>
     </div>`;
   };
@@ -2394,20 +2475,23 @@ function renderMonitorGeneric(data,opts){
     (orgGroups[oid]=orgGroups[oid]||[]).push(d);
   });
   const orgIds=Object.keys(orgGroups).sort((a,b)=>{
-    const sumA=orgGroups[a].reduce((s,d)=>s+d.breached,0);
-    const sumB=orgGroups[b].reduce((s,d)=>s+d.breached,0);
+    const sumA=orgGroups[a].reduce((s,d)=>s+bigNum(d),0);
+    const sumB=orgGroups[b].reduce((s,d)=>s+bigNum(d),0);
     return sumB-sumA;
   });
   const sections=orgIds.map(oid=>{
     const org=DB.orgs.find(o=>o.id===oid);
     const orgName=org?org.name:'ארגון לא ידוע';
     const files=orgGroups[oid];
-    const orgBreached=files.reduce((s,d)=>s+d.breached,0);
+    const orgBig=files.reduce((s,d)=>s+bigNum(d),0);
+    const badgeLabel=isPending?'ממתין':'בחריגה';
+    const badgeBg=isPending?'#dbeafe':'var(--red-light)';
+    const badgeColor=isPending?'#1d4ed8':'#dc2626';
     return `<div style="margin-bottom:26px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border)">
         <span style="font-size:15px;font-weight:800;color:var(--text)">${esc(orgName)}</span>
-        ${orgBreached>0
-          ?`<span style="background:var(--red-light);color:#dc2626;font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px">${orgBreached} בחריגה</span>`
+        ${orgBig>0
+          ?`<span style="background:${badgeBg};color:${badgeColor};font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px">${orgBig} ${badgeLabel}</span>`
           :`<span style="background:var(--green-light);color:#16a34a;font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px">תקין</span>`}
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">${files.map(fileCardHTML).join('')}</div>
@@ -2419,9 +2503,24 @@ function renderMonitorGeneric(data,opts){
       <div style="display:flex;align-items:center;gap:10px;color:var(--text);font-size:18px;font-weight:800">
         <i class="ti ${opts.icon}" style="color:${opts.iconColor}"></i> ${opts.title}
       </div>
-      <button class="btn btn-sm" onclick="${opts.reloadFn}()"><i class="ti ti-refresh"></i> רענן</button>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="nav-tabs" style="margin-bottom:0">
+          <button class="nav-tab ${!isPending?'active':''}" onclick="setMonitorViewMode('${opts.viewKey}','breached')">🔴 בחריגה</button>
+          <button class="nav-tab ${isPending?'active':''}" onclick="setMonitorViewMode('${opts.viewKey}','pending')">🕐 ממתין (טרם חרג)</button>
+        </div>
+        <button class="btn btn-sm" onclick="${opts.reloadFn}()"><i class="ti ti-refresh"></i> רענן</button>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px">
+      ${isPending?`
+      <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:30px;font-weight:900;color:#1e3a8a">${totalPendingNotBreached}</div>
+        <div style="font-size:11px;color:#1d4ed8;margin-top:4px;font-weight:600">ממתינים (טרם חרגו)</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:30px;font-weight:900;color:#1e3a8a">${minNextDue===null?'—':minNextDue}</div>
+        <div style="font-size:11px;color:#1d4ed8;margin-top:4px;font-weight:600">ימים עד לחריגה הקרובה ביותר</div>
+      </div>`:`
       <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:30px;font-weight:900;color:#7f1d1d">${totalBreached}</div>
         <div style="font-size:11px;color:#b91c1c;margin-top:4px;font-weight:600">סה"כ חריגות</div>
@@ -2433,7 +2532,7 @@ function renderMonitorGeneric(data,opts){
       <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:30px;font-weight:900;color:#1e3a8a">${maxOldest}</div>
         <div style="font-size:11px;color:#1d4ed8;margin-top:4px;font-weight:600">ימים — החריגה הוותיקה ביותר</div>
-      </div>
+      </div>`}
     </div>
     ${data.length?sections:`<div class="empty"><i class="ti ti-mood-check"></i><p>${opts.emptyMsg}</p></div>`}
     <div style="text-align:center;color:var(--text3);font-size:11px;margin-top:20px">מתעדכן אוטומטית כל דקה</div>
@@ -2444,7 +2543,8 @@ function renderMonitorPm(){
   if(S._monitorPmLoading) return `<div class="loading"><div class="spinner"></div><p>טוען מוניטור...</p></div>`;
   return renderMonitorGeneric(_monitorPmData||[], {
     title:'מוניטור חריגה — מנהלים', icon:'ti-crown', iconColor:'#15803d',
-    reloadFn:'loadMonitorPmTab', showPending:false, emptyMsg:'אין שדות הסלמה עם חריגה'
+    reloadFn:'loadMonitorPmTab', showPending:false, emptyMsg:'אין שדות הסלמה עם חריגה',
+    viewKey:'monitor_pm', mode:_monitorPmViewMode
   });
 }
 
@@ -2452,7 +2552,8 @@ function renderMonitor(){
   if(S._monitorLoading) return `<div class="loading"><div class="spinner"></div><p>טוען מוניטור...</p></div>`;
   return renderMonitorGeneric(_monitorData||[], {
     title:'מוניטור חריגה — אחמ"ש', icon:'ti-activity-heartbeat', iconColor:'#ef4444',
-    reloadFn:'loadMonitorTab', showPending:true, emptyMsg:'אין קבצים עם מעקב SLA'
+    reloadFn:'loadMonitorTab', showPending:true, emptyMsg:'אין קבצים עם מעקב SLA',
+    viewKey:'monitor', mode:_monitorViewMode
   });
 }
 
@@ -6864,6 +6965,102 @@ function renderAttachmentStoragePanel(){
     </div>
   </div>`;
 }
+// ══ בריאות המערכת (super_admin בלבד) — סורק פערי הגדרה שגורמים לחריגות "ליפול בין
+// הכיסאות" בלי שאף אחד יקבל עליהן התראה, בהמשך לביקורת הידנית שנעשתה ב-2026-09-23 ══
+function computeSystemHealth(){
+  const issues=[];
+  const managers=S._managers||[];
+  const pmManagerFiles=(_pmDigestCfg&&_pmDigestCfg.managerFiles)||{};
+  const assignedFileIds=new Set();
+  Object.values(pmManagerFiles).forEach(ids=>(ids||[]).forEach(id=>assignedFileIds.add(id)));
+
+  const noTracking=DB.files.filter(f=>f.active!==false&&
+    !(f.alert_rule?.enabled&&f.alert_rule?.fieldId)&&
+    !(f.admin_fields||[]).some(af=>af.ahmashAlertDays||af.escalationAlertDays)
+  );
+  if(noTracking.length) issues.push({
+    severity:'warn', icon:'ti-alert-triangle', category:'מעקב SLA',
+    title:`${noTracking.length} קבצים בלי שום מעקב חריגה מוגדר`,
+    detail:'אף אחד לא יקבל התראה אם פניות בקבצים האלה ייתקעו. אם זה מכוון (למשל טופס מידע בלבד) — אין צורך לפעול.',
+    items:noTracking.map(f=>f.name)
+  });
+
+  const pmFieldFiles=new Set();
+  DB.files.forEach(f=>{
+    if(f.active===false) return;
+    if((f.admin_fields||[]).some(af=>af.escalationAlertDays) && !assignedFileIds.has(f.id)) pmFieldFiles.add(f.name);
+  });
+  if(pmFieldFiles.size) issues.push({
+    severity:'warn', icon:'ti-user-question', category:'מנהלי פרויקטים',
+    title:`${pmFieldFiles.size} קבצים עם מעקב מנהל פרויקט שלא משויכים לאף מנהל`,
+    detail:'חריגות בקבצים האלה לא יישלחו לאף אחד בדוח היומי. שייך אותם ב"התראות WA" ← מנהלי פרויקטים.',
+    items:[...pmFieldFiles]
+  });
+
+  const ahmashNoContact=DB.files.filter(f=>f.active!==false&&
+    ((f.alert_rule?.enabled&&f.alert_rule?.fieldId)||(f.admin_fields||[]).some(af=>af.ahmashAlertDays))&&
+    (f.wa_contacts||[]).length===0 && f.wa_notify_group!==true
+  );
+  if(ahmashNoContact.length) issues.push({
+    severity:'warn', icon:'ti-brand-whatsapp', category:'אחמ"שים',
+    title:`${ahmashNoContact.length} קבצים עם מעקב חריגה בלי אף איש קשר WA`,
+    detail:'יש מעקב חריגה מוגדר, אבל אף אחד לא יקבל עליו הודעה. הוסף איש קשר בעריכת הקובץ ← התראות וואטסאפ.',
+    items:ahmashNoContact.map(f=>f.name)
+  });
+
+  const noPhoneMgrs=managers.filter(m=>m.active&&(m.is_project_manager||m.is_ahmash_senior)&&!m.phone);
+  if(noPhoneMgrs.length) issues.push({
+    severity:'warn', icon:'ti-phone-off', category:'מנהלים',
+    title:`${noPhoneMgrs.length} מנהלים מסומנים כאחראים אבל בלי מספר טלפון`,
+    detail:'לא יוכלו לקבל שום דוח וואטסאפ, גם אם משויכים לקבצים.',
+    items:noPhoneMgrs.map(m=>`${m.name} (${m.email})`)
+  });
+
+  const orgsNoContact=DB.orgs.filter(o=>!o.sla_contact_name);
+  if(orgsNoContact.length) issues.push({
+    severity:'info', icon:'ti-building', category:'ארגונים',
+    title:`${orgsNoContact.length} ארגונים בלי "שם איש קשר" מוגדר`,
+    detail:'קוסמטי בלבד — משפיע רק על התצוגה בדוחות (מוצג בסוגריים ליד שם הארגון).',
+    items:orgsNoContact.map(o=>o.name)
+  });
+
+  return issues;
+}
+async function loadHealthTab(){
+  S.adminTab='health'; render();
+  if(!S._managers){ try{ S._managers=await GET('app_managers','?order=created_at.asc'); }catch(e){ S._managers=[]; } }
+  if(!_pmDigestCfg) _pmDigestCfg=await loadDigestScheduleConfig('pm_digest');
+  render();
+}
+function renderSystemHealth(){
+  const issues=computeSystemHealth();
+  const warnCount=issues.filter(i=>i.severity==='warn').length;
+  return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:24px;margin:-6px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px;color:var(--text);font-size:18px;font-weight:800">
+        <i class="ti ti-heart-rate-monitor" style="color:#0891b2"></i> בריאות המערכת
+      </div>
+      <button class="btn btn-sm" onclick="loadHealthTab()"><i class="ti ti-refresh"></i> רענן</button>
+    </div>
+    ${!issues.length
+      ? `<div class="empty"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>הכל תקין — לא נמצאו פערי הגדרה 🎉</p></div>`
+      : `<div style="margin-bottom:16px;font-size:13px;color:var(--text2)">${warnCount} דברים כדאי לבדוק</div>
+      ${issues.map(iss=>`
+        <div style="background:var(--surface);border:1px solid ${iss.severity==='warn'?'#fcd34d':'var(--border)'};border-radius:12px;padding:16px;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <i class="ti ${iss.icon}" style="color:${iss.severity==='warn'?'#d97706':'#64748b'};font-size:16px"></i>
+            <strong style="font-size:14px">${esc(iss.title)}</strong>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:8px">${esc(iss.detail)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${iss.items.slice(0,20).map(x=>`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px">${esc(x)}</span>`).join('')}
+            ${iss.items.length>20?`<span style="font-size:11px;color:var(--text3)">+${iss.items.length-20} נוספים</span>`:''}
+          </div>
+        </div>`).join('')}`
+    }
+  </div>`;
+}
+
 function renderAdminBackup(){
   const cfg=loadBackupDefaults(); // מטמון מקומי — מתעדכן מהשרת ב-loadBackupConfigFromServer
   const days=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
