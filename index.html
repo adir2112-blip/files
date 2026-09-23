@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.115'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.116'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1535,7 +1535,12 @@ async function bulkUpdateAll(fieldId, value, isAdminField){
     if(isAdminField){
       if(!r.admin_data) r.admin_data={};
       r.admin_data[fieldId]=value;
-      await PATCH('records',{admin_data:r.admin_data},`?id=eq.${r.id}`);
+      // אותו מעקב הסלמה כמו בעריכה בודדת (saveAdminField) — אחרת עדכון גורף "שוכח" להפעיל
+      // את שעון ההעברה למנהל פרויקט, כי הוא רק כותב את הערך בלי לבדוק תלות
+      const nowEscalated=isRecordEscalated(r,f);
+      if(nowEscalated&&!r.escalated_at) r.escalated_at=new Date().toISOString();
+      else if(!nowEscalated&&r.escalated_at) r.escalated_at=null;
+      await PATCH('records',{admin_data:r.admin_data,escalated_at:r.escalated_at},`?id=eq.${r.id}`);
     } else {
       if(!r.extra) r.extra={};
       r.extra[fieldId]=typeof value==='boolean'?(value?'כן':'לא'):value;
@@ -2000,7 +2005,7 @@ function isProjectManager(){
 function isRecordEscalated(record,file){
   const adminData=record.admin_data||{};
   return (file?.admin_fields||[]).some(af=>{
-    if(!af.projectManagerOnly||!af.dependsOn) return false;
+    if(!af.dependsOn||!af.escalationAlertDays) return false;
     const parentField=(file.admin_fields||[]).find(x=>x.id===af.dependsOn);
     const parentVal=adminData[af.dependsOn];
     return parentField?.type==='checkbox'
@@ -2028,15 +2033,15 @@ async function openQuickFieldSettings(fileId,fieldId){
       ${!candidates.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px">אין עדיין שדה אחר מסוג תפריט/תיבת סימון עם שם — צריך להוסיף אחד בעורך השדות המלא.</div>`:''}
     </div>
     <div id="qfs-value-wrap">${quickDependsOnValueHTML(f,af)}</div>
-    <div class="form-row">
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:#15803d">
-        <input type="checkbox" id="qfs-pm" ${af.projectManagerOnly?'checked':''} onchange="document.getElementById('qfs-pm-wrap').style.display=this.checked?'block':'none'" style="width:16px;height:16px;accent-color:#15803d;cursor:pointer">
-        <i class="ti ti-crown"></i> גלוי לעריכה רק למנהל פרויקט
-      </label>
-    </div>
-    <div id="qfs-pm-wrap" style="display:${af.projectManagerOnly?'block':'none'};margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
+
+    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border2)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px"><i class="ti ti-activity-heartbeat" style="color:#15803d"></i> מעקב הסלמה למנהל פרויקט (מוניטור + התראת וואטסאפ)</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+        עצמאי לגמרי מהרשאת העריכה למטה — כל שדה תלוי עם מספר ימים כאן ייספר במוניטור "מנהלים",
+        גם אם כל מנהל (לא רק מנהל פרויקט) יכול לערוך אותו.
+      </div>
       <div class="form-row">
-        <label class="form-label">מנהל פרויקט אחראי <span style="color:var(--text3);font-weight:400">(השדה יהיה נגיש רק אליו; ריק = לכל מנהלי הפרויקט)</span></label>
+        <label class="form-label">מנהל פרויקט לעדכון <span style="color:var(--text3);font-weight:400">(ריק = כל מנהלי הפרויקט)</span></label>
         <select class="form-input" id="qfs-assigned">
           <option value="">— כל מנהלי הפרויקט —</option>
           ${pmList.map(m=>`<option value="${esc(m.email)}" ${af.assignedManagerEmail===m.email?'selected':''}>${esc(m.name||m.email)}</option>`).join('')}
@@ -2044,9 +2049,17 @@ async function openQuickFieldSettings(fileId,fieldId){
         ${!pmList.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px">אין עדיין מנהלים מסומנים כ"מנהל פרויקט" — אפשר להגדיר בניהול > מנהלים.</div>`:''}
       </div>
       <div class="form-row">
-        <label class="form-label">ימי עסקים עד חריגה <span style="color:var(--text3);font-weight:400">(התראת וואטסאפ למנהל הפרויקט)</span></label>
+        <label class="form-label">ימי עסקים עד חריגה <span style="color:var(--text3);font-weight:400">(ריק = לא נספר במעקב הסלמה בכלל)</span></label>
         <input type="number" min="0" step="0.5" class="form-input" id="qfs-days" value="${af.escalationAlertDays||''}" placeholder="—">
       </div>
+    </div>
+
+    <div class="form-row" style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border2)">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:#7c3aed">
+        <input type="checkbox" id="qfs-pm" ${af.projectManagerOnly?'checked':''} style="width:16px;height:16px;accent-color:#7c3aed;cursor:pointer">
+        <i class="ti ti-lock"></i> להגביל את עריכת השדה למנהל פרויקט בלבד
+      </label>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">נוגע רק להרשאת עריכה — לא קשור למעקב ההסלמה למעלה.</div>
     </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-primary" onclick="saveQuickFieldSettings('${fileId}','${fieldId}')"><i class="ti ti-check"></i> שמור</button></div>
   `);
@@ -2074,7 +2087,6 @@ async function saveQuickFieldSettings(fileId,fieldId){
   af.assignedManagerEmail=document.getElementById('qfs-assigned')?.value||'';
   const daysVal=document.getElementById('qfs-days')?.value;
   af.escalationAlertDays=daysVal?parseFloat(daysVal):null;
-  if(!af.projectManagerOnly){ af.assignedManagerEmail=''; af.escalationAlertDays=null; }
   try{
     await PATCH('files',{admin_fields:f.admin_fields},`?id=eq.${fileId}`);
     closeModal(); await loadAll(); render();
@@ -2224,12 +2236,12 @@ function recordMatchesEscalationField(record,af,file){
 async function loadMonitorPmData(){
   const filesWithEscalation=DB.files.filter(f=>
     canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false&&
-    (f.admin_fields||[]).some(af=>af.projectManagerOnly&&af.dependsOn&&af.escalationAlertDays)
+    (f.admin_fields||[]).some(af=>af.dependsOn&&af.escalationAlertDays)
   );
   const results=await Promise.all(filesWithEscalation.map(async f=>{
     try{
       const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,escalated_at,closed_at,admin_data`);
-      const escalationFields=(f.admin_fields||[]).filter(af=>af.projectManagerOnly&&af.dependsOn&&af.escalationAlertDays);
+      const escalationFields=(f.admin_fields||[]).filter(af=>af.dependsOn&&af.escalationAlertDays);
       let breached=[];
       escalationFields.forEach(af=>{
         const matches=(recs||[]).filter(r=>
@@ -5726,16 +5738,16 @@ function fieldDependsOnHTML(ef,i,p){
     : `<div style="font-size:12px;color:var(--text3);margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius-xs)">
         אין עדיין שדה אחר מסוג תפריט/תיבת סימון עם שם — כדי שהשדה הזה יוכל להיות תלוי בשדה אחר, קודם צריך שדה כזה עם שם שמור ברשימה.
       </div>`;
-  const pmOnlyHTML=p==='a'?`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:#15803d;margin-top:10px">
-      <input type="checkbox" data-fpm="${p}_${i}" ${ef.projectManagerOnly?'checked':''} onchange="document.getElementById('pm-days-wrap-${p}-${i}').style.display=this.checked?'flex':'none'" style="width:15px;height:15px;accent-color:#15803d;cursor:pointer">
-      <i class="ti ti-crown" style="font-size:13px"></i> גלוי לעריכה רק למנהל פרויקט (מוסתר מנציגים ומנהלים רגילים)
-    </label>
-    <div id="pm-days-wrap-${p}-${i}" style="display:${ef.projectManagerOnly?'flex':'none'};align-items:center;gap:8px;margin-top:8px;padding-right:21px">
+  const pmOnlyHTML=p==='a'?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <i class="ti ti-clock-alert" style="font-size:13px;color:#15803d"></i>
-      <span style="font-size:12px;color:var(--text2)">שלח התראת וואטסאפ למנהל הפרויקט אם עברו</span>
+      <span style="font-size:12px;color:var(--text2)">מעקב הסלמה למנהל פרויקט (מוניטור + וואטסאפ) — עבר</span>
       <input type="number" min="0" step="0.5" data-fpmd="${p}_${i}" value="${ef.escalationAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
-      <span style="font-size:12px;color:var(--text2)">ימי עסקים מרגע ההעברה אליו, בלי שסגר את הרשומה</span>
-    </div>`:'';
+      <span style="font-size:12px;color:var(--text2)">ימי עסקים מרגע ההעברה, בלי שסגר את הרשומה (ריק = לא נספר)</span>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:#7c3aed;margin-top:8px">
+      <input type="checkbox" data-fpm="${p}_${i}" ${ef.projectManagerOnly?'checked':''} style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer">
+      <i class="ti ti-lock" style="font-size:13px"></i> להגביל את עריכת השדה למנהל פרויקט בלבד (לא קשור למעקב ההסלמה למעלה)
+    </label>`:'';
   return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--purple)">
       <i class="ti ti-git-branch" style="font-size:13px"></i> שדה תלוי — מוצג רק בתנאי
