@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.130'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.131'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -695,15 +695,20 @@ function enterApp(user){
     initApp().then(()=>{
       loadDashboardTab();
       GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs').then(data=>{ allAgents=data||[]; render(); });
+      // רענון תג המספר בטופבר (badge) — רץ ברקע לכל מנהל עם גישה למוניטור, לאורך כל
+      // ההתחברות שלו, ללא קשר לאיזה מסך הוא צופה בו. 10 דקות מספיק בהחלט (חריגות
+      // נמדדות בימי עסקים, לא בדקות) ומקטין דרמטית את צריכת ה-Egress מול 120 שניות
+      // הישנות — עם עד 7 מנהלים שיכולים להישאר מחוברים כל היום, זה היה עיקר הצריכה
+      // שהוביל לחריגת מכסת ה-Egress החינמית ב-2026-09-28.
       if(canSeeAdminTab('monitor')){
         loadMonitorData();
         clearInterval(_monitorBadgeTimer);
-        _monitorBadgeTimer=setInterval(loadMonitorData,120000);
+        _monitorBadgeTimer=setInterval(loadMonitorData,600000);
       }
       if(canSeeAdminTab('monitor_pm')){
         loadMonitorPmData();
         clearInterval(_monitorPmBadgeTimer);
-        _monitorPmBadgeTimer=setInterval(loadMonitorPmData,120000);
+        _monitorPmBadgeTimer=setInterval(loadMonitorPmData,600000);
       }
     });
   } else {
@@ -2205,7 +2210,7 @@ async function loadMonitorTab(){
     if(S.adminTab!=='monitor'){ clearInterval(_monitorTimer); return; }
     await loadMonitorData();
     render();
-  },60000);
+  },300000);
 }
 
 // שדה שמסומן ישירות "עקוב במוניטור אחמ"ש" (ahmashAlertDays) — עצמאי מ"כלל ה-SLA"
@@ -2338,7 +2343,7 @@ async function loadMonitorPmTab(){
     if(S.adminTab!=='monitor_pm'){ clearInterval(_monitorPmTimer); return; }
     await loadMonitorPmData();
     render();
-  },60000);
+  },300000);
 }
 
 // בודק אם תנאי התלות של שדה הסלמה ספציפי מתקיים על רשומה. שדה עצמאי (בלי dependsOn,
