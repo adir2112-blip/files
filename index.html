@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.132'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.133'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2733,10 +2733,13 @@ function renderUsageScreen(){
 
 function renderAdminOrgs(){
   return `<div style="text-align:left;margin-bottom:14px"><button class="btn btn-black" onclick="openNewOrg()"><i class="ti ti-plus"></i> ארגון חדש</button></div>
-  ${DB.orgs.map(o=>{const st=orgStyle(o.name);return`<div style="display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:8px">
+  ${DB.orgs.map(o=>{const st=orgStyle(o.name);const allowed=o.allowed_managers||[];const hasRestriction=allowed.length>0;return`<div style="display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:8px">
     <div style="width:36px;height:36px;border-radius:8px;background:${st.bg};display:flex;align-items:center;justify-content:center">${st.logo.replace('width="36"','width="28"')}</div>
-    <div style="flex:1;font-weight:600">${esc(o.name)}</div>
+    <div style="flex:1;font-weight:600;display:flex;align-items:center;gap:8px">${esc(o.name)}
+      ${hasRestriction?`<span title="גישה מוגבלת ל-${allowed.length} מנהלים" style="background:var(--amber-light);color:#92400e;border:1px solid #fcd34d;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700"><i class="ti ti-lock" style="font-size:10px"></i> ${allowed.length} מנהלים</span>`:''}
+    </div>
     <div class="flex-gap">
+      ${currentUser?.is_super_admin?`<button class="btn btn-sm" style="background:#fef3c7;border-color:#fcd34d;color:#92400e" onclick="openOrgPermissions('${o.id}')" title="הרשאות מנהלים לארגון זה"><i class="ti ti-user-check"></i></button>`:''}
       <button class="btn btn-sm" onclick="openEditOrg('${o.id}','${escJs(o.name)}','${escJs(o.sla_contact_name||'')}')"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm btn-danger" onclick="confirmDeleteOrg('${o.id}')"><i class="ti ti-trash"></i></button>
     </div>
