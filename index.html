@@ -469,7 +469,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.131'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.132'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -716,9 +716,19 @@ function enterApp(user){
   }
 }
 
+// עוצר את כל טיימרי הרענון ברקע (מוניטורים/מיילים/דוח יומי/חוסר-פעילות) — בלי זה
+// הם ממשיכים לרוץ ולצרוך Egress גם אחרי שהמשתמש כבר "התנתק" ונשאר עם הטאב פתוח
+function stopAllBackgroundTimers(){
+  clearInterval(_monitorBadgeTimer); clearInterval(_monitorPmBadgeTimer);
+  clearInterval(_monitorTimer); clearInterval(_monitorPmTimer);
+  clearInterval(_dailyReportTimer); clearInterval(_inactivityTimer);
+  Object.values(_emailTimers).forEach(t=>clearInterval(t)); _emailTimers={};
+}
+
 async function doLogout(){
   // גם לנציגים יש עכשיו session אמיתי (agent-login) — תמיד מתנתקים ממנו, לא רק למנהלים
   await sbClient.auth.signOut();
+  stopAllBackgroundTimers();
   currentUser=null; _agentName=''; _selectedAgent=null;
   S={...S_DEFAULT()}; DB={orgs:[],files:[]}; _cachedRecords={}; _allRecords=[]; _pendingCounts={};
   // reload only active for login list — בלי pin
@@ -730,6 +740,23 @@ async function doLogout(){
   document.getElementById('mgr-btn').disabled=false; document.getElementById('mgr-btn').innerHTML='<i class="ti ti-login"></i> כניסה';
   showLogin('mode');
 }
+
+// ── ניתוק אוטומטי אחרי חוסר פעילות ──
+// מטרה כפולה: (1) אבטחה בסיסית — מסך לא ננעל לבד, (2) לצמצם Egress — session שנשאר
+// מחובר בטאב פתוח ברקע ממשיך להריץ את כל טיימרי הרענון (מוניטורים/מיילים) גם כשאף
+// אחד לא באמת משתמש במערכת. נבדק ב-2026-09-28 בעקבות חריגת מכסת ה-Egress החינמית.
+const INACTIVITY_LOGOUT_MS=2*60*60*1000; // שעתיים
+let _lastActivityAt=Date.now();
+function _markActivity(){ _lastActivityAt=Date.now(); }
+['mousemove','keydown','mousedown','touchstart','scroll'].forEach(ev=>
+  document.addEventListener(ev,_markActivity,{passive:true})
+);
+setInterval(()=>{
+  if(!currentUser) return; // אף אחד לא מחובר כרגע — אין מה לנתק
+  if(Date.now()-_lastActivityAt>=INACTIVITY_LOGOUT_MS){
+    doLogout().then(()=>alert('התנתקת אוטומטית עקב חוסר פעילות של שעתיים. יש להתחבר מחדש.'));
+  }
+},60000);
 
 // ══ APP STATE ══
 function S_DEFAULT(){return{view:'orgs',orgId:null,fileId:null,adminLoggedIn:false,adminTab:'orgs',searchQ:'',alert:null,filters:{},chatFilter:'',pmFilter:'',filesOrgFilter:'',phoneSearch:'',phoneLookup:null,sortCol:null,sortDir:1,showBulkAll:false,globalSearch:'',globalSearchResults:null,archiveMode:false};}
