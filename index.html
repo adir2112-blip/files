@@ -475,7 +475,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.136'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.137'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -851,9 +851,9 @@ function alertSelectCols(f){
   const rule=f.alert_rule||{};
   if(rule.fieldId && rule.fieldId!=='__closed__' && rule.fieldId!=='__chat_open__'){
     const isAdmin=(f.admin_fields||[]).some(af=>af.id===rule.fieldId);
-    if(!isAdmin) return 'id,created_at,closed_at,admin_data,extra';
+    if(!isAdmin) return 'id,created_at,closed_at,escalated_at,admin_data,extra';
   }
-  return 'id,created_at,closed_at,admin_data';
+  return 'id,created_at,closed_at,escalated_at,admin_data';
 }
 // כמה ימי עסקים עברו מאז היצירה, כל עוד תנאי ה"עדיין פתוח" של כלל ה-SLA מתקיים —
 // ללא קשר לסף הימים שמוגדר בכלל (משמש לתצוגה חיה מתחת לתאריך יצירה בטבלה)
@@ -3188,9 +3188,11 @@ async function goRecords(fileId, archiveMode=false){
   await getRecords(fileId, archiveMode);
   if(!archiveMode){
     await autoArchiveExpired(fileId);
-    // גם טוענים ברקע את הארכיון המלא (לא רק id) — כדי שחיפוש בטבלה הפעילה
-    // יוכל למצוא ולהציג גם לקוחות שהרשומה שלהם כבר עברה לארכיון
-    GET('records',`?file_id=eq.${fileId}&archived=eq.true&order=archived_at.desc`).then(r=>{
+    // טוענים ברקע רק את עמודות החיפוש/תצוגה של כרטיס "נמצא בארכיון" (לא admin_data/
+    // extra/field_comments — אלה נטענים במלואם רק אם ממש נכנסים לטאב "ארכיון", דרך
+    // getRecords, שדורס את ה-cache הזה בכל מקרה). זה רץ על כל כניסה לקובץ, לכל משתמש —
+    // היה מקור egress משמעותי ששולף ארכיון שלם בכל פעם בלי צורך אמיתי ברוב המקרים
+    GET('records',`?file_id=eq.${fileId}&archived=eq.true&order=archived_at.desc&select=id,first_name,last_name,phone,id_num,agent_name`).then(r=>{
       _cachedArchive[fileId]=r||[];
       render();
     });
@@ -3277,7 +3279,10 @@ async function loadDashDataForPeriod(){
       // שולפים את כל הרשומות (בלי סינון תאריך) — חריגה היא מצב "עכשיו" (תלוי בגיל הרשומה),
       // ולא בהכרח נופלת בטווח התאריכים של תקופת התצוגה. סינון לפי תקופה כאן היה מסתיר
       // חריגות אמיתיות ברשומות שנוצרו מחוץ לתקופה (למשל "היום") למרות שהן חורגות עכשיו.
-      const params=`?file_id=eq.${f.id}&select=id,created_at,extra,admin_data,closed_at,escalated_at,field_comments`;
+      // רץ אוטומטית בכל כניסה של כל מנהל (לפני שהוא לוחץ על משהו) ועל כל קובץ שהוא
+      // רואה — היה מקור egress כבד ביותר כששלף field_comments/extra שמעולם לא נקראים
+      // כאן בפועל (ראו alertSelectCols). זה כנראה הגורם המשמעותי ביותר בבדיקה הזו.
+      const params=`?file_id=eq.${f.id}&select=${alertSelectCols(f)}`;
       const recs = await GET('records', params);
       const inPeriod = (from||to) ? recs.filter(r=>{const t=new Date(r.created_at).getTime();return (!from||t>=new Date(from).getTime())&&(!to||t<new Date(to).getTime());}) : recs;
       const total = inPeriod.length;
@@ -5216,7 +5221,11 @@ function debounceFilter(afId,val){
   clearTimeout(_filterTimers[afId]);
   _filterTimers[afId]=setTimeout(()=>setFilter(afId,val),350);
 }
-async function adminLoadAllRecords(){S.adminTab='records';S._loadingRecords=true;render();_allRecords=await GET('records','?order=created_at.desc');S._loadingRecords=false;render();}
+// "כל הרשומות" מציג ומייצא (exportAll) רק את 8 העמודות האלה — לא admin_data/extra/
+// field_comments, שהם יחד רוב משקל טבלת records (extra לבדו ~1.95MB מתוך 5.6MB כולל).
+// שליפה ללא select= מביאה select=* כברירת מחדל ב-PostgREST, כלומר כל ה-JSON הכבד הזה
+// על כל רשומה בכל לחיצה על הטאב — התגלה כמקור משמעותי לחריגת מכסת ה-Egress.
+async function adminLoadAllRecords(){S.adminTab='records';S._loadingRecords=true;render();_allRecords=await GET('records','?order=created_at.desc&select=id,file_id,created_at,first_name,last_name,phone,id_num,agent_name');S._loadingRecords=false;render();}
 
 // ── ATTACHMENTS (קבצי אסמכתא) ──
 const ATTACHMENTS_BUCKET='attachments';
@@ -6601,7 +6610,7 @@ async function toggleFileActive(id,newActive){
 // ── EXPORT ──
 async function exportFile(fileId){
   const f=DB.files.find(x=>x.id===fileId);showAlert('מכין קובץ Excel...','success');
-  const records=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc`);
+  const records=await GET('records',`?file_id=eq.${fileId}&order=created_at.desc&select=created_at,first_name,last_name,phone,id_num,agent_name,extra,admin_data,treated_at`);
   const extra=f.extra_fields||[],admin=f.admin_fields||[];
   const headers=['תאריך','שם פרטי','שם משפחה','טלפון','ת"ז','נציג',...extra.map(ef=>ef.label),...admin.map(af=>'[ניהולי] '+af.label),...(admin.length?['תאריך טיפול']:[])];
   const attachCell=(ef,v)=>ef.type==='attachment'?parseAttachmentUrls(v).join(' | '):(v||'');
