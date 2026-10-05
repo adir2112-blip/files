@@ -475,7 +475,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.137'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.138'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -940,6 +940,54 @@ function isRecordPending(record,file){
 }
 async function loadAllCounts(){
   await Promise.all([loadPendingCounts(), loadAlertCounts(), loadRecentActivity()]);
+}
+// מעדכן את הבאדג'ים (_alertCounts/_fieldPendingCounts/_pendingCounts) בזיכרון בלבד, לפי
+// מה השתנה ברשומה הבודדת שנערכה הרגע — בלי לקרוא ל-loadAllCounts() שסורק מחדש את כל
+// הרשומות של כל קובץ עם מעקב SLA/pending_rules בכל המערכת. saveAdminField קורא לזה בכל
+// שמירת שדה בודד (ייתכן מאות פעמים ביום למנהל פעיל) — זה היה ככל הנראה הגורם המשמעותי
+// ביותר שנותר לצריכת ה-Egress אחרי צמצום הדשבורד/ארכיון (ראו [[moked-backend-infra]]).
+function adjustCountsForRecordChange(oldAdminData,record,f){
+  const oldRec={...record,admin_data:oldAdminData};
+  if(f.alert_rule?.enabled&&f.alert_rule?.fieldId){
+    const wasBreached=recordMatchesAlert(oldRec,f),isBreached=recordMatchesAlert(record,f);
+    if(wasBreached!==isBreached) _alertCounts[f.id]=(_alertCounts[f.id]||0)+(isBreached?1:-1);
+    const wasPending=recordFieldPending(oldRec,f),isPending=recordFieldPending(record,f);
+    if(wasPending!==isPending) _fieldPendingCounts[f.id]=(_fieldPendingCounts[f.id]||0)+(isPending?1:-1);
+  }
+  if(Object.values(f.pending_rules||{}).some(r=>r!=='ignore')){
+    const was=isRecordPending(oldRec,f),is=isRecordPending(record,f);
+    if(was!==is) _pendingCounts[f.id]=(_pendingCounts[f.id]||0)+(is?1:-1);
+  }
+}
+// כנ"ל עבור רשומה חדשה לגמרי (אין "לפני" להשוות אליו) — submitRecord קורא לזה בכל שליחת
+// טופס חדש ע"י נציג, כנראה הפעולה התדירה ביותר במערכת כולה
+function addCountsForNewRecord(record,f){
+  if(f.alert_rule?.enabled&&f.alert_rule?.fieldId){
+    if(recordMatchesAlert(record,f)) _alertCounts[f.id]=(_alertCounts[f.id]||0)+1;
+    if(recordFieldPending(record,f)) _fieldPendingCounts[f.id]=(_fieldPendingCounts[f.id]||0)+1;
+  }
+  if(Object.values(f.pending_rules||{}).some(r=>r!=='ignore') && isRecordPending(record,f)){
+    _pendingCounts[f.id]=(_pendingCounts[f.id]||0)+1;
+  }
+  _recentActivity[f.id]=true;
+}
+// גרסה ממוקדת-קובץ-אחד של loadAllCounts() — לפעולות גורפות (bulk) שמשנות הרבה רשומות
+// באותו קובץ בבת אחת: אין טעם לסרוק מחדש את כל שאר הקבצים במערכת בשביל זה
+async function refreshCountsForFile(fileId){
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  if(f.alert_rule?.enabled&&f.alert_rule?.fieldId){
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=${alertSelectCols(f)}`);
+      _alertCounts[f.id]=recs.filter(r=>recordMatchesAlert(r,f)).length;
+      _fieldPendingCounts[f.id]=recs.filter(r=>recordFieldPending(r,f)).length;
+    }catch(e){}
+  }
+  if(Object.values(f.pending_rules||{}).some(r=>r!=='ignore')){
+    try{
+      const recs=await GET('records',`?file_id=eq.${f.id}&select=id,admin_data`);
+      _pendingCounts[f.id]=recs.filter(r=>isRecordPending(r,f)).length;
+    }catch(e){}
+  }
 }
 
 const RECENT_ACTIVITY_DAYS=5;
@@ -1548,7 +1596,7 @@ async function bulkDelete(){
   await Promise.all(ids.map(id=>DEL('records',`?id=eq.${id}`)));
   if(_cachedRecords[fileId]) _cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>!ids.includes(r.id));
   _allRecords=_allRecords.filter(r=>!ids.includes(r.id));
-  await loadAllCounts();
+  await refreshCountsForFile(fileId);
   _selectedRows.clear();
   _bulkMode=false;
   render();
@@ -1599,7 +1647,7 @@ async function bulkUpdateAll(fieldId, value, isAdminField){
       await PATCH('records',{extra:r.extra},`?id=eq.${r.id}`);
     }
   }));
-  await loadAllCounts();
+  await refreshCountsForFile(fileId);
   render();
   showAlert(`✓ עודכנו ${filtered.length} רשומות`,'success');
 }
@@ -1620,7 +1668,7 @@ async function bulkSetExtraField(fieldId, value){
     r.extra[fieldId]=typeof value==='boolean'?(value?'כן':'לא'):value;
     await PATCH('records',{extra:r.extra},`?id=eq.${r.id}`);
   }));
-  await loadAllCounts();
+  await refreshCountsForFile(fileId);
   _selectedRows.clear(); _bulkMode=false;
   render();
   showAlert(`✓ עודכנו ${ids.length} רשומות`,'success');
@@ -1651,7 +1699,7 @@ async function bulkSetField(fieldId, value){
     done++;
   }));
 
-  await loadAllCounts();
+  await refreshCountsForFile(fileId);
   _selectedRows.clear();
   _bulkMode=false;
   render();
@@ -5407,7 +5455,7 @@ async function submitRecord(e,fileId){
   try{
     await POST('records',{file_id:fileId,first_name:form.first_name?.value.trim()||'',last_name:form.last_name?.value.trim()||'',phone:form.phone?.value.trim()||'',id_num:form.id_num?.value.trim()||'',extra,admin_data:{},agent_name:_agentName});
     form.reset();S.phoneSearch='';S.phoneLookup=null;
-    await loadAllCounts();
+    addCountsForNewRecord({admin_data:{},extra,created_at:new Date().toISOString(),closed_at:null},f);
     showAlert('הרשומה נשמרה בהצלחה ✓','success');
   }catch(err){showAlert('שגיאה: '+err.message,'error');}
   btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> שמור רשומה';
@@ -5436,6 +5484,7 @@ async function saveAdminField(recordId,fieldId,value,fileId){
   const f=DB.files.find(x=>x.id===fileId);
   const af=(f?.admin_fields||[]).find(x=>x.id===fieldId);
   const oldVal=(record.admin_data||{})[fieldId];
+  const oldAdminData={...(record.admin_data||{})};
   if(!record.admin_data)record.admin_data={};
   record.admin_data[fieldId]=value;
   const treatedAt=new Date().toISOString();
@@ -5457,7 +5506,7 @@ async function saveAdminField(recordId,fieldId,value,fileId){
   else if(!nowEscalated&&record.escalated_at) record.escalated_at=null;
   try{
     await PATCH('records',{admin_data:record.admin_data,treated_at:treatedAt,change_log:record.change_log,escalated_at:record.escalated_at},`?id=eq.${recordId}`);
-    await loadAllCounts();
+    if(f) adjustCountsForRecordChange(oldAdminData,record,f);
     const cell=document.getElementById('treated-at-'+recordId);
     if(cell) cell.innerHTML=`<div>${fmtDate(treatedAt)}</div><div style="color:var(--purple);font-weight:600;font-size:10px">${esc(currentUser?.name||_agentName||'')}</div>`;
   }
@@ -5540,7 +5589,7 @@ async function archiveNow(recordId, fileId){
   try{
     await PATCH('records',{archived:true,archived_at:now},`?id=eq.${recordId}`);
     if(_cachedRecords[fileId]) _cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>r.id!==recordId);
-    await loadAllCounts();
+    await refreshCountsForFile(fileId);
     render();
     showAlert('הרשומה הועברה לארכיון','success');
   }catch(e){showAlert('שגיאה','error');}
@@ -5573,7 +5622,7 @@ async function doDelRecord(id,fileId){
   try{
     await DEL('records',`?id=eq.${id}`);
     if(_cachedRecords[fileId]) _cachedRecords[fileId]=_cachedRecords[fileId].filter(r=>r.id!==id);
-    await loadAllCounts();closeModal();render();showAlert('הרשומה נמחקה','success');
+    await refreshCountsForFile(fileId);closeModal();render();showAlert('הרשומה נמחקה','success');
   }
   catch(e){showAlert('שגיאה במחיקה: '+e.message,'error');}
 }
