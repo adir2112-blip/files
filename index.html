@@ -475,7 +475,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.138'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.139'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2105,7 +2105,7 @@ function isProjectManager(){
 function isRecordEscalated(record,file){
   const adminData=record.admin_data||{};
   return (file?.admin_fields||[]).some(af=>{
-    if(!af.dependsOn||!af.escalationAlertDays) return false;
+    if(!af.dependsOn||af.escalationAlertDays==null) return false;
     const parentField=(file.admin_fields||[]).find(x=>x.id===af.dependsOn);
     const parentVal=adminData[af.dependsOn];
     return parentField?.type==='checkbox'
@@ -2142,25 +2142,25 @@ async function openQuickFieldSettings(fileId,fieldId){
       </div>
       <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600">
-          <input type="radio" name="qfs-montype" id="qfs-montype-none" ${(!af.ahmashAlertDays&&!af.escalationAlertDays)?'checked':''} onchange="onQfsMonitorTypeChange('')" style="cursor:pointer">
+          <input type="radio" name="qfs-montype" id="qfs-montype-none" ${(af.ahmashAlertDays==null&&af.escalationAlertDays==null)?'checked':''} onchange="onQfsMonitorTypeChange('')" style="cursor:pointer">
           ללא
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:#ef4444">
-          <input type="radio" name="qfs-montype" id="qfs-montype-ahmash" ${af.ahmashAlertDays?'checked':''} onchange="onQfsMonitorTypeChange('ahmash')" style="cursor:pointer">
+          <input type="radio" name="qfs-montype" id="qfs-montype-ahmash" ${af.ahmashAlertDays!=null?'checked':''} onchange="onQfsMonitorTypeChange('ahmash')" style="cursor:pointer">
           <i class="ti ti-activity-heartbeat"></i> אחמ"ש
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:#15803d">
-          <input type="radio" name="qfs-montype" id="qfs-montype-pm" ${af.escalationAlertDays?'checked':''} onchange="onQfsMonitorTypeChange('pm')" style="cursor:pointer">
+          <input type="radio" name="qfs-montype" id="qfs-montype-pm" ${af.escalationAlertDays!=null?'checked':''} onchange="onQfsMonitorTypeChange('pm')" style="cursor:pointer">
           <i class="ti ti-crown"></i> מנהל פרויקט
         </label>
       </div>
-      <div id="qfs-ahmash-wrap" style="display:${af.ahmashAlertDays?'block':'none'}">
+      <div id="qfs-ahmash-wrap" style="display:${af.ahmashAlertDays!=null?'block':'none'}">
         <div class="form-row">
           <label class="form-label">ימי עסקים עד חריגה (השדה ריק)</label>
-          <input type="number" min="0" step="0.5" class="form-input" id="qfs-ahmash-days" value="${af.ahmashAlertDays||''}" placeholder="—">
+          <input type="number" min="0" step="0.5" class="form-input" id="qfs-ahmash-days" value="${af.ahmashAlertDays!=null?af.ahmashAlertDays:''}" placeholder="—">
         </div>
       </div>
-      <div id="qfs-pm-wrap" style="display:${af.escalationAlertDays?'block':'none'}">
+      <div id="qfs-pm-wrap" style="display:${af.escalationAlertDays!=null?'block':'none'}">
         <div class="form-row">
           <label class="form-label">מנהל פרויקט לעדכון <span style="color:var(--text3);font-weight:400">(ריק = כל מנהלי הפרויקט)</span></label>
           <select class="form-input" id="qfs-assigned">
@@ -2171,7 +2171,7 @@ async function openQuickFieldSettings(fileId,fieldId){
         </div>
         <div class="form-row">
           <label class="form-label">ימי עסקים מרגע ההעברה למנהל פרויקט</label>
-          <input type="number" min="0" step="0.5" class="form-input" id="qfs-days" value="${af.escalationAlertDays||''}" placeholder="—">
+          <input type="number" min="0" step="0.5" class="form-input" id="qfs-days" value="${af.escalationAlertDays!=null?af.escalationAlertDays:''}" placeholder="—">
         </div>
       </div>
     </div>
@@ -2321,7 +2321,7 @@ async function loadMonitorTab(){
 // הכללי של הקובץ. תנאי קבוע: השדה ריק. שעון: אם השדה תלוי בשדה אחר — מרגע שהתנאי
 // התקיים (escalated_at); אחרת מרגע יצירת הרשומה.
 function recordMatchesAhmashField(record,af,file){
-  if(!af.ahmashAlertDays) return false;
+  if(af.ahmashAlertDays==null) return false;
   const val=((record.admin_data||{})[af.id]||'').toString();
   if(val.trim()!=='') return false;
   if(af.dependsOn){
@@ -2336,7 +2336,7 @@ function recordMatchesAhmashField(record,af,file){
 // אותו תנאי בדיוק כמו הפונקציה המקבילה, רק שעוד לא עברו מספיק ימים. משמשות ל"ממתין
 // (טרם חרג)" — תור העבודה הפרואקטיבי במוניטורים (ראו renderMonitorGeneric, mode='pending')
 function recordAhmashPending(record,af,file){
-  if(!af.ahmashAlertDays) return false;
+  if(af.ahmashAlertDays==null) return false;
   const val=((record.admin_data||{})[af.id]||'').toString();
   if(val.trim()!=='') return false;
   let refDate;
@@ -2360,7 +2360,7 @@ async function loadMonitorData(){
   const filesWithSLA=DB.files.filter(f=>{
     if(!(f.alert_rule?.enabled&&f.alert_rule?.fieldId)) return false;
     const targetField=(f.admin_fields||[]).find(af=>af.id===f.alert_rule.fieldId);
-    if(targetField?.escalationAlertDays) return false;
+    if(targetField?.escalationAlertDays!=null) return false;
     return canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false;
   });
   const results=await Promise.all(filesWithSLA.map(async f=>{
@@ -2389,12 +2389,12 @@ async function loadMonitorData(){
   const filesWithAhmashFields=DB.files.filter(f=>
     !(f.alert_rule?.enabled&&f.alert_rule?.fieldId)&&
     canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false&&
-    (f.admin_fields||[]).some(af=>af.ahmashAlertDays)
+    (f.admin_fields||[]).some(af=>af.ahmashAlertDays!=null)
   );
   const fieldResults=await Promise.all(filesWithAhmashFields.map(async f=>{
     try{
       const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`);
-      const ahmashFields=(f.admin_fields||[]).filter(af=>af.ahmashAlertDays);
+      const ahmashFields=(f.admin_fields||[]).filter(af=>af.ahmashAlertDays!=null);
       let breached=[]; let pendingPairs=[];
       ahmashFields.forEach(af=>{
         breached=breached.concat((recs||[]).filter(r=>!r.closed_at&&recordMatchesAhmashField(r,af,f)));
@@ -2469,7 +2469,7 @@ function recordMatchesEscalationField(record,af,file){
 // שעון: אם תלוי בשדה אחר — מרגע שהתנאי התקיים (escalated_at); אחרת (שדה עצמאי, כמו
 // טופס חד-שלבי בלי אחמ"ש) מרגע יצירת הרשומה.
 function recordEscalationBreached(record,af,file){
-  if(!af.escalationAlertDays||record.closed_at) return false;
+  if(af.escalationAlertDays==null||record.closed_at) return false;
   if(af.dependsOn){
     if(!recordMatchesEscalationField(record,af,file)||!record.escalated_at) return false;
     return businessDaysBetween(new Date(record.escalated_at),new Date())>=parseFloat(af.escalationAlertDays);
@@ -2479,7 +2479,7 @@ function recordEscalationBreached(record,af,file){
 }
 // גרסת "טרם חרג" — ראו הערה מקבילה ליד recordAhmashPending
 function recordEscalationPending(record,af,file){
-  if(!af.escalationAlertDays||record.closed_at) return false;
+  if(af.escalationAlertDays==null||record.closed_at) return false;
   let refDate;
   if(af.dependsOn){
     if(!recordMatchesEscalationField(record,af,file)||!record.escalated_at) return false;
@@ -2494,12 +2494,12 @@ function recordEscalationPending(record,af,file){
 async function loadMonitorPmData(){
   const filesWithEscalation=DB.files.filter(f=>
     canManagerAccessFile(f)&&canManagerAccessOrg(f.org_id)&&f.active!==false&&
-    (f.admin_fields||[]).some(af=>af.escalationAlertDays)
+    (f.admin_fields||[]).some(af=>af.escalationAlertDays!=null)
   );
   const results=await Promise.all(filesWithEscalation.map(async f=>{
     try{
       const recs=await GET('records',`?file_id=eq.${f.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`);
-      const escalationFields=(f.admin_fields||[]).filter(af=>af.escalationAlertDays);
+      const escalationFields=(f.admin_fields||[]).filter(af=>af.escalationAlertDays!=null);
       let breached=[]; let pendingPairs=[];
       escalationFields.forEach(af=>{
         breached=breached.concat((recs||[]).filter(r=>recordEscalationBreached(r,af,f)));
@@ -4347,7 +4347,7 @@ async function ensurePmDigestSeeded(){
   const seeded={};
   DB.files.forEach(f=>{
     if(f.active===false) return;
-    const af=(f.admin_fields||[]).find(x=>x.escalationAlertDays&&x.assignedManagerEmail&&pmManagerEmails.has(x.assignedManagerEmail));
+    const af=(f.admin_fields||[]).find(x=>x.escalationAlertDays!=null&&x.assignedManagerEmail&&pmManagerEmails.has(x.assignedManagerEmail));
     if(af) (seeded[af.assignedManagerEmail]=seeded[af.assignedManagerEmail]||[]).push(f.id);
   });
   if(!Object.keys(seeded).length) return;
@@ -4773,14 +4773,14 @@ function digestScheduleHTML(cfg,prefix,color){
 
 function renderWaSubTabPM(){
   const cfg=_pmDigestCfg||defaultDigestScheduleCfg();
-  const pmFiles=DB.files.filter(f=>(f.admin_fields||[]).some(af=>af.escalationAlertDays));
+  const pmFiles=DB.files.filter(f=>(f.admin_fields||[]).some(af=>af.escalationAlertDays!=null));
   const pmManagers=(S._managers||[]).filter(m=>m.is_project_manager&&m.active);
   const managerFiles=cfg.managerFiles||{};
   const hasAnyAssignment=Object.keys(managerFiles).length>0;
   // ברירת מחדל להצגה ראשונית (לפני שנשמר managerFiles פעם אחת): לפי assignedManagerEmail
   // שכבר הוגדר בעבר על השדה עצמו — כדי לא להתחיל מריק אם כבר קיים שיוך
   const fileDefaultMgr=(f)=>{
-    const af=(f.admin_fields||[]).find(x=>x.escalationAlertDays&&x.assignedManagerEmail);
+    const af=(f.admin_fields||[]).find(x=>x.escalationAlertDays!=null&&x.assignedManagerEmail);
     return af?af.assignedManagerEmail:null;
   };
   const isChecked=(email,f)=> hasAnyAssignment ? (managerFiles[email]||[]).includes(f.id) : fileDefaultMgr(f)===email;
@@ -4887,7 +4887,7 @@ async function computePmManagerLines(fileIds){
   for(const fid of (fileIds||[])){
     const file=DB.files.find(f=>f.id===fid);
     if(!file) continue;
-    const escFields=(file.admin_fields||[]).filter(af=>af.escalationAlertDays);
+    const escFields=(file.admin_fields||[]).filter(af=>af.escalationAlertDays!=null);
     if(!escFields.length) continue;
     let recs=[];
     try{ recs=await GET('records',`?file_id=eq.${file.id}&archived=eq.false&select=id,created_at,escalated_at,closed_at,admin_data`); }catch(e){ continue; }
@@ -6320,7 +6320,7 @@ function fieldDependsOnHTML(ef,i,p){
 // לא-רלוונטית של אחמ"ש ולהפך.
 function fieldMonitorTrackingHTML(ef,i,p){
   if(p!=='a') return '';
-  const monType=ef.ahmashAlertDays?'ahmash':(ef.escalationAlertDays?'pm':'');
+  const monType=ef.ahmashAlertDays!=null?'ahmash':(ef.escalationAlertDays!=null?'pm':'');
   return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2)">
     <label class="form-label" style="margin-bottom:6px;display:block">מעקב מוניטור לשדה זה</label>
     <div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap">
@@ -6339,11 +6339,11 @@ function fieldMonitorTrackingHTML(ef,i,p){
     </div>
     <div id="fmon-ahmash-wrap-${p}-${i}" style="display:${monType==='ahmash'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--text2)">ימי עסקים עד חריגה (השדה ריק)</span>
-      <input type="number" min="0" step="0.5" data-fahmashd="${p}_${i}" value="${ef.ahmashAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
+      <input type="number" min="0" step="0.5" data-fahmashd="${p}_${i}" value="${ef.ahmashAlertDays!=null?ef.ahmashAlertDays:''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
     </div>
     <div id="fmon-pm-wrap-${p}-${i}" style="display:${monType==='pm'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--text2)">ימי עסקים מרגע ההעברה למנהל פרויקט</span>
-      <input type="number" min="0" step="0.5" data-fpmd="${p}_${i}" value="${ef.escalationAlertDays||''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
+      <input type="number" min="0" step="0.5" data-fpmd="${p}_${i}" value="${ef.escalationAlertDays!=null?ef.escalationAlertDays:''}" placeholder="—" style="width:60px;font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px">
     </div>
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:#7c3aed;margin-top:8px">
       <input type="checkbox" data-fpm="${p}_${i}" ${ef.projectManagerOnly?'checked':''} style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer">
@@ -7137,7 +7137,7 @@ function computeSystemHealth(){
 
   const noTracking=DB.files.filter(f=>f.active!==false&&
     !(f.alert_rule?.enabled&&f.alert_rule?.fieldId)&&
-    !(f.admin_fields||[]).some(af=>af.ahmashAlertDays||af.escalationAlertDays)
+    !(f.admin_fields||[]).some(af=>af.ahmashAlertDays!=null||af.escalationAlertDays!=null)
   );
   if(noTracking.length) issues.push({
     severity:'warn', icon:'ti-alert-triangle', category:'מעקב SLA',
@@ -7150,7 +7150,7 @@ function computeSystemHealth(){
   const seenPmFieldFileIds=new Set();
   DB.files.forEach(f=>{
     if(f.active===false) return;
-    if((f.admin_fields||[]).some(af=>af.escalationAlertDays) && !assignedFileIds.has(f.id) && !seenPmFieldFileIds.has(f.id)){
+    if((f.admin_fields||[]).some(af=>af.escalationAlertDays!=null) && !assignedFileIds.has(f.id) && !seenPmFieldFileIds.has(f.id)){
       seenPmFieldFileIds.add(f.id); pmFieldFiles.push(f);
     }
   });
@@ -7162,7 +7162,7 @@ function computeSystemHealth(){
   });
 
   const ahmashNoContact=DB.files.filter(f=>f.active!==false&&
-    ((f.alert_rule?.enabled&&f.alert_rule?.fieldId)||(f.admin_fields||[]).some(af=>af.ahmashAlertDays))&&
+    ((f.alert_rule?.enabled&&f.alert_rule?.fieldId)||(f.admin_fields||[]).some(af=>af.ahmashAlertDays!=null))&&
     (f.wa_contacts||[]).length===0 && f.wa_notify_group!==true
   );
   if(ahmashNoContact.length) issues.push({
