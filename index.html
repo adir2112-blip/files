@@ -475,7 +475,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.139'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.140'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1844,6 +1844,13 @@ function renderRecordsPage(){
         if(af.agentEditable&&!af.projectManagerOnly){
           if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}<input type="checkbox" class="admin-checkbox" ${val?'checked':''} onchange="saveAdminField('${r.id}','${af.id}',this.checked,'${S.fileId}')"></div></td>`;
           if(af.type==='select'){const opts=(af.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${val===o.trim()?'selected':''}>${esc(o.trim())}</option>`).join('');return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${agentChatBadge}<select class="admin-input" style="flex:1;min-width:0;border-color:#ea580c" title="${esc(val||'')}" onchange="saveAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')"><option value="">--</option>${opts}</select>${cellToolsHTML(val)}</div></td>`;}
+          if(af.type==='attachment'){
+            const uploadLbl=`<label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--blue);white-space:nowrap" title="הוסף עוד תמונות/קבצים" onclick="event.stopPropagation()">
+              <i class="ti ti-upload" style="font-size:13px"></i>${val?'':'הוסף'}
+              <input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="handleAdminAttachmentUpload(event,'${r.id}','${af.id}','${S.fileId}')">
+            </label>`;
+            return `<td class="admin-col"><div style="display:flex;align-items:center;gap:6px">${agentChatBadge}${renderAttachmentCell(val)}${uploadLbl}</div></td>`;
+          }
           return `<td class="admin-col"><div style="display:flex;align-items:center;gap:2px">${agentChatBadge}<input class="admin-input" type="text" value="${esc(val||'')}" placeholder="הזן..." style="flex:1;border-color:#ea580c" oninput="debounceAdminField('${r.id}','${af.id}',this.value,'${S.fileId}')">${cellToolsHTML(val)}</div></td>`;
         }
         if(af.type==='checkbox') return `<td class="admin-col" style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:4px">${agentChatBadge}${val?'<i class="ti ti-check" style="color:var(--green)"></i>':'<i class="ti ti-x" style="color:var(--text3)"></i>'}</div></td>`;
