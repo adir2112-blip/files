@@ -483,7 +483,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.141'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.142'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1056,14 +1056,21 @@ function render(){
 // (לצורך גרירה חלקה גם כשהעכבר יוצא מתחום ה-thumb) נקשרים פעם אחת ולתמיד.
 let _hscrollDragState=null;
 let _hscrollGlobalBound=false;
+// חשוב: בדפדפנים (Chrome ואחרים) אלמנט עם dir=rtl (כמו כל הדף הזה) משתמש בטווח
+// scrollLeft הפוך — בין 0 (קצה ימין/התחלה) ל--maxScroll (קצה שמאל/סוף), לא בין
+// 0 ל-+maxScroll כמו ב-LTR. קביעת scrollLeft לערך חיובי באלמנט RTL נדחית בשקט בחזרה
+// ל-0 ע"י הדפדפן עצמו — זו הייתה הסיבה שהגרירה "נתקעה" ולא זזה בכלל.
+function hscrollIsRTL(wrap){ return getComputedStyle(wrap).direction==='rtl'; }
 function updateHscrollThumb(wrap,bar,thumb){
   const barWidth=bar.clientWidth;
   const ratio=wrap.clientWidth/wrap.scrollWidth;
   const thumbWidth=Math.max(40,ratio*barWidth);
   const maxScroll=wrap.scrollWidth-wrap.clientWidth;
-  const scrollRatio=maxScroll>0?wrap.scrollLeft/maxScroll:0;
+  // screenFraction: היכן נמצא חלון התצוגה בתוך התוכן, משמאל (0) לימין (1) על המסך —
+  // בלי קשר לכיווניות הטקסט בתוך הטבלה, כדי שגרירת ה-thumb תהיה אינטואיטיבית
+  const screenFraction=maxScroll>0?(hscrollIsRTL(wrap)?1+wrap.scrollLeft/maxScroll:wrap.scrollLeft/maxScroll):0;
   thumb.style.width=thumbWidth+'px';
-  thumb.style.left=(scrollRatio*(barWidth-thumbWidth))+'px';
+  thumb.style.left=(screenFraction*(barWidth-thumbWidth))+'px';
 }
 function ensureHscrollGlobalListeners(){
   if(_hscrollGlobalBound) return;
@@ -1076,7 +1083,8 @@ function ensureHscrollGlobalListeners(){
     const maxScroll=d.wrap.scrollWidth-d.wrap.clientWidth;
     const trackRange=barWidth-thumbWidth;
     const scrollDelta=trackRange>0?(e.clientX-d.startX)/trackRange*maxScroll:0;
-    d.wrap.scrollLeft=Math.max(0,Math.min(maxScroll,d.startScroll+scrollDelta));
+    const target=d.startScroll+scrollDelta;
+    d.wrap.scrollLeft = d.isRTL ? Math.max(-maxScroll,Math.min(0,target)) : Math.max(0,Math.min(maxScroll,target));
   });
   document.addEventListener('mouseup',()=>{
     if(_hscrollDragState){ _hscrollDragState.thumb.classList.remove('dragging'); _hscrollDragState=null; }
@@ -1097,7 +1105,7 @@ function setupStickyHScroll(){
   updateHscrollThumb(wrap,bar,thumb);
   wrap.onscroll=()=>updateHscrollThumb(wrap,bar,thumb);
   thumb.onmousedown=e=>{
-    _hscrollDragState={wrap,bar,thumb,startX:e.clientX,startScroll:wrap.scrollLeft};
+    _hscrollDragState={wrap,bar,thumb,startX:e.clientX,startScroll:wrap.scrollLeft,isRTL:hscrollIsRTL(wrap)};
     thumb.classList.add('dragging');
     e.preventDefault();
   };
@@ -1110,7 +1118,8 @@ function setupStickyHScroll(){
     const maxScroll=wrap.scrollWidth-wrap.clientWidth;
     const trackRange=barWidth-thumbWidth;
     const targetThumbLeft=Math.max(0,Math.min(trackRange,(e.clientX-rect.left)-thumbWidth/2));
-    wrap.scrollLeft=trackRange>0?(targetThumbLeft/trackRange*maxScroll):0;
+    const screenFraction=trackRange>0?targetThumbLeft/trackRange:0;
+    wrap.scrollLeft = hscrollIsRTL(wrap) ? (screenFraction-1)*maxScroll : screenFraction*maxScroll;
   };
 }
 
