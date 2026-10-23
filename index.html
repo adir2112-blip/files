@@ -483,7 +483,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.142'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.143'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -3010,7 +3010,19 @@ function renderAdminAllRecords(){
 }
 
 // ── NAV ──
-function goOrgs(){S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.chatFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.globalSearch='';S.globalSearchResults=null;loadAll().then(()=>loadAllCounts().then(render));}
+// "בית" הוא כנראה הניווט הכי תדיר באפליקציה (נציג חוזר אליו בין כל פנייה ופנייה) —
+// אין טעם לסרוק מחדש את כל המערכת (orgs+files+כל ספירות הבאדג'ים) בכל חזרה אליו,
+// במיוחד שהספירות כבר מתעדכנות מיידית בזיכרון על כל פעולה של המשתמש עצמו (ראו
+// adjustCountsForRecordChange/addCountsForNewRecord). רענון מלא רץ לכל היותר פעם
+// ב-3 דקות; בינתיים מציגים את מה שכבר יש בזיכרון — זה גם מהיר יותר למשתמש.
+let _lastHomeRefreshAt=0;
+const HOME_REFRESH_THROTTLE_MS=3*60*1000;
+function goOrgs(){
+  S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.chatFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.globalSearch='';S.globalSearchResults=null;
+  if(Date.now()-_lastHomeRefreshAt<HOME_REFRESH_THROTTLE_MS){ render(); return; }
+  _lastHomeRefreshAt=Date.now();
+  loadAll().then(()=>loadAllCounts().then(render));
+}
 
 // ══ FIELD CHAT SYSTEM ══
 let _chatPopup=null;
@@ -7741,7 +7753,7 @@ async function sendAlertEmail(file, breachedCount){
   }catch(e){ console.warn('Email send failed:',e); addEmailLog(emails.join(', '),subject,false); }
 }
 
-async function initApp(){await loadAll();await loadAllCounts();startEmailAlertTimers();render();}
+async function initApp(){await loadAll();await loadAllCounts();_lastHomeRefreshAt=Date.now();startEmailAlertTimers();render();}
 window.addEventListener('DOMContentLoaded',()=>{initLoginBg();initLogin();});
 </script>
 </body>
