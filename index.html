@@ -483,7 +483,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.143'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.144'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1999,7 +1999,16 @@ function renderRecordsPage(){
     const isBreached=isAdmin&&recordMatchesAlert(r,f);
     const isChatOpen=recordChatStatus(r)==='open';
     const isClosed=!!r.closed_at;
-    const trStyle=`${isSelected?'background:var(--blue-light);':isClosed?'background:#bbf7d0;box-shadow:inset 4px 0 0 #15803d;':isChatOpen?'background:#fecaca;box-shadow:inset 4px 0 0 #b91c1c;':isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
+    // צבע הדגשה מותאם-אישית לפי ערך שדה ניהולי (optionColors) — למשל סטטוס "הועבר לבדיקה"
+    // שהוגדר לו צבע בעריכת השדה. נדרס ע"י מצבי מערכת חשובים יותר (נבחר/סגור/צ'אט פתוח),
+    // אבל גובר על הדגשת "בחריגה" הגנרית
+    let statusColor=null;
+    for(const af of visibleAdminFields){
+      if(!af.optionColors) continue;
+      const v=(r.admin_data||{})[af.id];
+      if(v && af.optionColors[v]){ statusColor=af.optionColors[v]; break; }
+    }
+    const trStyle=`${isSelected?'background:var(--blue-light);':isClosed?'background:#bbf7d0;box-shadow:inset 4px 0 0 #15803d;':isChatOpen?'background:#fecaca;box-shadow:inset 4px 0 0 #b91c1c;':statusColor?`background:${statusColor};`:isBreached?'background:#fff7ed;':rowStyle}${_bulkMode?';cursor:pointer':''}`;
     const closeC=(isAdmin&&f.allow_close_record&&!_bulkMode)?(isClosed
       ?`<td style="text-align:center"><button class="btn btn-xs" style="background:#dcfce7;border-color:#86efac;color:#15803d" onclick="event.stopPropagation();closeRecord('${r.id}','${S.fileId}',false)" title="${esc(r.closed_by||'')}${r.closed_by_is_pm?' (מנהל פרויקט)':''} · ${r.closed_at?fmtDate(r.closed_at):''}"><i class="ti ti-circle-check-filled"></i> סגור${r.closed_by_is_pm?' <i class="ti ti-crown" style="font-size:10px"></i>':''}</button></td>`
       :`<td style="text-align:center"><button class="btn btn-xs" onclick="event.stopPropagation();closeRecord('${r.id}','${S.fileId}',true)">סגור רשומה</button></td>`)
@@ -5567,6 +5576,20 @@ async function submitRecord(e,fileId){
 async function closeRecord(recordId,fileId,close){
   const recs=_cachedRecords[fileId]||[];
   const record=recs.find(r=>r.id===recordId); if(!record) return;
+  // חוסם סגירת פנייה כל עוד שדה ניהולי כלשהו נמצא בערך שסומן כ"חוסם סגירה"
+  // (optionBlocksClose) — למשל סטטוס "הועבר לבדיקה". לא חוסם פתיחה מחדש.
+  if(close){
+    const f=DB.files.find(x=>x.id===fileId);
+    for(const af of (f?.admin_fields||[])){
+      const blockList=af.optionBlocksClose||[];
+      if(!blockList.length) continue;
+      const v=(record.admin_data||{})[af.id];
+      if(v && blockList.includes(v)){
+        alert(`יש לשנות את הסטטוס ("${af.label}": "${v}") לפני סגירת הפנייה`);
+        return;
+      }
+    }
+  }
   const closed_at=close?new Date().toISOString():null;
   const closed_by=close?(currentUser?.name||_agentName||'מנהל'):null;
   // נשמר כדי שתגובת מנהל רגיל בצ'אט תוכל לפתוח מחדש רשומה שנסגרה ע"י מנהל פרויקט
@@ -6377,14 +6400,28 @@ function fileModalHTML(f,mode,id=''){
 }
 function fieldOptionChipsHTML(ef,i,p){
   const opts=(ef.options||'').split(',').map(o=>o.trim()).filter(Boolean);
-  const chips=opts.map((o,oi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:20px;padding:3px 6px 3px 10px;font-size:12px;color:var(--blue-dark)">
+  // צבע הדגשת שורה + חסימת "סגור פנייה" לפי ערך — רלוונטי רק לשדות ניהוליים (לא שדות
+  // רגילים של הטופס), כי זה קשור למוניטור השורה ולסגירת רשומה בטבלת הניהול
+  const showStatusExtras=p==='a';
+  const colors=ef.optionColors||{};
+  const blocks=new Set(ef.optionBlocksClose||[]);
+  const chips=opts.map((o,oi)=>{
+    const color=colors[o]||'';
+    const isBlocked=blocks.has(o);
+    const colorPicker=showStatusExtras?`<input type="color" value="${color||'#ffffff'}" title="צבע הדגשת שורה לערך הזה" onchange="setFieldOptionColor('${p}',${i},${oi},this.value)" style="width:16px;height:16px;padding:0;border:1px solid rgba(0,0,0,.2);border-radius:4px;cursor:pointer;background:${esc(color||'#fff')}">`:'';
+    const clearColorBtn=(showStatusExtras&&color)?`<span onclick="clearFieldOptionColor('${p}',${i},${oi})" title="הסר צבע" style="cursor:pointer;font-size:9px;color:var(--text3)">✕צבע</span>`:'';
+    const blockToggle=showStatusExtras?`<span onclick="toggleFieldOptionBlockClose('${p}',${i},${oi})" title="${isBlocked?'חוסם \"סגור פנייה\" כל עוד נבחר — לחץ לביטול':'לחץ כדי לחסום \"סגור פנייה\" כל עוד ערך זה נבחר'}" style="cursor:pointer;font-size:12px;color:${isBlocked?'#dc2626':'var(--text3)'};opacity:${isBlocked?'1':'.5'}"><i class="ti ti-lock${isBlocked?'':'-open'}"></i></span>`:'';
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${color?color+'33':'var(--blue-light)'};border:1px solid ${color||'#bfdbfe'};border-radius:20px;padding:3px 6px 3px 10px;font-size:12px;color:var(--blue-dark)">
     ${esc(o)}
+    ${colorPicker}${clearColorBtn}${blockToggle}
     <span onclick="removeFieldOption('${p}',${i},${oi})" title="הסר" style="cursor:pointer;width:15px;height:15px;border-radius:50%;background:rgba(255,255,255,.7);display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1">✕</span>
-  </span>`).join('');
+  </span>`;
+  }).join('');
   return `<div class="mt-1" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-xs)">
     ${chips}
     <input type="text" placeholder="+ הוסף אופציה, Enter" style="border:none;background:transparent;outline:none;font-size:12px;flex:1;min-width:90px;font-family:inherit;color:var(--text)" onkeydown="if(event.key==='Enter'){event.preventDefault();addFieldOption('${p}',${i},this.value);this.value='';}" onblur="if(this.value.trim()){addFieldOption('${p}',${i},this.value);this.value='';}">
-  </div>`;
+  </div>
+  ${showStatusExtras?`<div style="font-size:10px;color:var(--text3);margin-top:3px">🎨 צבע = מדגיש את השורה כולה בטבלה כל עוד הערך הזה נבחר &nbsp;·&nbsp; 🔒 = חוסם "סגור פנייה" כל עוד הערך הזה נבחר</div>`:''}`;
 }
 function fieldDependsOnHTML(ef,i,p){
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
@@ -6584,8 +6621,41 @@ function removeFieldOption(p,i,oi){
   saveFieldsFromDOM(p);
   const arr=p==='f'?_tmpFields:_tmpAdminFields;
   const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
+  const removedVal=opts[oi];
   opts.splice(oi,1);
   arr[i].options=sortOptionsHe(opts).join(',');
+  if(arr[i].optionColors) delete arr[i].optionColors[removedVal];
+  if(arr[i].optionBlocksClose) arr[i].optionBlocksClose=arr[i].optionBlocksClose.filter(v=>v!==removedVal);
+  refreshFields(p);
+}
+// צבע הדגשת שורה לפי ערך נבחר בשדה select ניהולי (optionColors) — ראו fieldOptionChipsHTML
+function setFieldOptionColor(p,i,oi,color){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
+  const val=opts[oi]; if(val===undefined) return;
+  arr[i].optionColors=arr[i].optionColors||{};
+  arr[i].optionColors[val]=color;
+  refreshFields(p);
+}
+function clearFieldOptionColor(p,i,oi){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
+  const val=opts[oi]; if(val===undefined) return;
+  if(arr[i].optionColors) delete arr[i].optionColors[val];
+  refreshFields(p);
+}
+// חסימת כפתור "סגור פנייה" כל עוד השדה הזה נמצא בערך הזה (optionBlocksClose) — ראו closeRecord
+function toggleFieldOptionBlockClose(p,i,oi){
+  saveFieldsFromDOM(p);
+  const arr=p==='f'?_tmpFields:_tmpAdminFields;
+  const opts=(arr[i].options||'').split(',').map(o=>o.trim()).filter(Boolean);
+  const val=opts[oi]; if(val===undefined) return;
+  const list=arr[i].optionBlocksClose||[];
+  const idx=list.indexOf(val);
+  if(idx>=0) list.splice(idx,1); else list.push(val);
+  arr[i].optionBlocksClose=list;
   refreshFields(p);
 }
 function onDependsOnChange(p,i,val){
@@ -6696,7 +6766,7 @@ const fdv=document.querySelector(`[data-fdv="${p}_${i}"]`);
 const fpm=document.querySelector(`[data-fpm="${p}_${i}"]`);
 const fpmd=document.querySelector(`[data-fpmd="${p}_${i}"]`);
 const fahmashd=document.querySelector(`[data-fahmashd="${p}_${i}"]`);
-return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled,agentEditable:a2?a2.checked:!!ef.agentEditable,dependsOn:fdo?fdo.value:(ef.dependsOn||''),dependsOnValue:fdv?fdv.value:(ef.dependsOnValue||''),projectManagerOnly:fpm?fpm.checked:!!ef.projectManagerOnly,escalationAlertDays:fpmd?(fpmd.value?parseFloat(fpmd.value):null):(ef.escalationAlertDays??null),ahmashAlertDays:fahmashd?(fahmashd.value?parseFloat(fahmashd.value):null):(ef.ahmashAlertDays??null),assignedManagerEmail:ef.assignedManagerEmail||''};}).filter(ef=>ef.label);}
+return{id:ef.id,label:l?l.value.trim():ef.label,type:t?t.value:ef.type,options:o?o.value.trim():ef.options,required:r?r.checked:!!ef.required,bulkEnabled:b?b.checked:(ef.bulkEnabled!==false),noteEnabled:ne?ne.checked:!!ef.noteEnabled,note:n?n.value.trim():(ef.note||''),chatEnabled:c2?c2.checked:!!ef.chatEnabled,agentEditable:a2?a2.checked:!!ef.agentEditable,dependsOn:fdo?fdo.value:(ef.dependsOn||''),dependsOnValue:fdv?fdv.value:(ef.dependsOnValue||''),projectManagerOnly:fpm?fpm.checked:!!ef.projectManagerOnly,escalationAlertDays:fpmd?(fpmd.value?parseFloat(fpmd.value):null):(ef.escalationAlertDays??null),ahmashAlertDays:fahmashd?(fahmashd.value?parseFloat(fahmashd.value):null):(ef.ahmashAlertDays??null),assignedManagerEmail:ef.assignedManagerEmail||'',optionColors:ef.optionColors||{},optionBlocksClose:ef.optionBlocksClose||[]};}).filter(ef=>ef.label);}
 function collectPendingRules(){const r={};document.querySelectorAll('[data-pr]').forEach(el=>{if(el.value&&el.value!=='ignore')r[el.dataset.pr]=el.value;});return r;}
 function collectAlertEmails(){
   return [0,1,2,3].map(i=>document.getElementById(`email-alert-${i}`)?.value.trim()||'').filter(Boolean);
