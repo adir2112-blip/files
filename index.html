@@ -483,7 +483,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.145'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.146'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -1289,7 +1289,13 @@ function fieldIconGuess(label){
 
 function renderForm(){
   const f=DB.files.find(x=>x.id===S.fileId); if(!f) return '';
-  if(f.locked&&!S.adminLoggedIn){
+  if((f.locked||f.unavailable)&&!S.adminLoggedIn){
+    const isLocked=!!f.locked;
+    const blockTitle=isLocked?'הטופס נעול כרגע':'הטופס לא זמין כרגע';
+    const blockMsg=isLocked?(f.locked_message||'לא ניתן להזין רשומות חדשות בטופס זה כרגע.'):(f.unavailable_message||'טופס זה אינו זמין להזנת רשומות חדשות כרגע.');
+    const blockBg=isLocked?'linear-gradient(135deg,#b91c1c,#991b1b)':'linear-gradient(135deg,#6b7280,#4b5563)';
+    const blockIcon=isLocked?'ti-lock':'ti-ban';
+    const blockMsgColor=isLocked?'#fee2e2':'#f3f4f6';
     return `<div class="entry-card">
       <div class="entry-hero">
         <div class="entry-hero-top">
@@ -1306,11 +1312,11 @@ function renderForm(){
         </div>
       </div>
       <div class="entry-body">
-        <div class="entry-instructions" style="background:linear-gradient(135deg,#b91c1c,#991b1b)">
-          <i class="ti ti-lock"></i>
+        <div class="entry-instructions" style="background:${blockBg}">
+          <i class="ti ${blockIcon}"></i>
           <div>
-            <div class="entry-instructions-title">הטופס נעול כרגע</div>
-            <div style="color:#fee2e2;font-size:13.5px;font-weight:600;line-height:1.6">${esc(f.locked_message||'לא ניתן להזין רשומות חדשות בטופס זה כרגע.')}</div>
+            <div class="entry-instructions-title">${blockTitle}</div>
+            <div style="color:${blockMsgColor};font-size:13.5px;font-weight:600;line-height:1.6">${esc(blockMsg)}</div>
           </div>
         </div>
       </div>
@@ -1401,6 +1407,13 @@ function renderForm(){
         <div>
           <div class="entry-instructions-title">הטופס נעול לנציגים</div>
           <div style="color:#fee2e2;font-size:13.5px;font-weight:600;line-height:1.6">${esc(f.locked_message||'לא הוגדרה הודעה לנציג.')} — לביטול הנעילה: עריכת טופס.</div>
+        </div>
+      </div>`:''}
+      ${f.unavailable?`<div class="entry-instructions" style="background:linear-gradient(135deg,#6b7280,#4b5563)">
+        <i class="ti ti-ban"></i>
+        <div>
+          <div class="entry-instructions-title">הטופס לא זמין לנציגים</div>
+          <div style="color:#f3f4f6;font-size:13.5px;font-weight:600;line-height:1.6">${esc(f.unavailable_message||'לא הוגדרה הודעה לנציג.')} — לביטול: עריכת טופס.</div>
         </div>
       </div>`:''}
       ${(()=>{
@@ -2956,6 +2969,7 @@ function renderAdminFiles(){
               ${_recentActivity[f.id]?`<span style="background:#fee2e2;color:#dc2626;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700"><i class="ti ti-flame" style="font-size:10px"></i> פעיל מאוד</span>`:''}
               ${isInactive?`<span style="background:var(--surface3,#e5e7eb);color:var(--text3);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700"><i class="ti ti-eye-off" style="font-size:10px"></i> לא פעיל</span>`:''}
               ${f.locked?`<span style="background:#fee2e2;color:#b91c1c;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700"><i class="ti ti-lock" style="font-size:10px"></i> נעול לנציגים</span>`:''}
+              ${f.unavailable?`<span style="background:#e5e7eb;color:#4b5563;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700"><i class="ti ti-ban" style="font-size:10px"></i> לא זמין לנציגים</span>`:''}
               ${hasRestriction?`<span title="גישה מוגבלת ל-${allowed.length} מנהלים" style="background:var(--amber-light);color:#92400e;border:1px solid #fcd34d;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700"><i class="ti ti-lock" style="font-size:10px"></i> ${allowed.length} מנהלים</span>`:'<span style="background:var(--green-light);color:#15803d;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:600"><i class="ti ti-lock-open" style="font-size:10px"></i> כולם</span>'}
             </div>
             <div class="flex-gap">
@@ -6322,6 +6336,16 @@ function fileModalHTML(f,mode,id=''){
         <div style="font-size:11px;color:var(--text3);margin-top:4px">מנהלים ימשיכו לראות ולנהל את הטופס כרגיל, עם התראה שהוא נעול לנציגים.</div>
       </div>
     </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#4b5563">
+        <input type="checkbox" id="mf-unavailable" ${f.unavailable?'checked':''} onchange="document.getElementById('mf-unavailable-wrap').style.display=this.checked?'':'none'" style="width:16px;height:16px;accent-color:#4b5563;cursor:pointer">
+        <i class="ti ti-ban" style="font-size:15px"></i> הפוך טופס ללא זמין — ניתן לצפות ברשומות קיימות, לא ניתן להזין רשומות חדשות
+      </label>
+      <div id="mf-unavailable-wrap" style="margin-top:8px;display:${f.unavailable?'':'none'}">
+        <textarea class="form-input" id="mf-unavailable-message" rows="3" placeholder="ההודעה שהנציג יראה במקום הטופס, לדוגמה: טופס זה אינו פעיל יותר">${esc(f.unavailable_message||'')}</textarea>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">מנהלים ימשיכו לראות ולנהל את הטופס כרגיל, עם התראה שהוא לא זמין לנציגים.</div>
+      </div>
+    </div>
     <div class="form-row"><label class="form-label">שדות טופס (נציג ממלא)</label><div id="field-list">${fieldRows}</div><button class="btn btn-sm mt-1" type="button" onclick="addField('f')"><i class="ti ti-plus"></i> הוסף שדה</button></div>
     <div class="section-divider"><i class="ti ti-shield-check"></i> שדות ניהוליים (מנהל ממלא)</div>
     <div class="form-row"><div id="admin-field-list">${adminRows}</div>
@@ -6823,8 +6847,8 @@ function collectWaContacts(){
   }));
 }
 
-async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||'',wa_notify_group:document.getElementById('mf-wa-group')?.checked||false});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
-async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||'',wa_notify_group:document.getElementById('mf-wa-group')?.checked||false},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
+async function saveNewFile(){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await POST('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||'',unavailable:document.getElementById('mf-unavailable')?.checked||false,unavailable_message:document.getElementById('mf-unavailable-message')?.value||'',wa_notify_group:document.getElementById('mf-wa-group')?.checked||false});await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ נוסף','success');}
+async function saveEditFile(id){const name=document.getElementById('mf-name').value.trim(),orgId=document.getElementById('mf-org').value;if(!name){alert('יש להזין שם');return;}if(!orgId){alert('יש לבחור ארגון');return;}await PATCH('files',{name,icon:_tmpIcon,org_id:orgId,core_fields:collectCoreFields(),extra_fields:collectFields('f'),admin_fields:collectFields('a'),pending_rules:collectPendingRules(),alert_rule:collectAlertRule(),wa_contacts:collectWaContacts(),alert_emails:collectAlertEmails(),inactivity_alert:collectInactivityAlert(),responsible_manager:document.getElementById('mf-responsible')?.value||'',email_schedule:{intervalHours:parseInt(document.getElementById('email-interval')?.value||0),startHour:parseInt(document.getElementById('email-start-hour')?.value||8)},allow_close_record:document.getElementById('mf-allow-close')?.checked||false,show_instructions:document.getElementById('mf-show-instructions')?.checked||false,instructions_text:document.getElementById('mf-instructions-text')?.value||'',locked:document.getElementById('mf-locked')?.checked||false,locked_message:document.getElementById('mf-locked-message')?.value||'',unavailable:document.getElementById('mf-unavailable')?.checked||false,unavailable_message:document.getElementById('mf-unavailable-message')?.value||'',wa_notify_group:document.getElementById('mf-wa-group')?.checked||false},`?id=eq.${id}`);await loadAll();await loadAllCounts();closeModal();render();showAlert('הקובץ עודכן','success');}
 async function confirmDeleteFile(id){if(!isAdirAdmin()){showAlert('רק אדיר יכול למחוק קבצים','error');return;}const f=DB.files.find(x=>x.id===id);if(!confirm(`למחוק את "${f.name}"?`))return;await DEL('files',`?id=eq.${id}`);await loadAll();render();showAlert('הקובץ נמחק','success');}
 async function toggleFileActive(id,newActive){
   if(!isAdirAdmin()){showAlert('רק אדיר יכול לשנות סטטוס קובץ','error');return;}
