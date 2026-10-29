@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -432,6 +433,46 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
     </div>
   </div>
 
+  <!-- AGENT 2FA ENROLLMENT -->
+  <div id="ls-agent-enroll" class="login-card" style="display:none">
+    <button class="login-back" onclick="showLogin('mode')"><i class="ti ti-arrow-right"></i> חזרה</button>
+    <div class="login-section-title"><i class="ti ti-shield-lock" style="color:var(--blue)"></i> הגדרת אימות דו-שלבי</div>
+    <div class="login-err" id="enroll-err"><i class="ti ti-alert-circle"></i> <span id="enroll-err-msg"></span></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:10px">פתח את אפליקציית <strong>Microsoft Authenticator</strong> (או Google Authenticator) בטלפון וסרוק את הקוד עבור <strong><span id="enroll-agent-name"></span></strong>:</p>
+    <div style="display:flex;justify-content:center;margin:10px 0"><canvas id="enroll-qr-canvas"></canvas></div>
+    <div style="text-align:center;margin-bottom:14px">
+      <button type="button" class="sc-change" style="background:none;border:none;cursor:pointer" onclick="toggleManualKey()">הקוד לא נסרק? הצג מפתח להקלדה ידנית</button>
+      <div id="enroll-manual-key" style="display:none;margin-top:8px;font-family:monospace;letter-spacing:2px;font-size:14px;direction:ltr;background:var(--surface2);border-radius:8px;padding:8px"></div>
+    </div>
+    <label class="pin-label">הזן קוד בן 6 ספרות מהאפליקציה לאישור</label>
+    <div class="pin-row">
+      <input class="pin-digit" id="e0" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',0,6)" onkeydown="totpDigitKey(event,'e',0)">
+      <input class="pin-digit" id="e1" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',1,6)" onkeydown="totpDigitKey(event,'e',1)">
+      <input class="pin-digit" id="e2" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',2,6)" onkeydown="totpDigitKey(event,'e',2)">
+      <input class="pin-digit" id="e3" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',3,6)" onkeydown="totpDigitKey(event,'e',3)">
+      <input class="pin-digit" id="e4" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',4,6)" onkeydown="totpDigitKey(event,'e',4)">
+      <input class="pin-digit" id="e5" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',5,6)" onkeydown="totpDigitKey(event,'e',5)">
+    </div>
+    <button class="login-btn login-btn-primary" style="margin-top:16px" onclick="confirmEnroll()"><i class="ti ti-check"></i> אשר והפעל</button>
+  </div>
+
+  <!-- AGENT TOTP (second factor) -->
+  <div id="ls-agent-totp" class="login-card" style="display:none">
+    <button class="login-back" onclick="showLogin('mode')"><i class="ti ti-arrow-right"></i> חזרה</button>
+    <div class="login-section-title"><i class="ti ti-shield-check" style="color:var(--blue)"></i> קוד אימות</div>
+    <div class="login-err" id="totp-err"><i class="ti ti-alert-circle"></i> <span id="totp-err-msg"></span></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:10px">הזן את הקוד בן 6 הספרות מאפליקציית Authenticator</p>
+    <div class="pin-row">
+      <input class="pin-digit" id="t0" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',0,6)" onkeydown="totpDigitKey(event,'t',0)">
+      <input class="pin-digit" id="t1" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',1,6)" onkeydown="totpDigitKey(event,'t',1)">
+      <input class="pin-digit" id="t2" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',2,6)" onkeydown="totpDigitKey(event,'t',2)">
+      <input class="pin-digit" id="t3" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',3,6)" onkeydown="totpDigitKey(event,'t',3)">
+      <input class="pin-digit" id="t4" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',4,6)" onkeydown="totpDigitKey(event,'t',4)">
+      <input class="pin-digit" id="t5" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',5,6)" onkeydown="totpDigitKey(event,'t',5)">
+    </div>
+    <button class="login-btn login-btn-primary" style="margin-top:16px" onclick="verifyTotp()"><i class="ti ti-login"></i> אשר והיכנס</button>
+  </div>
+
   <!-- MANAGER -->
   <div id="ls-manager" class="login-card" style="display:none">
     <button class="login-back" onclick="showLogin('mode')"><i class="ti ti-arrow-right"></i> חזרה</button>
@@ -483,7 +524,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.148'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.149'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -555,7 +596,7 @@ document.getElementById('topbar-date').textContent=new Date().toLocaleDateString
 
 // ══ LOGIN ══
 function showLogin(screen){
-  ['mode','agent','manager'].forEach(s=>document.getElementById('ls-'+s).style.display=s===screen?'block':'none');
+  ['mode','agent','manager','agent-enroll','agent-totp'].forEach(s=>document.getElementById('ls-'+s).style.display=s===screen?'block':'none');
   if(screen==='agent'){
     document.getElementById('agent-step1').style.display='block';
     document.getElementById('agent-step2').style.display='none';
@@ -588,7 +629,7 @@ async function initLogin(){
     const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',session.user.email).eq('active',true).single();
     if(mgr){
       // load all agents for admin management
-      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
       enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,is_ahmash_senior:!!mgr.is_ahmash_senior,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]});
       PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
       return;
@@ -666,10 +707,95 @@ async function loginAgent(){
     ['p0','p1','p2','p3'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('p0').focus(); return;
   }
+  // אחרי PIN תקין — הנציג חייב גם אימות דו-שלבי (Authenticator). לא רשום עדיין → הרשמה
+  // (QR); רשום → שלב קוד. ה-session האמיתי מונפק רק אחרי אימות הקוד (agent-totp-verify).
+  if(res.stage==='enroll'){ showEnrollScreen(res); return; }
+  if(res.stage==='totp'){ showTotpScreen(res); return; }
+}
+
+// ══ 2FA (Authenticator) — הרשמה וכניסה ══
+let _enrollAgentId=null, _totpAgentId=null, _totpTicket=null;
+
+function showEnrollScreen(res){
+  _enrollAgentId=res.agentId;
+  document.getElementById('enroll-agent-name').textContent=_selectedAgent?.name||'';
+  const keyEl=document.getElementById('enroll-manual-key');
+  keyEl.textContent=res.secretBase32; keyEl.style.display='none';
+  showLogin('agent-enroll');
+  ['e0','e1','e2','e3','e4','e5'].forEach(id=>document.getElementById(id).value='');
+  setTimeout(()=>{
+    const canvas=document.getElementById('enroll-qr-canvas');
+    if(window.QRCode) QRCode.toCanvas(canvas,res.otpauthUri,{width:200},()=>{});
+    document.getElementById('e0').focus();
+  },60);
+}
+function toggleManualKey(){
+  const el=document.getElementById('enroll-manual-key');
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+function showTotpScreen(res){
+  _totpAgentId=res.agentId; _totpTicket=res.ticket;
+  showLogin('agent-totp');
+  ['t0','t1','t2','t3','t4','t5'].forEach(id=>document.getElementById(id).value='');
+  setTimeout(()=>document.getElementById('t0').focus(),60);
+}
+function totpDigitInput(prefix,i,total){
+  const el=document.getElementById(prefix+i);
+  el.value=el.value.replace(/\D/g,'').slice(0,1);
+  if(el.value && i<total-1) document.getElementById(prefix+(i+1)).focus();
+  if(i===total-1 && el.value){
+    if(prefix==='e') confirmEnroll();
+    if(prefix==='t') verifyTotp();
+  }
+}
+function totpDigitKey(e,prefix,i){
+  if(e.key==='Backspace' && !document.getElementById(prefix+i).value && i>0) document.getElementById(prefix+(i-1)).focus();
+  if(e.key==='Enter'){ if(prefix==='e') confirmEnroll(); if(prefix==='t') verifyTotp(); }
+}
+async function confirmEnroll(){
+  document.getElementById('enroll-err').style.display='none';
+  const code=['e0','e1','e2','e3','e4','e5'].map(id=>document.getElementById(id).value).join('');
+  if(code.length<6){ showLoginErr('enroll-err','enroll-err-msg','יש להזין 6 ספרות'); return; }
+  let res;
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/agent-totp-enroll-confirm`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({agentId:_enrollAgentId,code})
+    });
+    res=await r.json();
+  }catch(e){ showLoginErr('enroll-err','enroll-err-msg','שגיאת תקשורת — נסה שוב'); return; }
+  if(!res?.ok){
+    showLoginErr('enroll-err','enroll-err-msg',res?.error||'קוד שגוי — נסה שוב');
+    ['e0','e1','e2','e3','e4','e5'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('e0').focus();
+    return;
+  }
+  showAlert('האימות הופעל בהצלחה — התחבר שוב כדי להמשיך','success');
+  showLogin('agent');
+}
+async function verifyTotp(){
+  document.getElementById('totp-err').style.display='none';
+  const code=['t0','t1','t2','t3','t4','t5'].map(id=>document.getElementById(id).value).join('');
+  if(code.length<6){ showLoginErr('totp-err','totp-err-msg','יש להזין 6 ספרות'); return; }
+  let res;
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/agent-totp-verify`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({agentId:_totpAgentId,ticket:_totpTicket,code})
+    });
+    res=await r.json();
+  }catch(e){ showLoginErr('totp-err','totp-err-msg','שגיאת תקשורת — נסה שוב'); return; }
+  if(!res?.ok){
+    showLoginErr('totp-err','totp-err-msg',res?.error||'קוד שגוי');
+    ['t0','t1','t2','t3','t4','t5'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('t0').focus();
+    return;
+  }
   await sbClient.auth.setSession({access_token:res.access_token,refresh_token:res.refresh_token});
   enterApp({name:res.agent.name,role:'agent',is_super_admin:false,allowed_orgs:res.agent.allowed_orgs||[]});
-  // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
-  PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${_selectedAgent.id}`).catch(()=>{});
+  PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${_totpAgentId}`).catch(()=>{});
 }
 
 async function loginManager(){
@@ -708,7 +834,7 @@ function enterApp(user){
     // load agents after loadAll so render has all data
     initApp().then(()=>{
       loadDashboardTab();
-      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs').then(data=>{ allAgents=data||[]; render(); });
+      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at').then(data=>{ allAgents=data||[]; render(); });
       // רענון תג המספר בטופבר (badge) — רץ ברקע לכל מנהל עם גישה למוניטור, לאורך כל
       // ההתחברות שלו, ללא קשר לאיזה מסך הוא צופה בו. 10 דקות מספיק בהחלט (חריגות
       // נמדדות בימי עסקים, לא בדקות) ומקטין דרמטית את צריכת ה-Egress מול 120 שניות
@@ -2998,15 +3124,17 @@ function renderAdminAgents(){
     <button class="btn btn-black" onclick="openNewAgent()"><i class="ti ti-user-plus"></i> נציג חדש</button>
     <button class="btn btn-sm" onclick="openImportAgents()" style="border-color:var(--green);color:var(--green)"><i class="ti ti-table-import"></i> ייבוא מ-Excel</button>
   </div>
-  <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th>ארגונים</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th>שם</th><th>PIN</th><th>סטטוס</th><th>2FA</th><th>ארגונים</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
   ${allAgents.map(u=>`<tr>
     <td><div style="display:flex;align-items:center;gap:8px"><div class="ali-avatar" style="width:28px;height:28px;font-size:10px">${u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>${esc(u.name)}</div></td>
     <td dir="ltr" style="letter-spacing:6px;color:var(--text3)">••••</td>
     <td><span class="badge ${u.active?'badge-success':'badge-warning'}">${u.active?'פעיל':'מושבת'}</span></td>
+    <td>${u.authenticator_enrolled_at?`<span class="badge badge-success"><i class="ti ti-shield-check"></i> מאובטח</span>`:`<span class="badge badge-warning"><i class="ti ti-shield-off"></i> לא נרשם</span>`}</td>
     <td style="font-size:12px">${(u.allowed_orgs||[]).length?`<span class="badge badge-info"><i class="ti ti-building"></i> ${(u.allowed_orgs||[]).length} ארגונים</span>`:'<span style="color:var(--text3)">הכל</span>'}</td>
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${u.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(u.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
     <td><div class="flex-gap">
       <button class="btn btn-xs" onclick="openEditAgentById(${u.id})"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-xs" title="איפוס קוד אימות (2FA)" onclick="resetAgentTotp(${u.id},'${escJs(u.name)}')"><i class="ti ti-shield-x"></i></button>
       <button class="btn btn-xs btn-danger" onclick="confirmDeleteAgent(${u.id},'${escJs(u.name)}')"><i class="ti ti-trash"></i></button>
     </div></td>
   </tr>`).join('')}
@@ -5956,6 +6084,22 @@ function openNewAgent(){showModal(`<div class="modal-title"><i class="ti ti-user
     <div id="ag-new-orgs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">${orgCheckboxesHTML('ag-new',[])}</div>
   </div>
   <div class="modal-footer"><button class="btn" onclick="closeModal()">ביטול</button><button class="btn btn-black" onclick="saveNewAgent()"><i class="ti ti-check"></i> הוסף</button></div>`);}
+async function resetAgentTotp(id,name){
+  if(!confirm(`לאפס את קוד האימות הדו-שלבי (Authenticator) של ${name}? בכניסה הבאה הוא יצטרך להירשם מחדש עם QR חדש.`)) return;
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/agent-totp-admin-reset`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({agentId:id,performedBy:currentUser?.email||currentUser?.name||'manager'})
+    });
+    const data=await r.json();
+    if(data.ok){
+      showAlert('קוד האימות אופס','success');
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+      render();
+    } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
+  }catch(e){ showAlert('שגיאת תקשורת','error'); }
+}
 function openEditAgentById(id){
   const u=allAgents.find(x=>x.id===id);
   if(!u) return;
@@ -6082,7 +6226,7 @@ async function confirmImport(){
       done++;
     } catch(e){ errors++; }
   }
-  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
+  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
   closeModal();
   render();
   showAlert(`✓ יובאו ${done} נציגים${errors?` · ${errors} שגיאות`:''}`, done>0?'success':'error');
@@ -6096,7 +6240,7 @@ async function saveNewAgent(){
   if(!n||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}
   try{
     await POST('app_users',{name:n,pin,active:true,allowed_orgs:allowedOrgs});
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
     closeModal();render();showAlert('הנציג נוסף','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -6110,7 +6254,7 @@ async function saveEditAgent(id){
   if(pin.length===4) body.pin=pin;
   try{
     await PATCH('app_users',body,`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
     closeModal();render();showAlert('הנציג עודכן','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -6118,7 +6262,7 @@ async function confirmDeleteAgent(id,name){
   if(!confirm(`למחוק את הנציג "${name}"?`))return;
   try{
     await DEL('app_users',`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
     render();showAlert('הנציג נמחק','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
