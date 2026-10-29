@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.155'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.156'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -5655,9 +5655,11 @@ async function loadManagersTab(){
 }
 async function loadManagersMfaStatus(){
   try{
+    // שולחים את ה-session האמיתי של המנהל (לא anon key) — הפונקציה מאמתת בצד השרת שזה אכן מנהל
+    const {data:{session}}=await sbClient.auth.getSession();
     const r=await fetch(`${SB_URL}/functions/v1/manager-mfa-status`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?.access_token||SB_KEY)},
       body:JSON.stringify({})
     });
     const data=await r.json();
@@ -6273,9 +6275,11 @@ function openNewAgent(){showModal(`<div class="modal-title"><i class="ti ti-user
 async function resetAgentTotp(id,name){
   if(!confirm(`לאפס את קוד האימות הדו-שלבי (Authenticator) של ${name}? בכניסה הבאה הוא יצטרך להירשם מחדש עם QR חדש.`)) return;
   try{
+    // שולחים את ה-session האמיתי של המנהל (לא anon key) — הפונקציה מאמתת בצד השרת שזה אכן מנהל
+    const {data:{session}}=await sbClient.auth.getSession();
     const r=await fetch(`${SB_URL}/functions/v1/agent-totp-admin-reset`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?.access_token||SB_KEY)},
       body:JSON.stringify({agentId:id,performedBy:currentUser?.email||currentUser?.name||'manager'})
     });
     const data=await r.json();
@@ -6289,9 +6293,11 @@ async function resetAgentTotp(id,name){
 async function resetManagerMfa(email,name){
   if(!confirm(`לאפס את קוד האימות הדו-שלבי (Authenticator) של ${name||email}? בכניסה הבאה הוא יצטרך להירשם מחדש עם QR חדש.`)) return;
   try{
+    // שולחים את ה-session האמיתי של המנהל (לא anon key) — הפונקציה מאמתת בצד השרת שזה אכן מנהל
+    const {data:{session}}=await sbClient.auth.getSession();
     const r=await fetch(`${SB_URL}/functions/v1/manager-mfa-admin-reset`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?.access_token||SB_KEY)},
       body:JSON.stringify({email,performedBy:currentUser?.email||currentUser?.name||'manager'})
     });
     const data=await r.json();
