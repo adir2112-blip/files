@@ -445,7 +445,7 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
       <div id="enroll-manual-key" style="display:none;margin-top:8px;font-family:monospace;letter-spacing:2px;font-size:14px;direction:ltr;background:var(--surface2);border-radius:8px;padding:8px"></div>
     </div>
     <label class="pin-label">הזן קוד בן 6 ספרות מהאפליקציה לאישור</label>
-    <div class="pin-row">
+    <div class="pin-row" dir="ltr">
       <input class="pin-digit" id="e0" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',0,6)" onkeydown="totpDigitKey(event,'e',0)">
       <input class="pin-digit" id="e1" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',1,6)" onkeydown="totpDigitKey(event,'e',1)">
       <input class="pin-digit" id="e2" maxlength="1" inputmode="numeric" oninput="totpDigitInput('e',2,6)" onkeydown="totpDigitKey(event,'e',2)">
@@ -462,7 +462,7 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
     <div class="login-section-title"><i class="ti ti-shield-check" style="color:var(--blue)"></i> קוד אימות</div>
     <div class="login-err" id="totp-err"><i class="ti ti-alert-circle"></i> <span id="totp-err-msg"></span></div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:10px">הזן את הקוד בן 6 הספרות מאפליקציית Authenticator</p>
-    <div class="pin-row">
+    <div class="pin-row" dir="ltr">
       <input class="pin-digit" id="t0" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',0,6)" onkeydown="totpDigitKey(event,'t',0)">
       <input class="pin-digit" id="t1" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',1,6)" onkeydown="totpDigitKey(event,'t',1)">
       <input class="pin-digit" id="t2" maxlength="1" type="password" inputmode="numeric" oninput="totpDigitInput('t',2,6)" onkeydown="totpDigitKey(event,'t',2)">
@@ -495,7 +495,7 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
       <div id="mgr-enroll-manual-key" style="display:none;margin-top:8px;font-family:monospace;letter-spacing:2px;font-size:14px;direction:ltr;background:var(--surface2);border-radius:8px;padding:8px"></div>
     </div>
     <label class="pin-label">הזן קוד בן 6 ספרות מהאפליקציה לאישור</label>
-    <div class="pin-row">
+    <div class="pin-row" dir="ltr">
       <input class="pin-digit" id="me0" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',0,6)" onkeydown="managerMfaDigitKey(event,'me',0)">
       <input class="pin-digit" id="me1" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',1,6)" onkeydown="managerMfaDigitKey(event,'me',1)">
       <input class="pin-digit" id="me2" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',2,6)" onkeydown="managerMfaDigitKey(event,'me',2)">
@@ -512,7 +512,7 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
     <div class="login-section-title"><i class="ti ti-shield-check" style="color:var(--purple)"></i> קוד אימות</div>
     <div class="login-err" id="mgr-mfa-err"><i class="ti ti-alert-circle"></i> <span id="mgr-mfa-err-msg"></span></div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:10px">הזן את הקוד בן 6 הספרות מאפליקציית Authenticator</p>
-    <div class="pin-row">
+    <div class="pin-row" dir="ltr">
       <input class="pin-digit" id="mt0" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',0,6)" onkeydown="managerMfaDigitKey(event,'mt',0)">
       <input class="pin-digit" id="mt1" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',1,6)" onkeydown="managerMfaDigitKey(event,'mt',1)">
       <input class="pin-digit" id="mt2" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',2,6)" onkeydown="managerMfaDigitKey(event,'mt',2)">
@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.154'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.155'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
