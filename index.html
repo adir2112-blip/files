@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -439,7 +439,7 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
     <div class="login-section-title"><i class="ti ti-shield-lock" style="color:var(--blue)"></i> הגדרת אימות דו-שלבי</div>
     <div class="login-err" id="enroll-err"><i class="ti ti-alert-circle"></i> <span id="enroll-err-msg"></span></div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:10px">פתח את אפליקציית <strong>Microsoft Authenticator</strong> (או Google Authenticator) בטלפון וסרוק את הקוד עבור <strong><span id="enroll-agent-name"></span></strong>:</p>
-    <div style="display:flex;justify-content:center;margin:10px 0"><canvas id="enroll-qr-canvas"></canvas></div>
+    <div style="display:flex;justify-content:center;margin:10px 0"><div id="enroll-qr-canvas"></div></div>
     <div style="text-align:center;margin-bottom:14px">
       <button type="button" class="sc-change" style="background:none;border:none;cursor:pointer" onclick="toggleManualKey()">הקוד לא נסרק? הצג מפתח להקלדה ידנית</button>
       <div id="enroll-manual-key" style="display:none;margin-top:8px;font-family:monospace;letter-spacing:2px;font-size:14px;direction:ltr;background:var(--surface2);border-radius:8px;padding:8px"></div>
@@ -524,7 +524,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.149'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.150'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -724,8 +724,13 @@ function showEnrollScreen(res){
   showLogin('agent-enroll');
   ['e0','e1','e2','e3','e4','e5'].forEach(id=>document.getElementById(id).value='');
   setTimeout(()=>{
-    const canvas=document.getElementById('enroll-qr-canvas');
-    if(window.QRCode) QRCode.toCanvas(canvas,res.otpauthUri,{width:200},()=>{});
+    const holder=document.getElementById('enroll-qr-canvas');
+    if(window.qrcode){
+      const qr=qrcode(0,'M');
+      qr.addData(res.otpauthUri);
+      qr.make();
+      holder.innerHTML=qr.createImgTag(5,4);
+    }
     document.getElementById('e0').focus();
   },60);
 }
