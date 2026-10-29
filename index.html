@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.152'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.153'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -884,7 +884,7 @@ async function checkManagerMfaAndEnter(mgr, onReady){
 }
 function showManagerEnrollScreen(enrollData){
   _mgrFactorId=enrollData.id;
-  document.getElementById('mgr-enroll-qr').innerHTML=enrollData.totp.qr_code;
+  document.getElementById('mgr-enroll-qr').innerHTML=`<img src="${enrollData.totp.qr_code}" width="200" height="200" alt="QR">`;
   const keyEl=document.getElementById('mgr-enroll-manual-key');
   keyEl.textContent=enrollData.totp.secret; keyEl.style.display='none';
   showLogin('manager-enroll');
