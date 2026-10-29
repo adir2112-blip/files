@@ -483,7 +483,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.147'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.148'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4426,7 +4426,7 @@ async function syncAllSettingsToServer(){
 
 const WA_POLICY_KEY = 'wa_policy';
 
-let _waSubTab='pm';
+let _waSubTab='overview';
 function setWaSubTab(t){ _waSubTab=t; render(); loadWALog(); }
 let _pmDigestCfg=null;
 let _ahmashDigestCfg=null;
@@ -4544,7 +4544,7 @@ const WA_TAB_MSG_TYPES={
   ahmash:['AHMASH_DIGEST','AHMASH_DIGEST_GROUP','AHMASH_DIGEST_TEST','INACTIVITY','INACTIVITY_GROUP','SLA','SLA_GROUP'],
   digest:['SLA_DIGEST','SLA_DIGEST_TEST','DAILY_REPORT'],
 };
-const WA_TAB_LABELS={pm:'מנהלי פרויקטים', ahmash:'אחמ"שים', digest:'אדיר, ליאת וכו\''};
+const WA_TAB_LABELS={overview:'סקירה כוללת', pm:'מנהלי פרויקטים', ahmash:'אחמ"שים', digest:'אדיר, ליאת וכו\''};
 async function loadWALog(){
   S._waLogFilter = S._waLogFilter || {period:'today', recipient:''};
   const {from,to} = waLogPeriodRange(S._waLogFilter.period);
@@ -4906,6 +4906,170 @@ function digestScheduleHTML(cfg,prefix,color){
     </div>`;
 }
 
+// ══ סקירה כוללת של התראות WA — מרכזת לכל אדם את כל המנגנונים שבהם הוא מופיע ══
+// (אנשי קשר בתוך קבצים, דוח מנהלי פרויקטים, דוח SLA, דוח יומי אישי) כדי שאפשר יהיה
+// לראות ולהסיר ממקום אחד, בלי לחפש בין הגדרות כל קובץ בנפרד. נבנתה בעקבות מקרה שבו
+// הוסרה נמענת ממנגנון אחד (PM) אבל המשיכה לקבל הודעות ממנגנון אחר (אנשי קשר בקובץ)
+// שהוזן דרך עריכת קובץ ולא היה גלוי מכאן בכלל.
+function buildNotificationOverview(){
+  const people={};
+  const ensure=(phone,name)=>{
+    const key=formatWAPhone(phone||''); if(!key||key==='972') return null;
+    if(!people[key]) people[key]={phone,name:name||phone,sources:[]};
+    else if(name && people[key].name===people[key].phone) people[key].name=name;
+    return people[key];
+  };
+  DB.files.filter(f=>f.active!==false).forEach(f=>{
+    const org=DB.orgs.find(o=>o.id===f.org_id);
+    (f.wa_contacts||[]).forEach(c=>{
+      const p=ensure(c.phone,c.name); if(!p) return;
+      p.sources.push({type:'file_contact',fileId:f.id,fileName:f.name,orgName:org?.name||'',alertEnabled:!!f.alert_rule?.enabled,inactivityEnabled:!!f.inactivity_alert?.enabled});
+    });
+  });
+  const managerFiles=(_pmDigestCfg?.managerFiles)||{};
+  Object.entries(managerFiles).forEach(([email,fileIds])=>{
+    const mgr=(S._managers||[]).find(m=>m.email===email);
+    if(!mgr?.phone) return;
+    (fileIds||[]).forEach(fid=>{
+      const f=DB.files.find(x=>x.id===fid); if(!f) return;
+      const org=DB.orgs.find(o=>o.id===f.org_id);
+      const p=ensure(mgr.phone,mgr.name); if(!p) return;
+      p.sources.push({type:'pm_digest',email,fileId:fid,fileName:f.name,orgName:org?.name||''});
+    });
+  });
+  ((_slaDigestCfg?.recipients)||[]).forEach(r=>{
+    const p=ensure(r.phone,r.name); if(!p) return;
+    p.sources.push({type:'sla_digest',email:r.email});
+  });
+  const dr=loadDailyReportConfig();
+  if(dr?.enabled&&dr?.phone){
+    const p=ensure(dr.phone,'דוח יומי אישי'); if(p) p.sources.push({type:'daily_report'});
+  }
+  return Object.values(people).sort((a,b)=>b.sources.length-a.sources.length);
+}
+function waOverviewBadge(label,color,onRemove){
+  return `<span style="display:inline-flex;align-items:center;gap:5px;background:${color}18;color:${color};border:1px solid ${color}55;border-radius:20px;padding:3px 6px 3px 10px;font-size:11px;font-weight:600;margin:2px">
+    ${label}
+    <span onclick="${onRemove}" title="הסר ממנגנון זה" style="cursor:pointer;width:15px;height:15px;border-radius:50%;background:${color};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0">✕</span>
+  </span>`;
+}
+async function removeWaContactFromFile(fileId,phone){
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  if(!confirm(`להסיר את איש הקשר מהתראות הקובץ "${f.name}"?`)) return;
+  const key=formatWAPhone(phone);
+  const newContacts=(f.wa_contacts||[]).filter(c=>formatWAPhone(c.phone)!==key);
+  try{
+    await PATCH('files',{wa_contacts:newContacts},`?id=eq.${fileId}`);
+    f.wa_contacts=newContacts;
+    showAlert('✓ הוסר מהקובץ','success');
+    render();
+  }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
+}
+async function toggleFileWaGroup(fileId,val){
+  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  try{
+    await PATCH('files',{wa_notify_group:val},`?id=eq.${fileId}`);
+    f.wa_notify_group=val;
+    showAlert(val?'✓ הופעל':'✓ הוסר מהקבוצה','success');
+    render();
+  }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
+}
+async function removePmAssignment(email,fileId){
+  const cfg=_pmDigestCfg||defaultDigestScheduleCfg();
+  const managerFiles={...(cfg.managerFiles||{})};
+  managerFiles[email]=(managerFiles[email]||[]).filter(id=>id!==fileId);
+  const newCfg={...cfg,managerFiles};
+  try{
+    const exists=await GET('app_settings','?key=eq.pm_digest&select=key');
+    if(exists?.length) await PATCH('app_settings',{value:JSON.stringify(newCfg)},'?key=eq.pm_digest');
+    else await POST('app_settings',{key:'pm_digest',value:JSON.stringify(newCfg)});
+    _pmDigestCfg=newCfg;
+    showAlert('✓ הוסר מדוח מנהלי הפרויקטים','success');
+    render();
+  }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
+}
+async function removeSlaDigestRecipient(email){
+  const cfg=_slaDigestCfg||defaultSlaDigestCfg();
+  const recipients=(cfg.recipients||[]).filter(r=>r.email!==email);
+  const newCfg={...cfg,recipients};
+  try{
+    const exists=await GET('app_settings','?key=eq.sla_digest&select=key');
+    if(exists?.length) await PATCH('app_settings',{value:JSON.stringify(newCfg)},'?key=eq.sla_digest');
+    else await POST('app_settings',{key:'sla_digest',value:JSON.stringify(newCfg)});
+    _slaDigestCfg=newCfg;
+    showAlert('✓ הוסר מדוח ה-SLA','success');
+    render();
+  }catch(e){ showAlert('שגיאה: '+e.message,'error'); }
+}
+async function toggleDailyReportEnabled(val){
+  const cfg=loadDailyReportConfig();
+  cfg.enabled=val;
+  localStorage.setItem('moked_daily_report',JSON.stringify(cfg));
+  await syncAllSettingsToServer();
+  render();
+}
+function renderWaSubTabOverview(){
+  const people=buildNotificationOverview();
+  const sCfg=_slaDigestCfg||defaultSlaDigestCfg();
+  const pCfg=_pmDigestCfg||defaultDigestScheduleCfg();
+  const aCfg=_ahmashDigestCfg||defaultDigestScheduleCfg();
+  const dr=loadDailyReportConfig();
+  const statusChip=(label,on,onclick)=>`<div onclick="${onclick}" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:var(--radius-sm);border:1.5px solid ${on?'#86efac':'var(--border)'};background:${on?'#f0fdf4':'var(--surface2)'};font-size:12px;font-weight:700">
+    <i class="ti ti-circle-${on?'check':'x'}" style="color:${on?'#16a34a':'var(--text3)'}"></i> ${label} — ${on?'פעיל':'כבוי'}
+  </div>`;
+  const statusStrip=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+    ${statusChip('דוח אחמ"שים',aCfg.enabled,"setWaSubTab('ahmash')")}
+    ${statusChip('דוח מנהלי פרויקטים',pCfg.enabled,"setWaSubTab('pm')")}
+    ${statusChip('דוח SLA (אדיר/ליאת)',sCfg.enabled,"setWaSubTab('digest')")}
+    ${statusChip('דוח יומי אישי לאדיר',!!dr.enabled,"setWaSubTab('digest')")}
+  </div>`;
+
+  const groupFiles=DB.files.filter(f=>f.active!==false&&f.wa_notify_group===true);
+  const groupCard=groupFiles.length?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px"><i class="ti ti-users" style="color:#25d366"></i> קבוצת וואטסאפ "מנהל ובכירי אדיר"</div>
+    <div>${groupFiles.map(f=>{
+      const o=DB.orgs.find(x=>x.id===f.org_id);
+      return waOverviewBadge(`${esc(f.name)} · ${esc(o?.name||'')}`,'#25d366',`toggleFileWaGroup('${f.id}',false)`);
+    }).join('')}</div>
+  </div>`:'';
+
+  const sourceInfo=(s,phone)=>{
+    if(s.type==='file_contact'){
+      const extras=[s.alertEnabled?'SLA':'',s.inactivityEnabled?'אי-פעילות':''].filter(Boolean).join('+');
+      return {label:`📁 ${esc(s.fileName)}${extras?` (${extras})`:' (ללא כלל פעיל)'} · ${esc(s.orgName)}`,color:'#ef4444',
+        remove:`removeWaContactFromFile('${s.fileId}','${esc(phone)}')`};
+    }
+    if(s.type==='pm_digest') return {label:`👑 ${esc(s.fileName)} · ${esc(s.orgName)}`,color:'#15803d',remove:`removePmAssignment('${esc(s.email)}','${s.fileId}')`};
+    if(s.type==='sla_digest') return {label:'📊 דוח SLA יומי (אדיר/ליאת)',color:'#0891b2',remove:`removeSlaDigestRecipient('${esc(s.email)}')`};
+    return {label:'📋 דוח יומי אישי',color:'#64748b',remove:`toggleDailyReportEnabled(false)`};
+  };
+
+  const peopleHTML=people.length? people.map(p=>{
+    const badges=p.sources.map(s=>{
+      const info=sourceInfo(s,p.phone);
+      return waOverviewBadge(info.label,info.color,info.remove);
+    }).join('');
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--blue);flex-shrink:0">${esc((p.name||'?')[0])}</div>
+        <div>
+          <div style="font-weight:700;font-size:14px">${esc(p.name)}</div>
+          <div style="font-size:11px;color:var(--text3)" dir="ltr">${esc(p.phone)}</div>
+        </div>
+        <div style="margin-right:auto;font-size:11px;color:var(--text3);white-space:nowrap">${p.sources.length} התראות</div>
+      </div>
+      <div>${badges}</div>
+    </div>`;
+  }).join('') : `<div class="empty"><i class="ti ti-bell-off"></i><p>אין כרגע אף נמען בשום מנגנון התראה</p></div>`;
+
+  return `
+  <div style="background:var(--amber-light);border:1.5px solid #fcd34d;border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;font-size:12px;color:#92400e">
+    <i class="ti ti-info-circle"></i> כל מי שמופיע כאן מקבל לפחות הודעת וואטסאפ אוטומטית אחת. לחיצה על ✕ ליד תג מסירה אותו רק מאותו מנגנון ספציפי — אדם יכול להופיע במספר מנגנונים בו-זמנית (למשל גם כאיש קשר בקובץ וגם בדוח מנהלי פרויקטים), וצריך להסיר מכל תג בנפרד.
+  </div>
+  ${statusStrip}
+  ${groupCard}
+  ${peopleHTML}`;
+}
 function renderWaSubTabPM(){
   const cfg=_pmDigestCfg||defaultDigestScheduleCfg();
   const pmFiles=DB.files.filter(f=>(f.admin_fields||[]).some(af=>af.escalationAlertDays!=null));
@@ -5130,11 +5294,12 @@ function renderWAAlerts(){
   const tab=_waSubTab;
   return `
     <div class="nav-tabs" style="margin-bottom:16px">
+      <button class="nav-tab ${tab==='overview'?'active':''}" onclick="setWaSubTab('overview')"><i class="ti ti-list-check" style="font-size:12px;color:#7c3aed"></i> סקירה כוללת</button>
       <button class="nav-tab ${tab==='pm'?'active':''}" onclick="setWaSubTab('pm')"><i class="ti ti-crown" style="font-size:12px;color:#15803d"></i> מנהלי פרויקטים</button>
       <button class="nav-tab ${tab==='ahmash'?'active':''}" onclick="setWaSubTab('ahmash')"><i class="ti ti-activity-heartbeat" style="font-size:12px;color:#ef4444"></i> אחמ"שים</button>
       <button class="nav-tab ${tab==='digest'?'active':''}" onclick="setWaSubTab('digest')"><i class="ti ti-users" style="font-size:12px;color:#0891b2"></i> אדיר, ליאת וכו'</button>
     </div>
-    ${tab==='pm'?renderWaSubTabPM():tab==='ahmash'?renderWaSubTabAhmash():`${renderSlaDigestSection()}${renderDailyReportSection()}`}
+    ${tab==='overview'?renderWaSubTabOverview():tab==='pm'?renderWaSubTabPM():tab==='ahmash'?renderWaSubTabAhmash():`${renderSlaDigestSection()}${renderDailyReportSection()}`}
     <!-- HISTORY -->
     ${renderWALogSection()}`;
 }
