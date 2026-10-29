@@ -524,7 +524,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.150'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.151'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -757,50 +757,59 @@ function totpDigitKey(e,prefix,i){
   if(e.key==='Backspace' && !document.getElementById(prefix+i).value && i>0) document.getElementById(prefix+(i-1)).focus();
   if(e.key==='Enter'){ if(prefix==='e') confirmEnroll(); if(prefix==='t') verifyTotp(); }
 }
+let _enrollSubmitting=false, _totpSubmitting=false;
 async function confirmEnroll(){
+  if(_enrollSubmitting) return;
   document.getElementById('enroll-err').style.display='none';
   const code=['e0','e1','e2','e3','e4','e5'].map(id=>document.getElementById(id).value).join('');
   if(code.length<6){ showLoginErr('enroll-err','enroll-err-msg','יש להזין 6 ספרות'); return; }
+  _enrollSubmitting=true;
   let res;
   try{
-    const r=await fetch(`${SB_URL}/functions/v1/agent-totp-enroll-confirm`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
-      body:JSON.stringify({agentId:_enrollAgentId,code})
-    });
-    res=await r.json();
-  }catch(e){ showLoginErr('enroll-err','enroll-err-msg','שגיאת תקשורת — נסה שוב'); return; }
-  if(!res?.ok){
-    showLoginErr('enroll-err','enroll-err-msg',res?.error||'קוד שגוי — נסה שוב');
-    ['e0','e1','e2','e3','e4','e5'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('e0').focus();
-    return;
-  }
-  showAlert('האימות הופעל בהצלחה — התחבר שוב כדי להמשיך','success');
-  showLogin('agent');
+    try{
+      const r=await fetch(`${SB_URL}/functions/v1/agent-totp-enroll-confirm`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+        body:JSON.stringify({agentId:_enrollAgentId,code})
+      });
+      res=await r.json();
+    }catch(e){ showLoginErr('enroll-err','enroll-err-msg','שגיאת תקשורת — נסה שוב'); return; }
+    if(!res?.ok){
+      showLoginErr('enroll-err','enroll-err-msg',res?.error||'קוד שגוי — נסה שוב');
+      ['e0','e1','e2','e3','e4','e5'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('e0').focus();
+      return;
+    }
+    showAlert('האימות הופעל בהצלחה — התחבר שוב כדי להמשיך','success');
+    showLogin('agent');
+  }finally{ _enrollSubmitting=false; }
 }
 async function verifyTotp(){
+  if(_totpSubmitting) return;
   document.getElementById('totp-err').style.display='none';
   const code=['t0','t1','t2','t3','t4','t5'].map(id=>document.getElementById(id).value).join('');
   if(code.length<6){ showLoginErr('totp-err','totp-err-msg','יש להזין 6 ספרות'); return; }
+  _totpSubmitting=true;
   let res;
   try{
-    const r=await fetch(`${SB_URL}/functions/v1/agent-totp-verify`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
-      body:JSON.stringify({agentId:_totpAgentId,ticket:_totpTicket,code})
-    });
-    res=await r.json();
-  }catch(e){ showLoginErr('totp-err','totp-err-msg','שגיאת תקשורת — נסה שוב'); return; }
-  if(!res?.ok){
-    showLoginErr('totp-err','totp-err-msg',res?.error||'קוד שגוי');
-    ['t0','t1','t2','t3','t4','t5'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('t0').focus();
-    return;
-  }
-  await sbClient.auth.setSession({access_token:res.access_token,refresh_token:res.refresh_token});
-  enterApp({name:res.agent.name,role:'agent',is_super_admin:false,allowed_orgs:res.agent.allowed_orgs||[]});
-  PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${_totpAgentId}`).catch(()=>{});
+    try{
+      const r=await fetch(`${SB_URL}/functions/v1/agent-totp-verify`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+        body:JSON.stringify({agentId:_totpAgentId,ticket:_totpTicket,code})
+      });
+      res=await r.json();
+    }catch(e){ showLoginErr('totp-err','totp-err-msg','שגיאת תקשורת — נסה שוב'); return; }
+    if(!res?.ok){
+      showLoginErr('totp-err','totp-err-msg',res?.error||'קוד שגוי');
+      ['t0','t1','t2','t3','t4','t5'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('t0').focus();
+      return;
+    }
+    await sbClient.auth.setSession({access_token:res.access_token,refresh_token:res.refresh_token});
+    enterApp({name:res.agent.name,role:'agent',is_super_admin:false,allowed_orgs:res.agent.allowed_orgs||[]});
+    PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${_totpAgentId}`).catch(()=>{});
+  }finally{ _totpSubmitting=false; }
 }
 
 async function loginManager(){
