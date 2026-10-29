@@ -483,6 +483,46 @@ tr:hover .cell-tools,td:hover .cell-tools{opacity:1}
     <button class="login-btn login-btn-primary" id="mgr-btn" onclick="loginManager()"><i class="ti ti-login"></i> כניסה</button>
   </div>
 
+  <!-- MANAGER 2FA ENROLLMENT -->
+  <div id="ls-manager-enroll" class="login-card" style="display:none">
+    <button class="login-back" onclick="cancelManagerMfa()"><i class="ti ti-arrow-right"></i> חזרה</button>
+    <div class="login-section-title"><i class="ti ti-shield-lock" style="color:var(--purple)"></i> הגדרת אימות דו-שלבי</div>
+    <div class="login-err" id="mgr-enroll-err"><i class="ti ti-alert-circle"></i> <span id="mgr-enroll-err-msg"></span></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:10px">פתח את אפליקציית <strong>Microsoft Authenticator</strong> (או Google Authenticator) בטלפון וסרוק את הקוד:</p>
+    <div id="mgr-enroll-qr" style="display:flex;justify-content:center;margin:10px 0"></div>
+    <div style="text-align:center;margin-bottom:14px">
+      <button type="button" class="sc-change" style="background:none;border:none;cursor:pointer" onclick="toggleManagerManualKey()">הקוד לא נסרק? הצג מפתח להקלדה ידנית</button>
+      <div id="mgr-enroll-manual-key" style="display:none;margin-top:8px;font-family:monospace;letter-spacing:2px;font-size:14px;direction:ltr;background:var(--surface2);border-radius:8px;padding:8px"></div>
+    </div>
+    <label class="pin-label">הזן קוד בן 6 ספרות מהאפליקציה לאישור</label>
+    <div class="pin-row">
+      <input class="pin-digit" id="me0" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',0,6)" onkeydown="managerMfaDigitKey(event,'me',0)">
+      <input class="pin-digit" id="me1" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',1,6)" onkeydown="managerMfaDigitKey(event,'me',1)">
+      <input class="pin-digit" id="me2" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',2,6)" onkeydown="managerMfaDigitKey(event,'me',2)">
+      <input class="pin-digit" id="me3" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',3,6)" onkeydown="managerMfaDigitKey(event,'me',3)">
+      <input class="pin-digit" id="me4" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',4,6)" onkeydown="managerMfaDigitKey(event,'me',4)">
+      <input class="pin-digit" id="me5" maxlength="1" inputmode="numeric" oninput="managerMfaDigitInput('me',5,6)" onkeydown="managerMfaDigitKey(event,'me',5)">
+    </div>
+    <button class="login-btn login-btn-primary" style="margin-top:16px" onclick="confirmManagerEnroll()"><i class="ti ti-check"></i> אשר והפעל</button>
+  </div>
+
+  <!-- MANAGER MFA (second factor) -->
+  <div id="ls-manager-mfa" class="login-card" style="display:none">
+    <button class="login-back" onclick="cancelManagerMfa()"><i class="ti ti-arrow-right"></i> חזרה</button>
+    <div class="login-section-title"><i class="ti ti-shield-check" style="color:var(--purple)"></i> קוד אימות</div>
+    <div class="login-err" id="mgr-mfa-err"><i class="ti ti-alert-circle"></i> <span id="mgr-mfa-err-msg"></span></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:10px">הזן את הקוד בן 6 הספרות מאפליקציית Authenticator</p>
+    <div class="pin-row">
+      <input class="pin-digit" id="mt0" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',0,6)" onkeydown="managerMfaDigitKey(event,'mt',0)">
+      <input class="pin-digit" id="mt1" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',1,6)" onkeydown="managerMfaDigitKey(event,'mt',1)">
+      <input class="pin-digit" id="mt2" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',2,6)" onkeydown="managerMfaDigitKey(event,'mt',2)">
+      <input class="pin-digit" id="mt3" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',3,6)" onkeydown="managerMfaDigitKey(event,'mt',3)">
+      <input class="pin-digit" id="mt4" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',4,6)" onkeydown="managerMfaDigitKey(event,'mt',4)">
+      <input class="pin-digit" id="mt5" maxlength="1" type="password" inputmode="numeric" oninput="managerMfaDigitInput('mt',5,6)" onkeydown="managerMfaDigitKey(event,'mt',5)">
+    </div>
+    <button class="login-btn login-btn-primary" style="margin-top:16px" onclick="verifyManagerMfa()"><i class="ti ti-login"></i> אשר והיכנס</button>
+  </div>
+
 </div>
 <div style="position:absolute;bottom:14px;left:0;right:0;text-align:center;font-size:14px;font-weight:700;letter-spacing:.02em;color:rgba(255,255,255,.85);z-index:2">כל הזכויות שמורות ל-A.L Systems</div>
 </div>
@@ -524,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.151'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.152'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -596,7 +636,7 @@ document.getElementById('topbar-date').textContent=new Date().toLocaleDateString
 
 // ══ LOGIN ══
 function showLogin(screen){
-  ['mode','agent','manager','agent-enroll','agent-totp'].forEach(s=>document.getElementById('ls-'+s).style.display=s===screen?'block':'none');
+  ['mode','agent','manager','agent-enroll','agent-totp','manager-enroll','manager-mfa'].forEach(s=>document.getElementById('ls-'+s).style.display=s===screen?'block':'none');
   if(screen==='agent'){
     document.getElementById('agent-step1').style.display='block';
     document.getElementById('agent-step2').style.display='none';
@@ -628,10 +668,10 @@ async function initLogin(){
   if(session?.user){
     const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',session.user.email).eq('active',true).single();
     if(mgr){
-      // load all agents for admin management
-      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
-      enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,is_ahmash_senior:!!mgr.is_ahmash_senior,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]});
-      PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
+      await checkManagerMfaAndEnter(mgr, async()=>{
+        // load all agents for admin management
+        allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+      });
       return;
     }
   }
@@ -812,6 +852,121 @@ async function verifyTotp(){
   }finally{ _totpSubmitting=false; }
 }
 
+// ══ 2FA (Authenticator) — מנהלים, דרך ה-MFA המובנה של Supabase Auth ══
+// בשונה מנציגים (secret מנוהל בעצמנו ב-app_users) — כאן הכל מנוהל ע"י Supabase עצמו
+// (auth.mfa_factors): יצירת ה-secret, הצפנתו, ה-QR (SVG מוכן) ואימות הקוד.
+let _mgrEnterData=null, _mgrFactorId=null, _mgrOnReady=null, _mgrMfaSubmitting=false, _mgrEnrollSubmitting=false;
+
+async function checkManagerMfaAndEnter(mgr, onReady){
+  _mgrEnterData={name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,is_ahmash_senior:!!mgr.is_ahmash_senior,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]};
+  _mgrOnReady=onReady||null;
+  const {data:aal}=await sbClient.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(aal?.currentLevel==='aal2'){ finishManagerLogin(); return; }
+  if(aal?.nextLevel==='aal2'){
+    // יש כבר factor מאומת — צריך רק את הקוד
+    const {data:factorsData}=await sbClient.auth.mfa.listFactors();
+    const factor=(factorsData?.totp||[]).find(f=>f.status==='verified');
+    if(factor){ showManagerMfaScreen(factor.id); return; }
+  }
+  // לא רשום עדיין — ניקוי factors ישנים שלא הושלמו (ניסיון הרשמה שננטש) והתחלת הרשמה חדשה
+  const {data:factorsData}=await sbClient.auth.mfa.listFactors();
+  const stale=(factorsData?.totp||[]).filter(f=>f.status!=='verified');
+  for(const f of stale){ await sbClient.auth.mfa.unenroll({factorId:f.id}).catch(()=>{}); }
+  const {data:enrollData,error:enrollErr}=await sbClient.auth.mfa.enroll({factorType:'totp',friendlyName:'manager-'+Date.now()});
+  if(enrollErr){
+    showAlert('שגיאה בהפעלת אימות דו-שלבי: '+enrollErr.message,'error');
+    await sbClient.auth.signOut();
+    _mgrEnterData=null; _mgrOnReady=null;
+    showLogin('manager');
+    return;
+  }
+  showManagerEnrollScreen(enrollData);
+}
+function showManagerEnrollScreen(enrollData){
+  _mgrFactorId=enrollData.id;
+  document.getElementById('mgr-enroll-qr').innerHTML=enrollData.totp.qr_code;
+  const keyEl=document.getElementById('mgr-enroll-manual-key');
+  keyEl.textContent=enrollData.totp.secret; keyEl.style.display='none';
+  showLogin('manager-enroll');
+  ['me0','me1','me2','me3','me4','me5'].forEach(id=>document.getElementById(id).value='');
+  setTimeout(()=>document.getElementById('me0').focus(),60);
+}
+function toggleManagerManualKey(){
+  const el=document.getElementById('mgr-enroll-manual-key');
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+function showManagerMfaScreen(factorId){
+  _mgrFactorId=factorId;
+  showLogin('manager-mfa');
+  ['mt0','mt1','mt2','mt3','mt4','mt5'].forEach(id=>document.getElementById(id).value='');
+  setTimeout(()=>document.getElementById('mt0').focus(),60);
+}
+function managerMfaDigitInput(prefix,i,total){
+  const el=document.getElementById(prefix+i);
+  el.value=el.value.replace(/\D/g,'').slice(0,1);
+  if(el.value && i<total-1) document.getElementById(prefix+(i+1)).focus();
+  if(i===total-1 && el.value){
+    if(prefix==='me') confirmManagerEnroll();
+    if(prefix==='mt') verifyManagerMfa();
+  }
+}
+function managerMfaDigitKey(e,prefix,i){
+  if(e.key==='Backspace' && !document.getElementById(prefix+i).value && i>0) document.getElementById(prefix+(i-1)).focus();
+  if(e.key==='Enter'){ if(prefix==='me') confirmManagerEnroll(); if(prefix==='mt') verifyManagerMfa(); }
+}
+async function confirmManagerEnroll(){
+  if(_mgrEnrollSubmitting) return;
+  document.getElementById('mgr-enroll-err').style.display='none';
+  const code=['me0','me1','me2','me3','me4','me5'].map(id=>document.getElementById(id).value).join('');
+  if(code.length<6){ showLoginErr('mgr-enroll-err','mgr-enroll-err-msg','יש להזין 6 ספרות'); return; }
+  _mgrEnrollSubmitting=true;
+  try{
+    const {data:challengeData,error:challengeErr}=await sbClient.auth.mfa.challenge({factorId:_mgrFactorId});
+    if(challengeErr){ showLoginErr('mgr-enroll-err','mgr-enroll-err-msg',challengeErr.message); return; }
+    const {error:verifyErr}=await sbClient.auth.mfa.verify({factorId:_mgrFactorId,challengeId:challengeData.id,code});
+    if(verifyErr){
+      showLoginErr('mgr-enroll-err','mgr-enroll-err-msg','קוד שגוי — נסה שוב');
+      ['me0','me1','me2','me3','me4','me5'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('me0').focus();
+      return;
+    }
+    finishManagerLogin();
+  }finally{ _mgrEnrollSubmitting=false; }
+}
+async function verifyManagerMfa(){
+  if(_mgrMfaSubmitting) return;
+  document.getElementById('mgr-mfa-err').style.display='none';
+  const code=['mt0','mt1','mt2','mt3','mt4','mt5'].map(id=>document.getElementById(id).value).join('');
+  if(code.length<6){ showLoginErr('mgr-mfa-err','mgr-mfa-err-msg','יש להזין 6 ספרות'); return; }
+  _mgrMfaSubmitting=true;
+  try{
+    const {data:challengeData,error:challengeErr}=await sbClient.auth.mfa.challenge({factorId:_mgrFactorId});
+    if(challengeErr){ showLoginErr('mgr-mfa-err','mgr-mfa-err-msg',challengeErr.message); return; }
+    const {error:verifyErr}=await sbClient.auth.mfa.verify({factorId:_mgrFactorId,challengeId:challengeData.id,code});
+    if(verifyErr){
+      showLoginErr('mgr-mfa-err','mgr-mfa-err-msg','קוד שגוי');
+      ['mt0','mt1','mt2','mt3','mt4','mt5'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('mt0').focus();
+      return;
+    }
+    finishManagerLogin();
+  }finally{ _mgrMfaSubmitting=false; }
+}
+function finishManagerLogin(){
+  const data=_mgrEnterData, onReady=_mgrOnReady;
+  _mgrEnterData=null; _mgrFactorId=null; _mgrOnReady=null;
+  const proceed=()=>{
+    enterApp(data);
+    PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(data.email)}`).catch(()=>{});
+  };
+  if(onReady){ onReady().then(proceed); } else { proceed(); }
+}
+function cancelManagerMfa(){
+  sbClient.auth.signOut();
+  _mgrEnterData=null; _mgrFactorId=null; _mgrOnReady=null;
+  showLogin('manager');
+}
+
 async function loginManager(){
   const email=document.getElementById('mgr-email').value.trim();
   const pass=document.getElementById('mgr-pass').value;
@@ -823,9 +978,8 @@ async function loginManager(){
   if(error){showLoginErr('mgr-err','mgr-err-msg','מייל או סיסמה שגויים');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
   const {data:mgr}=await sbClient.from('app_managers').select('*').eq('email',email).eq('active',true).single();
   if(!mgr){await sbClient.auth.signOut();showLoginErr('mgr-err','mgr-err-msg','אין הרשאת מנהל');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> כניסה';return;}
-  enterApp({name:mgr.name,role:'manager',is_super_admin:mgr.is_super_admin,is_project_manager:!!mgr.is_project_manager,is_ahmash_senior:!!mgr.is_ahmash_senior,email:mgr.email,allowed_orgs:mgr.allowed_orgs||[],allowed_files:mgr.allowed_files||[],tab_permissions:mgr.tab_permissions||{},dashboard_widgets:mgr.dashboard_widgets||[]});
-  // עדכון תאריך כניסה אחרון — לא חוסם את הכניסה
-  PATCH('app_managers',{last_login:new Date().toISOString()},`?email=eq.${encodeURIComponent(mgr.email)}`).catch(()=>{});
+  await checkManagerMfaAndEnter(mgr);
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-login"></i> כניסה';
 }
 
 function enterApp(user){
@@ -5497,6 +5651,22 @@ async function loadManagersTab(){
   try{ S._managers=await GET('app_managers','?order=created_at.asc'); }
   catch(e){ S._managers=[]; showAlert('שגיאה בטעינת מנהלים','error'); }
   S._managersLoading=false; render();
+  loadManagersMfaStatus();
+}
+async function loadManagersMfaStatus(){
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/manager-mfa-status`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({})
+    });
+    const data=await r.json();
+    if(data.ok){
+      S._managersMfa={};
+      (data.managers||[]).forEach(m=>{ S._managersMfa[m.email]=m; });
+      render();
+    }
+  }catch(e){}
 }
 
 function renderAdminManagers(){
@@ -5513,8 +5683,8 @@ function renderAdminManagers(){
     </div>
     ${!managers.length
       ?`<div class="empty"><i class="ti ti-shield-off"></i><p>אין מנהלים מוגדרים</p></div>`
-      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>קבצים</th><th>סופר מנהל</th><th>מנהל פרויקט</th><th>בכיר אחמ"ש</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
-      ${managers.map(m=>`<tr>
+      :`<div class="table-wrap"><table><thead><tr><th>מייל</th><th>שם</th><th>טלפון WA</th><th>סטטוס</th><th>קבצים</th><th>סופר מנהל</th><th>מנהל פרויקט</th><th>בכיר אחמ"ש</th><th>2FA</th><th>כניסה אחרונה</th><th></th></tr></thead><tbody>
+      ${managers.map(m=>{const mfa=(S._managersMfa||{})[m.email];const mfaCell=!S._managersMfa?`<span style="color:var(--text3);font-size:11px">טוען...</span>`:mfa?.enrolled?`<span class="badge badge-success"><i class="ti ti-shield-check"></i> מאובטח</span>`:`<span class="badge badge-warning"><i class="ti ti-shield-off"></i> לא נרשם</span>`;return `<tr>
         <td dir="ltr" style="font-size:13px">${esc(m.email)}</td>
         <td><div style="display:flex;align-items:center;gap:8px">
           <div class="ali-avatar" style="width:28px;height:28px;font-size:10px;background:linear-gradient(135deg,#7c3aed,#a855f7)">${(m.name||m.email).trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
@@ -5526,12 +5696,14 @@ function renderAdminManagers(){
         <td>${m.is_super_admin?'<span class="badge badge-purple"><i class="ti ti-star"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
         <td>${m.is_project_manager?'<span class="badge" style="background:#dcfce7;color:#15803d"><i class="ti ti-crown"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
         <td>${m.is_ahmash_senior?'<span class="badge" style="background:#fee2e2;color:#dc2626"><i class="ti ti-activity-heartbeat"></i> כן</span>':'<span style="color:var(--text3)">—</span>'}</td>
+        <td>${mfaCell}</td>
         <td style="font-size:12px;color:var(--text2);white-space:nowrap">${m.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(m.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
         <td><div class="flex-gap">
           <button class="btn btn-xs" onclick="openEditManagerById('${escJs(m.email)}')"><i class="ti ti-edit"></i></button>
+          <button class="btn btn-xs" title="איפוס קוד אימות (2FA)" onclick="resetManagerMfa('${escJs(m.email)}','${escJs(m.name||m.email)}')"><i class="ti ti-shield-x"></i></button>
           <button class="btn btn-xs btn-danger" onclick="confirmDeleteManager('${escJs(m.email)}')"><i class="ti ti-trash"></i></button>
         </div></td>
-      </tr>`).join('')}
+      </tr>`;}).join('')}
       </tbody></table></div>`}`;
 }
 
@@ -6110,6 +6282,22 @@ async function resetAgentTotp(id,name){
     if(data.ok){
       showAlert('קוד האימות אופס','success');
       allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+      render();
+    } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
+  }catch(e){ showAlert('שגיאת תקשורת','error'); }
+}
+async function resetManagerMfa(email,name){
+  if(!confirm(`לאפס את קוד האימות הדו-שלבי (Authenticator) של ${name||email}? בכניסה הבאה הוא יצטרך להירשם מחדש עם QR חדש.`)) return;
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/manager-mfa-admin-reset`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({email,performedBy:currentUser?.email||currentUser?.name||'manager'})
+    });
+    const data=await r.json();
+    if(data.ok){
+      showAlert('קוד האימות אופס','success');
+      await loadManagersMfaStatus();
       render();
     } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
   }catch(e){ showAlert('שגיאת תקשורת','error'); }
