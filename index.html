@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.157'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.158'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -670,7 +670,7 @@ async function initLogin(){
     if(mgr){
       await checkManagerMfaAndEnter(mgr, async()=>{
         // load all agents for admin management
-        allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+        allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
       });
       return;
     }
@@ -751,6 +751,12 @@ async function loginAgent(){
   // (QR); רשום → שלב קוד. ה-session האמיתי מונפק רק אחרי אימות הקוד (agent-totp-verify).
   if(res.stage==='enroll'){ showEnrollScreen(res); return; }
   if(res.stage==='totp'){ showTotpScreen(res); return; }
+  // נציג פטור מ-2FA (totp_exempt=true) — agent-login מנפיק session אמיתי ישירות, בלי שלבי אימות
+  if(res.access_token){
+    await sbClient.auth.setSession({access_token:res.access_token,refresh_token:res.refresh_token});
+    enterApp({name:res.agent.name,role:'agent',is_super_admin:false,allowed_orgs:res.agent.allowed_orgs||[]});
+    PATCH('app_users',{last_login:new Date().toISOString()},`?id=eq.${res.agent.id}`).catch(()=>{});
+  }
 }
 
 // ══ 2FA (Authenticator) — הרשמה וכניסה ══
@@ -1002,7 +1008,7 @@ function enterApp(user){
     // load agents after loadAll so render has all data
     initApp().then(()=>{
       loadDashboardTab();
-      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at').then(data=>{ allAgents=data||[]; render(); });
+      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt').then(data=>{ allAgents=data||[]; render(); });
       // רענון תג המספר בטופבר (badge) — רץ ברקע לכל מנהל עם גישה למוניטור, לאורך כל
       // ההתחברות שלו, ללא קשר לאיזה מסך הוא צופה בו. 10 דקות מספיק בהחלט (חריגות
       // נמדדות בימי עסקים, לא בדקות) ומקטין דרמטית את צריכת ה-Egress מול 120 שניות
@@ -3297,12 +3303,13 @@ function renderAdminAgents(){
     <td><div style="display:flex;align-items:center;gap:8px"><div class="ali-avatar" style="width:28px;height:28px;font-size:10px">${u.name.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>${esc(u.name)}</div></td>
     <td dir="ltr" style="letter-spacing:6px;color:var(--text3)">••••</td>
     <td><span class="badge ${u.active?'badge-success':'badge-warning'}">${u.active?'פעיל':'מושבת'}</span></td>
-    <td>${u.authenticator_enrolled_at?`<span class="badge badge-success"><i class="ti ti-shield-check"></i> מאובטח</span>`:`<span class="badge badge-warning"><i class="ti ti-shield-off"></i> לא נרשם</span>`}</td>
+    <td>${u.totp_exempt?`<span class="badge badge-neutral"><i class="ti ti-shield-off"></i> פטור</span>`:u.authenticator_enrolled_at?`<span class="badge badge-success"><i class="ti ti-shield-check"></i> מאובטח</span>`:`<span class="badge badge-warning"><i class="ti ti-shield-off"></i> לא נרשם</span>`}</td>
     <td style="font-size:12px">${(u.allowed_orgs||[]).length?`<span class="badge badge-info"><i class="ti ti-building"></i> ${(u.allowed_orgs||[]).length} ארגונים</span>`:'<span style="color:var(--text3)">הכל</span>'}</td>
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${u.last_login?`<i class="ti ti-clock" style="font-size:11px;color:var(--text3)"></i> ${fmtDate(u.last_login)}`:'<span style="color:var(--text3);font-style:italic">טרם התחבר</span>'}</td>
     <td><div class="flex-gap">
       <button class="btn btn-xs" onclick="openEditAgentById(${u.id})"><i class="ti ti-edit"></i></button>
       <button class="btn btn-xs" title="איפוס קוד אימות (2FA)" onclick="resetAgentTotp(${u.id},'${escJs(u.name)}')"><i class="ti ti-shield-x"></i></button>
+      ${currentUser?.is_super_admin?`<button class="btn btn-xs" title="${u.totp_exempt?'ביטול פטור מ-2FA':'פטור מ-2FA'}" onclick="toggleAgentTotpExempt(${u.id},'${escJs(u.name)}',${!u.totp_exempt})"><i class="ti ti-${u.totp_exempt?'lock':'lock-open'}"></i></button>`:''}
       <button class="btn btn-xs btn-danger" onclick="confirmDeleteAgent(${u.id},'${escJs(u.name)}')"><i class="ti ti-trash"></i></button>
     </div></td>
   </tr>`).join('')}
@@ -6285,7 +6292,28 @@ async function resetAgentTotp(id,name){
     const data=await r.json();
     if(data.ok){
       showAlert('קוד האימות אופס','success');
-      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+      render();
+    } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
+  }catch(e){ showAlert('שגיאת תקשורת','error'); }
+}
+async function toggleAgentTotpExempt(id,name,exempt){
+  const msg=exempt
+    ? `לפטור את ${name} מחובת אימות דו-שלבי (2FA)? בכניסה הבאה הוא יתחבר עם PIN בלבד, בלי קוד אימות. זה מחליש את האבטחה עבורו — להפעיל רק אם יש סיבה טובה.`
+    : `לבטל את הפטור מ-2FA של ${name}? בכניסה הבאה הוא יחויב בקוד אימות (הקיים אם יש לו, אחרת הרשמה מחדש).`;
+  if(!confirm(msg)) return;
+  try{
+    // שולחים את ה-session האמיתי של המנהל (לא anon key) — הפונקציה מאמתת בצד השרת שזה אכן מנהל-על
+    const {data:{session}}=await sbClient.auth.getSession();
+    const r=await fetch(`${SB_URL}/functions/v1/agent-totp-set-exempt`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?.access_token||SB_KEY)},
+      body:JSON.stringify({agentId:id,exempt})
+    });
+    const data=await r.json();
+    if(data.ok){
+      showAlert(exempt?'הנציג פטור מ-2FA':'הפטור בוטל','success');
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
       render();
     } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
   }catch(e){ showAlert('שגיאת תקשורת','error'); }
@@ -6434,7 +6462,7 @@ async function confirmImport(){
       done++;
     } catch(e){ errors++; }
   }
-  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
   closeModal();
   render();
   showAlert(`✓ יובאו ${done} נציגים${errors?` · ${errors} שגיאות`:''}`, done>0?'success':'error');
@@ -6448,7 +6476,7 @@ async function saveNewAgent(){
   if(!n||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}
   try{
     await POST('app_users',{name:n,pin,active:true,allowed_orgs:allowedOrgs});
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
     closeModal();render();showAlert('הנציג נוסף','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -6462,7 +6490,7 @@ async function saveEditAgent(id){
   if(pin.length===4) body.pin=pin;
   try{
     await PATCH('app_users',body,`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
     closeModal();render();showAlert('הנציג עודכן','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -6470,7 +6498,7 @@ async function confirmDeleteAgent(id,name){
   if(!confirm(`למחוק את הנציג "${name}"?`))return;
   try{
     await DEL('app_users',`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
     render();showAlert('הנציג נמחק','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
