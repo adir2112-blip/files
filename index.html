@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.158'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.159'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -2150,6 +2150,9 @@ function renderRecordsPage(){
   if(S.pmFilter==='pending'&&isProjectManager()&&escalationFields.length){
     filtered=filtered.filter(r=>escalationFields.some(af=>escalationMet(r,af)));
   }
+  if(S.breachFilter==='breach' && f.alert_rule?.enabled && f.alert_rule?.fieldId){
+    filtered = filtered.filter(r => recordMatchesAlert(r, f));
+  }
   const sortable=(col,label,cls='',style='')=>{
     const active=S.sortCol===col;
     const arrow=active?(S.sortDir===1?'↑':'↓'):'';
@@ -2364,11 +2367,21 @@ function renderRecordsPage(){
       <option value="pending" ${S.pmFilter==='pending'?'selected':''}>הועבר אליי</option>
     </select>
   </div>`:'';
+  const showBreachFilter=isAdmin && f.alert_rule?.enabled && f.alert_rule?.fieldId;
+  const breachFilterHTML=showBreachFilter?`<div style="display:flex;align-items:center;gap:8px;background:${S.breachFilter==='breach'?'#ffedd5':'#fff'};border:2px solid #c2410c;border-radius:20px;padding:5px 14px 5px 8px;transition:background .15s">
+    <i class="ti ti-alert-triangle" style="color:#c2410c;font-size:16px"></i>
+    <span style="font-weight:800;color:#c2410c;font-size:13px;white-space:nowrap">רשומות בחריגה</span>
+    <select onchange="setBreachFilter(this.value)" style="border:none;background:transparent;font-weight:800;color:#c2410c;cursor:pointer;padding:2px 4px">
+      <option value="">הכל</option>
+      <option value="breach" ${S.breachFilter==='breach'?'selected':''}>רק בחריגה</option>
+    </select>
+  </div>`:'';
   const filterSettingsBtn=isAdmin?`<button class="btn btn-xs" style="border-color:var(--border2)" onclick="openFilterSettingsModal('${f.id}')" title="בחר אילו סינוני שדה יופיעו בטופס הזה"><i class="ti ti-adjustments-horizontal"></i> הגדרות סינון לטופס</button>`:'';
   const filterBar=(allFilterableFields.length||hasChatFields||hasCloseFeature||showPmFilter||isAdmin)?`<div class="filter-bar">
     <span class="filter-label"><i class="ti ti-filter"></i> סינון:</span>
     ${chatFilterHTML}
     ${pmFilterHTML}
+    ${breachFilterHTML}
     ${filterSettingsBtn}
     ${allFilterableFields.map(field=>{
       const fid=field.id;
@@ -2378,7 +2391,7 @@ function renderRecordsPage(){
       if(field.type==='select') return `<select onchange="setFilter('${fid}',this.value)" style="${field._isAdmin?'border-color:var(--purple)':''}"><option value="">כל ${badge}${esc(field.label)}</option><option value="__empty__" ${cur==='__empty__'?'selected':''}>— ריק / טרם נבחר —</option>${(field.options||'').split(',').map(o=>`<option value="${esc(o.trim())}" ${cur===esc(o.trim())?'selected':''}>${esc(o.trim())}</option>`).join('')}</select>`;
       return `<input type="text" placeholder="סנן ${esc(field.label)}..." value="${cur}" id="filter-txt-${fid}" oninput="debounceFilter('${fid}',this.value)" style="min-width:120px${field._isAdmin?';border-color:var(--purple)':''}">`;
     }).join('')}
-    <button class="btn btn-xs" onclick="S.filters={};S.chatFilter='';render()"><i class="ti ti-x"></i> נקה</button>
+    <button class="btn btn-xs" onclick="S.filters={};S.chatFilter='';S.breachFilter='';render()"><i class="ti ti-x"></i> נקה</button>
   </div>`:'';
 
   // BULK UPDATE ALL FILTERED — no selection needed
@@ -3354,7 +3367,7 @@ function renderAdminAllRecords(){
 let _lastHomeRefreshAt=0;
 const HOME_REFRESH_THROTTLE_MS=3*60*1000;
 function goOrgs(){
-  S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.chatFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.globalSearch='';S.globalSearchResults=null;
+  S.view='orgs';S.orgId=null;S.fileId=null;S.searchQ='';S.filters={};S.chatFilter='';S.breachFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.globalSearch='';S.globalSearchResults=null;
   if(Date.now()-_lastHomeRefreshAt<HOME_REFRESH_THROTTLE_MS){ render(); return; }
   _lastHomeRefreshAt=Date.now();
   loadAll().then(()=>loadAllCounts().then(render));
@@ -3665,9 +3678,9 @@ async function openGlobalResultDetail(recordId,fileId){
   `,true);
 }
 function goFiles(orgId){if(orgId)S.orgId=orgId;S.view='files';S.fileId=null;_bulkMode=false;_selectedRows.clear();render();}
-function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.chatFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();}
+function goForm(fileId){S.fileId=fileId;S.view='form';S.searchQ='';S.filters={};S.chatFilter='';S.breachFilter='';S.phoneSearch='';S.phoneLookup=null;_bulkMode=false;_selectedRows.clear();S.showBulkAll=false;render();}
 async function goRecords(fileId, archiveMode=false){
-  S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};S.chatFilter='';
+  S.fileId=fileId;S.view='records';S.searchQ='';S.filters={};S.chatFilter='';S.breachFilter='';
   _bulkMode=false;_selectedRows.clear();S.showBulkAll=false;
   S.archiveMode=archiveMode;
   render();
@@ -3689,7 +3702,7 @@ async function adminViewFileRecords(fileId, archiveMode=false){
   const fCheck=DB.files.find(x=>x.id===fileId);
   if(fCheck&&!canManagerAccessFile(fCheck)&&!currentUser?.is_super_admin){showAlert('אין לך גישה לקובץ זה','error');return;}
   S.fileId=fileId;const f=DB.files.find(x=>x.id===fileId);if(f)S.orgId=f.org_id;
-  S.view='records';S.searchQ='';S.filters={};S.chatFilter='';_bulkMode=false;_selectedRows.clear();
+  S.view='records';S.searchQ='';S.filters={};S.chatFilter='';S.breachFilter='';_bulkMode=false;_selectedRows.clear();
   S.showBulkAll=false;S.archiveMode=archiveMode;
   render();
   await getRecords(fileId, archiveMode);
@@ -5876,6 +5889,7 @@ function gotoMonitorPm(){S.view='admin';loadMonitorPmTab();}
 function toggleSort(col){if(S.sortCol===col){S.sortDir*=-1;}else{S.sortCol=col;S.sortDir=1;}render();}
 function setChatFilter(val){ S.chatFilter=val||''; render(); }
 function setPmFilter(val){ S.pmFilter=val||''; render(); }
+function setBreachFilter(val){ S.breachFilter=val||''; render(); }
 function setFilter(afId,val){
   if(val===''){ delete S.filters[afId]; }
   else { S.filters[afId]=val; }
