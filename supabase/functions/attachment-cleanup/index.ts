@@ -13,6 +13,12 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// אימות דו-שלבי בצד השרת (15.11.2026): סיסמה לבד (aal1) לא מספיקה לפעולת מנהל —
+// ה-JWT חייב להיות aal2, כלומר אחרי הזנת קוד ה-Authenticator. ה-JWT כבר אומת ע"י getUser.
+function jwtAal(token: string): string {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal || 'aal1'; } catch { return 'aal1'; }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -41,7 +47,7 @@ Deno.serve(async (req) => {
       const email = u?.user?.email
       if (email) {
         const { data: mgr } = await sb.from('app_managers').select('is_super_admin').eq('email', email).eq('active', true).maybeSingle()
-        trusted = !!mgr?.is_super_admin
+        trusted = !!mgr?.is_super_admin && jwtAal(token) === 'aal2'
       }
     }
 
