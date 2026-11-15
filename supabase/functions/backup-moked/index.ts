@@ -17,6 +17,27 @@ Deno.serve(async (req)=>{
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    // הרשאה (15.11.2026): גיבוי מלא של המערכת נשלח רק לבקשה של
+    // (א) moked-scheduler — הגיבוי השבועי, נשלח עם ה-service role key, או
+    // (ב) סופר-מנהל מחובר אמיתי (מאומת כאן בצד השרת) — כפתור "שלח עכשיו" בטאב גיבוי.
+    // לפני כן כל מי שראה את ה-anon key בקוד הדף יכל לבקש גיבוי לכל כתובת.
+    const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    let allowed = !!token && token === SUPABASE_SERVICE_KEY;
+    if (!allowed && token) {
+      const { data: u } = await sb.auth.getUser(token);
+      const email = u?.user?.email;
+      if (email) {
+        const { data: mgr } = await sb.from('app_managers').select('is_super_admin').eq('email', email).eq('active', true).maybeSingle();
+        allowed = !!mgr?.is_super_admin;
+      }
+    }
+    if (!allowed) {
+      return new Response(JSON.stringify({ ok: false, error: 'נדרשת התחברות של סופר-מנהל' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
     // Parse request body
     let toEmail = 'adir2112@gmail.com';
     let includeOrgs = [];
@@ -25,7 +46,6 @@ Deno.serve(async (req)=>{
       if (body.to) toEmail = body.to;
       if (body.orgs) includeOrgs = body.orgs;
     } catch (_) {}
-    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const { data: orgs } = await sb.from('organizations').select('*');
     const { data: files } = await sb.from('files').select('*');
     // גיבוי מלא של כל הרשומות — לא סומכים על מגבלת max_rows של הפרויקט,

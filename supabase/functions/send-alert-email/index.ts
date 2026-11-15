@@ -2,6 +2,8 @@
 // Using Brevo (Sendinblue) API
 // Env vars needed: BREVO_API_KEY
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -15,6 +17,23 @@ Deno.serve(async (req) => {
 
   try {
     const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY')!
+
+    // הרשאה (15.11.2026): שליחה רק למשתמש מחובר אמיתי של המערכת (מנהל או נציג),
+    // או לשרת עם ה-service role key. לפני כן כל מי שראה את ה-anon key בקוד הדף
+    // יכל לשלוח דרך הפונקציה מייל HTML חופשי לכל כתובת, מהשולח של המערכת.
+    const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+    let allowed = !!token && token === SERVICE_KEY
+    if (!allowed && token) {
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, SERVICE_KEY!)
+      const { data: u } = await sb.auth.getUser(token)
+      allowed = !!u?.user?.email
+    }
+    if (!allowed) {
+      return new Response(JSON.stringify({ ok: false, error: 'נדרשת התחברות' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
 
     const { to, fileName, orgName, breached, fieldLabel, days, subject: customSubject, htmlOverride } = await req.json()
 

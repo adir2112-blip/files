@@ -26,20 +26,39 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const url = new URL(req.url)
-    let days = DEFAULT_MAX_AGE_DAYS
-    const qDays = url.searchParams.get('days')
-    if (qDays && !isNaN(Number(qDays))) days = Number(qDays)
-    if (req.method === 'POST') {
-      try {
-        const body = await req.json()
-        if (body?.days && !isNaN(Number(body.days))) days = Number(body.days)
-      } catch { /* no/invalid body — ignore, keep days as-is */ }
-    }
-
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
     const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+    // הרשאה (15.11.2026): רק סופר-מנהל מחובר אמיתי (או ה-service role key) רשאי לבחור
+    // סף ימים. כל קריאה אחרת, כולל ה-pg_cron היומי שנשלח עם ה-anon key, מנקה רק לפי
+    // ברירת המחדל (120 יום). כך מי שמחזיק את ה-anon key כבר לא יכול לשלוח days=0
+    // ולמחוק את כל האסמכתאות.
+    const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+    let trusted = !!token && token === SUPABASE_KEY
+    if (!trusted && token) {
+      const { data: u } = await sb.auth.getUser(token)
+      const email = u?.user?.email
+      if (email) {
+        const { data: mgr } = await sb.from('app_managers').select('is_super_admin').eq('email', email).eq('active', true).maybeSingle()
+        trusted = !!mgr?.is_super_admin
+      }
+    }
+
+    const url = new URL(req.url)
+    let days = DEFAULT_MAX_AGE_DAYS
+    if (trusted) {
+      const qDays = url.searchParams.get('days')
+      if (qDays && !isNaN(Number(qDays))) days = Number(qDays)
+      if (req.method === 'POST') {
+        try {
+          const body = await req.json()
+          if (body?.days && !isNaN(Number(body.days))) days = Number(body.days)
+        } catch { /* no/invalid body — ignore, keep days as-is */ }
+      }
+    }
+    // גם למנהל: לא פחות מיום אחד, כדי שקלט שגוי לא ימחק את מה שהועלה היום
+    if (!(days >= 1)) days = DEFAULT_MAX_AGE_DAYS
 
     const cutoff = Date.now() - days * 86400000
     const toDelete: string[] = []

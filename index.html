@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.159'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.160'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -4697,7 +4697,7 @@ async function sendWeeklyEmail(){
   try{
     const res=await fetch(EMAIL_FUNC_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(await fnToken())},
       body:JSON.stringify({to:['adir2112@gmail.com'],fileName:'דוח שבועי',orgName:'מובמנט',breached:0,fieldLabel:'',days:0,subject,htmlOverride:html})
     });
     const data=await res.json();
@@ -7609,6 +7609,17 @@ function initLoginBg(){
   draw();
 }
 
+// טוקן לקריאה ל-Edge Functions: ה-session האמיתי של המשתמש המחובר (מנהל או נציג),
+// כדי שהפונקציה תאמת בצד השרת מי מבקש. בלי session נשלח ה-anon key, והפונקציות
+// הרגישות (גיבוי, מייל, ניקוי אסמכתאות) דוחות אותו מאז 15.11.2026.
+async function fnToken(){
+  try{
+    const {data:{session}}=await sbClient.auth.getSession();
+    if(session?.access_token) return session.access_token;
+  }catch(e){}
+  return SB_KEY;
+}
+
 // ══ BACKUP TAB ══
 const SB_FUNC_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/functions/v1/backup-moked';
 
@@ -7681,7 +7692,7 @@ async function runBackup(toEmail, silent=false){
   try{
     const res=await fetch(SB_FUNC_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(await fnToken())},
       body:JSON.stringify({to:toEmail})
     });
     const data=await res.json().catch(()=>({ok:res.ok,records:0}));
@@ -7847,7 +7858,7 @@ async function cleanupAttachmentsByAge(days){
   try{
     const res=await fetch(`${SB_URL}/functions/v1/attachment-cleanup`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(await fnToken())},
       body:JSON.stringify({days})
     });
     const data=await res.json();
@@ -8259,7 +8270,7 @@ async function sendInactivityEmail(fileId){
   try{
     await fetch(EMAIL_FUNC_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(await fnToken())},
       body:JSON.stringify({
         to:emails,
         fileName:f.name,
@@ -8380,7 +8391,7 @@ async function testAlertEmail(email, name){
   try{
     const res = await fetch(EMAIL_FUNC_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(await fnToken())},
       body:JSON.stringify({
         to:[email],
         fileName:'בדיקה — טופס לדוגמה',
@@ -8409,7 +8420,7 @@ async function sendAlertEmail(file, breachedCount){
   try{
     const res=await fetch(EMAIL_FUNC_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(await fnToken())},
       body:JSON.stringify({to:emails,fileName:file.name,orgName:org?.name||'',breached:breachedCount,fieldLabel,days:rule.days||0})
     });
     const data=await res.json();
