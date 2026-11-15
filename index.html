@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.161'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.162'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -623,6 +623,10 @@ async function api(method,table,body=null,params=''){
     const {data:{session}}=await sbClient.auth.getSession();
     if(session?.access_token) token=session.access_token;
   }catch(e){}
+  // app_users: מאז 15.11.2026 עמודות ה-PIN וסודות ה-Authenticator לא קריאות מהדפדפן. כתיבה
+  // (POST/PATCH/DELETE) מחזירה את השורה, ובלי select מפורש היא הייתה מבקשת גם אותן ונכשלת,
+  // לכן מבקשים בחזרה רק id.
+  if(table==='app_users' && method!=='GET' && !/[?&]select=/.test(params)) params+=(params.includes('?')?'&':'?')+'select=id';
   const r=await fetch(`${SB_REST}/${table}${params}`,{method,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},body:body?JSON.stringify(body):null});
   if(!r.ok) throw new Error(await r.text());
   const t=await r.text(); return t?JSON.parse(t):null;
@@ -670,7 +674,7 @@ async function initLogin(){
     if(mgr){
       await checkManagerMfaAndEnter(mgr, async()=>{
         // load all agents for admin management
-        allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+        allAgents=await GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
       });
       return;
     }
@@ -1008,7 +1012,7 @@ function enterApp(user){
     // load agents after loadAll so render has all data
     initApp().then(()=>{
       loadDashboardTab();
-      GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt').then(data=>{ allAgents=data||[]; render(); });
+      GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt').then(data=>{ allAgents=data||[]; render(); });
       // רענון תג המספר בטופבר (badge) — רץ ברקע לכל מנהל עם גישה למוניטור, לאורך כל
       // ההתחברות שלו, ללא קשר לאיזה מסך הוא צופה בו. 10 דקות מספיק בהחלט (חריגות
       // נמדדות בימי עסקים, לא בדקות) ומקטין דרמטית את צריכת ה-Egress מול 120 שניות
@@ -3577,7 +3581,12 @@ async function runGlobalSearch(q){
   const orParams=`?or=(phone.ilike.*${encodeURIComponent(term)}*,first_name.ilike.*${encodeURIComponent(term)}*,last_name.ilike.*${encodeURIComponent(term)}*,id_num.ilike.*${encodeURIComponent(term)}*)&limit=40&select=id,file_id,first_name,last_name,phone,id_num,created_at,agent_name,archived,approved_at`;
   try{
     const results = await GET('records', orParams);
-    S.globalSearchResults = results||[];
+    // רק רשומות מקבצים שהמשתמש רשאי בהם (כמו רשימת הארגונים/הקבצים). נציגים כבר מוגבלים
+    // בשרת (RLS agent_org_scope); מנהל שהוגבל לחלק מהקבצים ראה כאן עד 15.11.2026 את כולם.
+    S.globalSearchResults = (results||[]).filter(r=>{
+      const f=DB.files.find(x=>x.id===r.file_id);
+      return f && canManagerAccessFile(f) && canManagerAccessOrg(f.org_id);
+    });
   }catch(e){ S.globalSearchResults=[]; }
   const pos = document.getElementById('global-search-input')?.selectionStart;
   render();
@@ -3637,7 +3646,7 @@ async function openGlobalResult(fileId, isArchived=false){
 // פופאפ עם השורה המלאה של תוצאת חיפוש גלובלי — כדי שלא יצטרכו לחפש שוב בתוך
 // כל רשימת הרשומות של הטופס (יכולה להכיל מאות שורות) רק כדי למצוא את מה שכבר נמצא
 async function openGlobalResultDetail(recordId,fileId){
-  const f=DB.files.find(x=>x.id===fileId); if(!f) return;
+  const f=DB.files.find(x=>x.id===fileId); if(!f||!canManagerAccessFile(f)) return;
   let record;
   try{ const rows=await GET('records',`?id=eq.${recordId}&select=*`); record=rows&&rows[0]; }
   catch(e){}
@@ -5944,7 +5953,7 @@ async function uploadOneAttachment(fieldId,file){
   const path=`${fieldId}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
   const res=await fetch(`${SB_URL}/storage/v1/object/${ATTACHMENTS_BUCKET}/${path}`,{
     method:'POST',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||file.type||'application/octet-stream'},
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+(await fnToken()),'Content-Type':blob.type||file.type||'application/octet-stream'},
     body:blob
   });
   if(!res.ok) throw new Error(await res.text());
@@ -6306,7 +6315,7 @@ async function resetAgentTotp(id,name){
     const data=await r.json();
     if(data.ok){
       showAlert('קוד האימות אופס','success');
-      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
       render();
     } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
   }catch(e){ showAlert('שגיאת תקשורת','error'); }
@@ -6327,7 +6336,7 @@ async function toggleAgentTotpExempt(id,name,exempt){
     const data=await r.json();
     if(data.ok){
       showAlert(exempt?'הנציג פטור מ-2FA':'הפטור בוטל','success');
-      allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+      allAgents=await GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
       render();
     } else showAlert('שגיאה: '+(data.error||'לא ידוע'),'error');
   }catch(e){ showAlert('שגיאת תקשורת','error'); }
@@ -6476,7 +6485,7 @@ async function confirmImport(){
       done++;
     } catch(e){ errors++; }
   }
-  allAgents = await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+  allAgents = await GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
   closeModal();
   render();
   showAlert(`✓ יובאו ${done} נציגים${errors?` · ${errors} שגיאות`:''}`, done>0?'success':'error');
@@ -6490,7 +6499,7 @@ async function saveNewAgent(){
   if(!n||pin.length!==4){alert('יש להזין שם ו-4 ספרות');return;}
   try{
     await POST('app_users',{name:n,pin,active:true,allowed_orgs:allowedOrgs});
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
     closeModal();render();showAlert('הנציג נוסף','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -6504,7 +6513,7 @@ async function saveEditAgent(id){
   if(pin.length===4) body.pin=pin;
   try{
     await PATCH('app_users',body,`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
     closeModal();render();showAlert('הנציג עודכן','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
@@ -6512,7 +6521,7 @@ async function confirmDeleteAgent(id,name){
   if(!confirm(`למחוק את הנציג "${name}"?`))return;
   try{
     await DEL('app_users',`?id=eq.${id}`);
-    allAgents=await GET('app_users','?order=name.asc&select=id,name,pin,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
+    allAgents=await GET('app_users','?order=name.asc&select=id,name,active,last_login,allowed_orgs,authenticator_enrolled_at,totp_exempt');
     render();showAlert('הנציג נמחק','success');
   }catch(e){showAlert('שגיאה: '+e.message,'error');}
 }
