@@ -175,7 +175,7 @@ Deno.serve(async (req)=>{
       body: JSON.stringify({
         from: 'onboarding@resend.dev',
         to: toEmail,
-        subject: `📊 גיבוי שבועי מוקד מובמנט — ${dateStr}`,
+        subject: `📊 גיבוי מערכת קבצים — ${dateStr}`,
         html,
         attachments: [
           {
@@ -190,12 +190,17 @@ Deno.serve(async (req)=>{
       })
     });
     const resendData = await resendRes.json();
+    // סטטוס HTTP אמיתי: אם Resend דחה את המייל מחזירים 502, כדי ש-moked-scheduler (שבודק res.ok)
+    // ירשום ביומן "שגיאה" ולא "נשלח". עד 15.11.2026 הוחזר תמיד 200, והגיבויים השבועיים
+    // לכתובת שאינה בעלת חשבון ה-Resend נרשמו כהצלחה בלי שהגיעו.
+    if (!resendRes.ok) console.error('resend rejected', resendRes.status, JSON.stringify(resendData).slice(0, 300));
     return new Response(JSON.stringify({
       ok: resendRes.ok,
       records: records.length,
       to: toEmail,
       resend: resendData
     }), {
+      status: resendRes.ok ? 200 : 502,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json'
