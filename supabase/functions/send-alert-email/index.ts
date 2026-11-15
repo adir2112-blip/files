@@ -4,6 +4,12 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// אימות דו-שלבי בצד השרת (15.11.2026): סיסמה לבד (aal1) לא מספיקה לפעולת מנהל —
+// ה-JWT חייב להיות aal2, כלומר אחרי הזנת קוד ה-Authenticator. ה-JWT כבר אומת ע"י getUser.
+function jwtAal(token: string): string {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal || 'aal1'; } catch { return 'aal1'; }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -27,7 +33,9 @@ Deno.serve(async (req) => {
     if (!allowed && token) {
       const sb = createClient(Deno.env.get('SUPABASE_URL')!, SERVICE_KEY!)
       const { data: u } = await sb.auth.getUser(token)
-      allowed = !!u?.user?.email
+      const em = u?.user?.email || ''
+      // נציג (משתמש סינתטי agent-N@moked.internal) — מספיק החיבור שלו; מנהל — חייב aal2
+      allowed = !!em && (/^agent-\d+@moked\.internal$/.test(em) || jwtAal(token) === 'aal2')
     }
     if (!allowed) {
       return new Response(JSON.stringify({ ok: false, error: 'נדרשת התחברות' }), {
