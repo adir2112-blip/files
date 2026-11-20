@@ -564,7 +564,7 @@ const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const SB_REST = SB_URL+'/rest/v1';
 
 // ── VERSION CHECK ──
-const APP_VERSION = '1.0.162'; // עדכן מספר זה בכל שינוי
+const APP_VERSION = '1.0.163'; // עדכן מספר זה בכל שינוי
 const VERSION_URL = 'https://adir2112-blip.github.io/files/version.txt';
 
 async function checkForUpdates(){
@@ -8107,7 +8107,17 @@ function renderAdminBackup(){
 // WA DISABLED
 const WA_API='https://whatsapp-bot-production-120a.up.railway.app/api/send';
 
+// 20.11.2026: WhatsApp goes through our own function (send-whatsapp), which holds
+// the bot's secret. If the function can't be reached it falls back to the bot
+// directly (the bot then delivers only to recipients it already knows).
+const WA_FUNC_URL='https://vlhqkwwgmkriwojffced.supabase.co/functions/v1/send-whatsapp';
 async function sendWA(phone,message){
+  try{
+    const r=await fetch(WA_FUNC_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(await fnToken()),'apikey':SB_KEY},body:JSON.stringify({phone,message})});
+    if(r.ok) return;
+    console.warn('WA function',r.status);
+    if(r.status===401||r.status===400) return;
+  }catch(e){console.warn('WA function failed:',e);}
   try{
     await fetch(WA_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message})});
   }catch(e){console.warn('WA send failed:',e);}
