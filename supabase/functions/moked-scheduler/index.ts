@@ -12,13 +12,16 @@ const corsHeaders = {
 
 const WA_API = 'https://whatsapp-bot-production-120a.up.railway.app/api/send'
 const WA_GROUP = '120363429161263528@g.us'
+const WA_BOT_SECRET = Deno.env.get('WA_BOT_SECRET') || ''
 const BACKUP_FUNC_URL = 'https://vlhqkwwgmkriwojffced.supabase.co/functions/v1/backup-moked'
 
 async function sendWA(phone: string, message: string): Promise<boolean> {
   try {
     const res = await fetch(WA_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // 28.11.2026: send with the bot's secret, so this keeps working once the
+      // bot accepts tokenless sends to the owner only (TOKENLESS_SCOPE=owner).
+      headers: { 'Content-Type': 'application/json', ...(WA_BOT_SECRET ? { Authorization: `Bearer ${WA_BOT_SECRET}` } : {}) },
       body: JSON.stringify({ phone, message, source: 'מערכת קבצים' })
     })
     return res.ok
